@@ -1,0 +1,38 @@
+{
+  "name": "web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install --with-deps chromium"
+  },
+  "dependencies": {
+    "@sentry/nextjs": "^8.35.0",
+    "@training/api": "workspace:*",
+    "@training/config": "workspace:*",
+    "@training/db": "workspace:*",
+    "@training/domain": "workspace:*",
+    "@trpc/client": "^11.0.0-rc.593",
+    "@trpc/server": "^11.0.0-rc.593",
+    "bcryptjs": "^2.4.3",
+    "next": "15.0.2",
+    "next-auth": "5.0.0-beta.25",
+    "react": "19.0.0-rc-02c0e824-20241028",
+    "react-dom": "19.0.0-rc-02c0e824-20241028",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.2",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.16.11",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "typescript": "^5.6.3"
+  }
+}
