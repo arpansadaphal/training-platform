@@ -1,3 +1,5 @@
+throw new Error("sentry-server-phase0-test");
+
 import { redirect } from "next/navigation";
 import { appRouter } from "@training/api";
 import { auth, signOut } from "@/src/server/auth";
