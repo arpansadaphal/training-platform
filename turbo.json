@@ -2,10 +2,19 @@
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
   "tasks": {
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
-    },
+   "build": {
+  "dependsOn": ["^build"],
+  "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+  "env": [
+    "DATABASE_URL",
+    "DIRECT_URL",
+    "AUTH_SECRET",
+    "NEXT_PUBLIC_SENTRY_DSN",
+    "SENTRY_AUTH_TOKEN",
+    "SENTRY_ORG",
+    "SENTRY_PROJECT"
+  ]
+},
     "typecheck": {
       "dependsOn": ["^build", "build"]
     },
