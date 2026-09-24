@@ -1,10 +1,10 @@
 import { withSentryConfig } from "@sentry/nextjs";
+import { PrismaPlugin } from "@prisma/nextjs-monorepo-workaround-plugin";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Workspace packages ship raw TS source (see 16-repository-structure.md's
-  // "no packages/types" note). Next.js transpiles them for us.
+  // Workspace packages ship raw TS source.
   transpilePackages: [
     "@training/api",
     "@training/ai",
@@ -12,6 +12,15 @@ const nextConfig = {
     "@training/db",
     "@training/domain",
   ],
+  webpack: (config, { isServer }) => {
+    // Copies Prisma's query engine into the serverless bundle.
+    // Required because Next.js's output file tracing does not follow
+    // pnpm's symlinked node_modules layout in a monorepo.
+    if (isServer) {
+      config.plugins = [...config.plugins, new PrismaPlugin()];
+    }
+    return config;
+  },
 };
 
 export default withSentryConfig(nextConfig, {
