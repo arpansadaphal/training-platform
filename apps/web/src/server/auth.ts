@@ -33,12 +33,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(rawCredentials) {
+           async authorize(rawCredentials) {
         const parsed = credentialsSchema.safeParse(rawCredentials);
         if (!parsed.success) return null;
 
         const user = await findUserByEmailWithHash(parsed.data.email);
         if (!user) return null;
+
+        // ARCH-024 made passwordHash nullable to anticipate future OAuth.
+        // Credentials provider requires a hash; if absent, this user can't
+        // sign in via password (they'd need OAuth once implemented).
+        if (!user.passwordHash) return null;
 
         const passwordMatches = await bcrypt.compare(parsed.data.password, user.passwordHash);
         if (!passwordMatches) return null;
@@ -46,7 +51,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return {
           id: user.id,
           email: user.email,
-          name: user.name ?? undefined,
+          name: user.displayName ?? undefined,
         };
       },
     }),

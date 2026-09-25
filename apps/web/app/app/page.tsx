@@ -41,7 +41,7 @@ export default async function DashboardPage() {
         <h1>Dashboard</h1>
         <p>
           Signed in as <strong>{me.email}</strong>
-          {me.name ? ` (${me.name})` : ""}.
+          {me.displayName ? ` (${me.displayName})` : ""}.
         </p>
         <p className="muted">
           This shell is intentionally empty. Program builder, analysis, and coach arrive in later

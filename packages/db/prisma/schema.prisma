@@ -1,16 +1,23 @@
-// Phase 0 schema — ONLY what Auth.js Credentials + JWT requires.
+// Phase 1 — Domain Model & Database
 //
-// Per phase-00-foundation.md:
-//   "schema containing only User and whatever Auth.js requires for a JWT
-//    session strategy (no Account/Session tables needed beyond what a
-//    credentials-only JWT setup requires)"
+// This schema implements 04-database-schema.md in full, with three deliberate
+// reconciliations recorded in DECISIONS.md:
 //
-// Because we use strategy = "jwt" with a Credentials provider and no
-// database adapter, Auth.js does NOT require Account, Session, or
-// VerificationToken tables. Do not add them in Phase 0.
+//   ARCH-022 — generator keeps binaryTargets = ["native", "rhel-openssl-3.0.x"]
+//              and datasource keeps directUrl = env("DIRECT_URL"). Both are required
+//              for Prisma on Vercel + Neon migrations. 04-database-schema.md predates
+//              these Phase 0 learnings; its omission is not authoritative.
 //
-// Phase 1 introduces 0002_domain_model (Program, ProgramDraft, Goal,
-// ProgramVersion, WorkoutDay, ExercisePrescription, etc.).
+//   ARCH-024 — User is reconciled with Phase 0:
+//                name (String?)        -> displayName (String, required)
+//                passwordHash          -> String? (optional, anticipates OAuth)
+//                updatedAt             -> kept (Phase 0 addition; standard, harmless)
+//              bundled into 0002_domain_model per the phase spec's
+//              "largest single migration" instruction.
+//
+//   ARCH-017 — Program.visibility and Program.publicShowsExecutionHistory ship now
+//              (only PRIVATE is enforced). ProgramShare is NOT in this schema;
+//              it is fully designed in 04-database-schema.md and built in Phase 10.
 
 generator client {
   provider      = "prisma-client-js"
@@ -23,13 +30,407 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// ───────────────────────── Identity ─────────────────────────
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
-  passwordHash String
-  name         String?
+  passwordHash String?
+  displayName  String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  programs             Program[]
+  constraints          Constraint[]
+  temporaryConstraints TemporaryConstraint[]
+  aiConversations      AIConversation[]
+  observations         Observation[]
+
   @@index([email])
+}
+
+// ───────────────────────── Goals ─────────────────────────
+
+model GoalProfileDefinition {
+  id            String   @id @default(cuid())
+  key           String   @unique          // e.g. "HYPERTROPHY"
+  displayName   String
+  configVersion String                    // bump on any threshold/weight change
+  thresholds    Json                      // GoalProfileConfig shape — see 05-analysis-engine.md
+  validated     Boolean  @default(false)  // launch gate: must be true before production use
+  sourceNote    String                    // provenance, or "UNRESOLVED — SCIENTIFIC INPUT REQUIRED"
+  createdAt     DateTime @default(now())
+
+  goals Goal[]
+}
+
+model Goal {
+  id            String               @id @default(cuid())
+  goalProfileId String
+  goalProfile   GoalProfileDefinition @relation(fields: [goalProfileId], references: [id])
+  params        Json                 @default("{}") // reserved for future per-instance goal parameters
+  createdAt     DateTime             @default(now())
+
+  programsCurrentlyUsing Program[] @relation("CurrentGoal")
+}
+
+// ───────────────────── Programs & Drafts ─────────────────────
+
+enum ProgramVisibility {
+  PRIVATE
+  SHARED
+  PUBLIC
+}
+
+model Program {
+  id                         String            @id @default(cuid())
+  ownerUserId                String
+  owner                      User              @relation(fields: [ownerUserId], references: [id])
+  name                       String
+  currentGoalId              String?
+  currentGoal                Goal?             @relation("CurrentGoal", fields: [currentGoalId], references: [id])
+  activeVersionId            String?           @unique
+  activeVersion              ProgramVersion?   @relation("ActiveVersion", fields: [activeVersionId], references: [id])
+  visibility                 ProgramVisibility @default(PRIVATE) // SHARED/PUBLIC unused until Phase 10
+  publicShowsExecutionHistory Boolean          @default(false)
+  archivedAt                 DateTime?
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
+
+  drafts      ProgramDraft[]
+  versions    ProgramVersion[] @relation("VersionsOfProgram")
+  revisions   Revision[]
+  simulations Simulation[]
+}
+
+enum DraftStatus {
+  ACTIVE
+  COMMITTED
+  DISCARDED
+}
+
+model ProgramDraft {
+  id                   String        @id @default(cuid())
+  programId            String
+  program              Program       @relation(fields: [programId], references: [id])
+  baseVersionId        String?
+  baseVersion          ProgramVersion? @relation(fields: [baseVersionId], references: [id])
+  label                String        // e.g. "Option A — more chest volume"
+  structure            Json          // mutable ProgramStructure while ACTIVE
+  status               DraftStatus   @default(ACTIVE)
+  committedAsVersionId String?       @unique
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([programId, status])
+}
+
+// ─────────────────── ProgramVersion & structure ───────────────────
+
+enum VersionOrigin {
+  MANUAL_COMMIT
+  AI_APPLIED_SIMULATION
+}
+
+model ProgramVersion {
+  id                String        @id @default(cuid())
+  programId         String
+  program           Program       @relation("VersionsOfProgram", fields: [programId], references: [id])
+  versionNumber     Int
+  structureSnapshot Json          // immutable — authoritative ProgramStructure as committed
+  createdVia        VersionOrigin
+  createdAt         DateTime      @default(now())
+
+  activeForProgram    Program?            @relation("ActiveVersion")
+  workoutDays         WorkoutDay[]        // derived projection of structureSnapshot
+  assessmentSnapshots AssessmentSnapshot[]
+  trainingBlocks      TrainingBlock[]
+  draftsBasedOnThis   ProgramDraft[]
+  revisionsFrom       Revision[]          @relation("RevisionFrom")
+  revisionsTo         Revision[]          @relation("RevisionTo")
+  simulationsFromHere Simulation[]
+
+  @@unique([programId, versionNumber])
+}
+
+model WorkoutDay {
+  id               String         @id @default(cuid())
+  programVersionId String
+  programVersion   ProgramVersion @relation(fields: [programVersionId], references: [id])
+  orderIndex       Int
+  name             String
+
+  prescriptions ExercisePrescription[]
+  sessions      Session[]
+
+  @@unique([programVersionId, orderIndex])
+}
+
+model ExercisePrescription {
+  id             String     @id @default(cuid())
+  workoutDayId   String
+  workoutDay     WorkoutDay @relation(fields: [workoutDayId], references: [id])
+  orderIndex     Int
+  exerciseId     String
+  exercise       Exercise   @relation(fields: [exerciseId], references: [id])
+  targetSets     Int
+  targetRepsLow  Int
+  targetRepsHigh Int
+  targetRpe      Decimal?
+  loadScheme     Json       // LoadScheme discriminated union — see 03-domain-model.md
+
+  performanceRecords PerformanceRecord[]
+
+  @@unique([workoutDayId, orderIndex])
+}
+
+// ───────────────────── Reference data ─────────────────────
+
+enum MovementPattern {
+  SQUAT
+  HINGE
+  HORIZONTAL_PUSH
+  VERTICAL_PUSH
+  HORIZONTAL_PULL
+  VERTICAL_PULL
+  CARRY
+  ISOLATION
+  OTHER
+}
+
+model Exercise {
+  id              String          @id @default(cuid())
+  name            String
+  movementPattern MovementPattern
+  equipment       String?
+  createdAt       DateTime        @default(now())
+
+  prescriptions ExercisePrescription[]
+  involvements  ExerciseMuscleInvolvement[]
+}
+
+model MuscleGroup {
+  id   String @id @default(cuid())
+  name String @unique
+
+  involvements ExerciseMuscleInvolvement[]
+}
+
+model ExerciseMuscleInvolvement {
+  exerciseId        String
+  exercise          Exercise    @relation(fields: [exerciseId], references: [id])
+  muscleGroupId     String
+  muscleGroup       MuscleGroup @relation(fields: [muscleGroupId], references: [id])
+  involvementFactor Decimal     // 0..1 — content data, reviewed alongside GoalProfile thresholds
+
+  @@id([exerciseId, muscleGroupId])
+}
+
+// ───────────────────── Revisions & Simulation ─────────────────────
+
+enum RevisionTrigger {
+  MANUAL_COMMIT
+  AI_APPLIED_SIMULATION
+}
+
+model Revision {
+  id                 String           @id @default(cuid())
+  programId          String
+  program            Program          @relation(fields: [programId], references: [id])
+  fromVersionId      String?
+  fromVersion        ProgramVersion?  @relation("RevisionFrom", fields: [fromVersionId], references: [id])
+  toVersionId        String
+  toVersion          ProgramVersion   @relation("RevisionTo", fields: [toVersionId], references: [id])
+  trigger            RevisionTrigger
+  sourceSimulationId String?
+  sourceSimulation   Simulation?      @relation(fields: [sourceSimulationId], references: [id])
+  userNote           String?
+  createdAt          DateTime         @default(now())
+}
+
+model Simulation {
+  id                      String         @id @default(cuid())
+  programId               String
+  program                 Program        @relation(fields: [programId], references: [id])
+  baseVersionId           String
+  baseVersion             ProgramVersion @relation(fields: [baseVersionId], references: [id])
+  goalId                  String
+  mutationSpec            Json
+  resultAnalysis          Json
+  resultAssessment        Json
+  diff                    Json           // Gain/Cost/Net + What-Changed payload
+  createdByConversationId String?
+  createdByConversation   AIConversation? @relation(fields: [createdByConversationId], references: [id])
+  createdAt               DateTime       @default(now())
+
+  revisionsSourced Revision[]
+
+  @@index([programId, baseVersionId])
+}
+
+enum AssessmentSnapshotReason {
+  COMMIT
+  BLOCK_END
+  MANUAL_RECOMPUTE
+}
+
+model AssessmentSnapshot {
+  id                String                  @id @default(cuid())
+  programVersionId  String
+  programVersion    ProgramVersion          @relation(fields: [programVersionId], references: [id])
+  goalId            String
+  engineVersion     String
+  thresholdsVersion String
+  metrics           Json                    // Analysis payload
+  assessment        Json                    // Assessment payload
+  fitScore          Json
+  reason            AssessmentSnapshotReason
+  computedAt        DateTime                @default(now())
+
+  @@index([programVersionId, goalId, computedAt])
+}
+
+// ───────────────────── Training execution ─────────────────────
+
+enum TrainingBlockStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
+}
+
+model TrainingBlock {
+  id                 String              @id @default(cuid())
+  programVersionId   String
+  programVersion     ProgramVersion      @relation(fields: [programVersionId], references: [id])
+  userId             String              // denormalized for query convenience
+  status             TrainingBlockStatus @default(ACTIVE)
+  plannedLengthWeeks Int?                // informational only; not a hard constraint
+  startedAt          DateTime            @default(now())
+  endedAt            DateTime?
+
+  sessions     Session[]
+  observations Observation[]
+
+  @@index([userId, status])
+}
+
+enum SessionStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+model Session {
+  id              String         @id @default(cuid())
+  trainingBlockId String
+  trainingBlock   TrainingBlock  @relation(fields: [trainingBlockId], references: [id])
+  workoutDayId    String
+  workoutDay      WorkoutDay     @relation(fields: [workoutDayId], references: [id])
+  sequenceIndex   Int
+  status          SessionStatus  @default(PLANNED)
+  scheduledDate   DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+
+  performanceRecords PerformanceRecord[]
+  observations       Observation[]
+
+  @@index([trainingBlockId, sequenceIndex])
+}
+
+model PerformanceRecord {
+  id                     String               @id @default(cuid())
+  sessionId              String
+  session                Session              @relation(fields: [sessionId], references: [id])
+  exercisePrescriptionId String
+  exercisePrescription   ExercisePrescription @relation(fields: [exercisePrescriptionId], references: [id])
+  setIndex               Int
+  actualReps             Int?
+  actualLoad             Decimal?
+  actualRpe              Decimal?
+  completedAt            DateTime             @default(now())
+
+  @@index([sessionId])
+}
+
+model Observation {
+  id               String          @id @default(cuid())
+  userId           String
+  user             User            @relation(fields: [userId], references: [id])
+  sessionId        String?
+  session          Session?        @relation(fields: [sessionId], references: [id])
+  trainingBlockId  String?
+  trainingBlock    TrainingBlock?  @relation(fields: [trainingBlockId], references: [id])
+  content          String
+  structuredFields Json?           // optional: sleep/stress/soreness ratings, etc.
+  createdAt        DateTime        @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// ───────────────────── Constraints ─────────────────────
+
+enum ConstraintKind {
+  EXERCISE_AVOIDANCE
+  MOVEMENT_PATTERN_AVOIDANCE
+  FREEFORM
+}
+
+model Constraint {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id])
+  kind            ConstraintKind
+  exerciseId      String?
+  movementPattern MovementPattern?
+  note            String
+  active          Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+}
+
+model TemporaryConstraint {
+  id               String         @id @default(cuid())
+  userId           String
+  user             User           @relation(fields: [userId], references: [id])
+  aiConversationId String         // scoped to a Coach conversation, NOT a workout Session
+  aiConversation   AIConversation @relation(fields: [aiConversationId], references: [id])
+  note             String
+  createdAt        DateTime       @default(now())
+}
+
+// ───────────────────── AI Coach ─────────────────────
+
+enum AIMessageRole {
+  USER
+  ASSISTANT
+  TOOL
+}
+
+model AIConversation {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  programId        String?
+  programVersionId String?
+  createdAt        DateTime @default(now())
+  lastMessageAt    DateTime @default(now())
+
+  messages             AIMessage[]
+  temporaryConstraints TemporaryConstraint[]
+  simulationsCreated   Simulation[]
+
+  @@index([userId, lastMessageAt])
+}
+
+model AIMessage {
+  id               String         @id @default(cuid())
+  aiConversationId String
+  aiConversation   AIConversation @relation(fields: [aiConversationId], references: [id])
+  role             AIMessageRole
+  segments         Json           // array of {type, tag?, content, sourceRef?}
+  rawToolCalls     Json?
+  createdAt        DateTime       @default(now())
+
+  @@index([aiConversationId, createdAt])
 }
