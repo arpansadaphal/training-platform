@@ -12,14 +12,33 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U ci -d ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
     env:
-      # Placeholders only. Phase 0's CI does not connect to a real database;
-      # prisma generate and Next.js build need these names present but not valid.
-      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
-      DIRECT_URL: "postgresql://ci:ci@localhost:5432/ci"
-      AUTH_SECRET: "ci-placeholder-secret-at-least-32-characters-long"
-      AUTH_URL: "http://localhost:3000"
+      # CI runs against the Postgres service container, never against a
+      # remote Neon branch. Runtime behavior matches production (Postgres 16);
+      # migration history is exercised the same way `migrate deploy` will
+      # run against production.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+      AUTH_SECRET: ci-placeholder-secret-at-least-32-characters-long
+      AUTH_URL: http://localhost:3000
+
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +53,12 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        run: pnpm --filter @training/db exec prisma migrate deploy
+
+      - name: Seed reference data
+        run: pnpm --filter @training/db exec prisma db seed
 
       - name: Typecheck
         run: pnpm turbo run typecheck
