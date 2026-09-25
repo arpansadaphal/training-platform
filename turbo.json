@@ -2,11 +2,12 @@
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
   "tasks": {
-   "build": {
+  "build": {
   "dependsOn": ["^build"],
   "outputs": [".next/**", "!.next/cache/**", "dist/**"],
   "env": [
     "DATABASE_URL",
+    "DATABASE_URL_UNPOOLED",
     "DIRECT_URL",
     "AUTH_SECRET",
     "NEXT_PUBLIC_SENTRY_DSN",
