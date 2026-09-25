@@ -1,13 +1,13 @@
+// Root tRPC router. Routers are organized by domain capability, not by
+// UI page (see 01-architecture-recommendation.md decision #4).
+
 import { router } from "./trpc";
 import { userRouter } from "./routers/user";
+import { programRouter } from "./routers/program";
 
-/**
- * The root appRouter. Phase 0 mounts only `user`. Phase 1 onward adds
- * `program`, `programDraft`, `programVersion`, `analysis`, `assessment`,
- * `simulation`, `training`, `coach` — per 09-api-architecture.md.
- */
 export const appRouter = router({
   user: userRouter,
+  program: programRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -1,53 +1,72 @@
+// Repository layer for User. Returns plain TypeScript shapes only — callers
+// outside packages/db must never see a Prisma type.
+//
+// Reconciled with Phase 1 schema (ARCH-024): displayName replaces name;
+// passwordHash is nullable.
+
 import { prisma } from "../client";
 
-/**
- * Plain, Prisma-free domain-facing user shape.
- * Per ARCH-010, nothing above packages/db should see Prisma types.
- */
 export interface UserRecord {
   id: string;
   email: string;
-  name: string | null;
+  displayName: string;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface UserWithHash extends UserRecord {
-  passwordHash: string;
+  passwordHash: string | null;
 }
 
 export async function findUserById(id: string): Promise<UserRecord | null> {
-  return prisma.user.findUnique({
+  const row = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, email: true, name: true, createdAt: true },
+    select: {
+      id: true,
+      email: true,
+      displayName: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
+  return row ?? null;
 }
 
 export async function findUserByEmailWithHash(
   email: string,
 ): Promise<UserWithHash | null> {
-  return prisma.user.findUnique({
+  const row = await prisma.user.findUnique({
     where: { email },
     select: {
       id: true,
       email: true,
-      name: true,
-      createdAt: true,
+      displayName: true,
       passwordHash: true,
+      createdAt: true,
+      updatedAt: true,
     },
   });
+  return row ?? null;
 }
 
 export async function createUser(input: {
   email: string;
   passwordHash: string;
-  name?: string | null;
+  displayName: string;
 }): Promise<UserRecord> {
-  return prisma.user.create({
+  const row = await prisma.user.create({
     data: {
       email: input.email,
       passwordHash: input.passwordHash,
-      name: input.name ?? null,
+      displayName: input.displayName,
     },
-    select: { id: true, email: true, name: true, createdAt: true },
+    select: {
+      id: true,
+      email: true,
+      displayName: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
+  return row;
 }

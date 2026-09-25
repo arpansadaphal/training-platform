@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { DOMAIN_PACKAGE_VERSION } from "./index";
+import type { ProgramStructure } from "./index";
 
 describe("@training/domain", () => {
-  it("exports a version marker", () => {
-    expect(DOMAIN_PACKAGE_VERSION).toBe("0.0.0");
+  it("exports the ProgramStructure type", () => {
+    // Compile-time check: if this type isn't exported, tsc fails.
+    const sample: ProgramStructure = { workoutDays: [] };
+    expect(sample.workoutDays).toEqual([]);
   });
 });

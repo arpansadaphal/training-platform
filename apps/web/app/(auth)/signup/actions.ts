@@ -39,7 +39,10 @@ export async function signupAction(formData: FormData): Promise<void> {
   await createUser({
     email: parsed.data.email,
     passwordHash,
-    name: parsed.data.name ?? null,
+    // ARCH-024: User.displayName is required (name → displayName rename).
+    // The signup form still collects an optional "name"; we default to a
+    // stable placeholder when the user leaves it blank.
+    displayName: parsed.data.name ?? "Anonymous",
   });
 
   // signIn with redirectTo throws NEXT_REDIRECT on success; that's the
