@@ -1,0 +1,262 @@
+/* apps/web/app/app/review/[blockId]/review.module.css
+ *
+ * The Review screen. Reading-first layout: generous vertical rhythm, muted
+ * metadata, and one clear visual divider separating the ARCH-015 default
+ * view (the commit-time snapshot) from the opt-in recompute section.
+ */
+
+.page {
+  padding: 2rem;
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.nav {
+  margin-bottom: 1rem;
+  opacity: 0.7;
+}
+
+.header {
+  margin-top: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.heading {
+  margin: 0 0 0.25rem 0;
+}
+
+.muted {
+  opacity: 0.7;
+}
+
+.partialBanner {
+  padding: 0.75rem 1rem;
+  background: #ebf8ff;
+  border: 1px solid #90cdf4;
+  color: #2a4365;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+}
+
+/* ── Sections ───────────────────────────────────────────────────────── */
+
+.section {
+  margin-bottom: 2.5rem;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.sectionHeading {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.25rem;
+}
+
+.sectionSub {
+  margin: 0 0 1rem 0;
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+
+.sectionMeta {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.65;
+}
+
+.sectionMeta code {
+  font-size: 0.8rem;
+}
+
+.subHeading {
+  margin: 1.5rem 0 0.25rem 0;
+  font-size: 1rem;
+}
+
+/* ── Adherence ──────────────────────────────────────────────────────── */
+
+.adherenceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin: 1rem 0 1.5rem 0;
+}
+
+.adherenceStat {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 6px;
+}
+
+.adherenceStatHighlight {
+  border-color: #9ae6b4;
+  background: #f0fff4;
+}
+
+.adherenceValue {
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.adherenceLabel {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.65;
+}
+
+/* ── Deviations ─────────────────────────────────────────────────────── */
+
+.deviationList {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0 0;
+}
+
+.deviationItem {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+}
+
+.deviationHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.deviationExercise {
+  font-weight: 600;
+}
+
+.deviationBadge {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.5rem;
+  background: #fff5f5;
+  border: 1px solid #feb2b2;
+  color: #742a2a;
+  border-radius: 999px;
+}
+
+.deviationDetail {
+  margin: 0.5rem 0 0.25rem 0;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.deviationExample {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+/* ── Observations ───────────────────────────────────────────────────── */
+
+.observationList {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0 0;
+}
+
+.observationItem {
+  padding: 0.75rem 0;
+  border-bottom: 1px dashed var(--border, #eee);
+}
+
+.observationItem:last-child {
+  border-bottom: none;
+}
+
+.observationMeta {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.6;
+}
+
+.observationContent {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 0.95rem;
+}
+
+/* ── Divider + recompute ────────────────────────────────────────────── */
+
+.divider {
+  border-top: 1px solid var(--border, #e5e5e5);
+  margin: 3rem 0 2rem 0;
+}
+
+.recomputeSection {
+  padding: 1.25rem;
+  background: #fafafa;
+  border: 1px dashed var(--border, #ccc);
+  border-radius: 6px;
+}
+
+.recomputeHeading {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+}
+
+.recomputeBody {
+  margin: 0 0 1rem 0;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.recomputeButton {
+  padding: 0.55rem 1rem;
+  min-height: 40px;
+  font-size: 0.95rem;
+  border: 1px solid var(--border, #ccc);
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.recomputeHideButton {
+  padding: 0.4rem 0.85rem;
+  min-height: 36px;
+  font-size: 0.85rem;
+  border: 1px solid var(--border, #ccc);
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 1rem;
+}
+
+.recomputeWarning {
+  padding: 0.75rem 1rem;
+  background: #fffaf0;
+  border: 1px solid #fbd38d;
+  color: #7b341e;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.recomputeError {
+  padding: 0.75rem 1rem;
+  background: #fff5f5;
+  border: 1px solid #feb2b2;
+  color: #742a2a;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}

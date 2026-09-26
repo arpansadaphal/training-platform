@@ -2,6 +2,11 @@
 //
 // Routers are thin: input validation via Zod, authorization + orchestration
 // delegated to programService. No business rules live here (three-layer rule).
+//
+// Phase 7 addition: getIdentitySummary — the /app landing screen's single
+// aggregation read. Returns the user's primary Program, its current
+// TrainingBlock, the current Session (if any), and three lifetime stats.
+// Deliberately one procedure so the landing page renders in one round trip.
 
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
@@ -11,6 +16,7 @@ import {
   getMyProgram,
   renameMyProgram,
   archiveMyProgram,
+  getMyIdentitySummaryForUser,
 } from "../services/programService";
 
 const programNameSchema = z.string().trim().min(1).max(120);
@@ -44,4 +50,12 @@ export const programRouter = router({
   archive: protectedProcedure
     .input(z.object({ id: programIdSchema }))
     .mutation(({ ctx, input }) => archiveMyProgram(ctx.user.id, input.id)),
+
+  // === PHASE 7 ADDITION ===
+  /**
+   * The /app landing screen's single aggregation read. See identityService.ts.
+   */
+  getIdentitySummary: protectedProcedure.query(({ ctx }) =>
+    getMyIdentitySummaryForUser(ctx.user.id),
+  ),
 });

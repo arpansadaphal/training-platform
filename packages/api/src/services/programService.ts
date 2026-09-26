@@ -33,6 +33,11 @@ import {
 } from "@training/db";
 import { loadOwnedProgramOrThrow } from "./loadOwnedProgram";
 
+import {
+  getMyIdentitySummary,
+  type IdentitySummary,
+} from "./identityService";
+
 /**
  * Key of the sole GoalProfileDefinition seeded at MVP. When a second profile
  * lands (Phase 9's Strength), this becomes the "default" choice and a
@@ -141,4 +146,20 @@ export async function archiveMyProgram(
     }
     return archiveProgramInTx(tx, programId);
   }, TRANSACTION_OPTIONS);
+}
+
+// === PHASE 7 ADDITION ===
+/**
+ * The /app landing screen's single aggregation read. Thin forwarder so the
+ * procedure can sit on the program router (it is entirely about the user's
+ * Programs) while the aggregation logic stays in identityService.ts.
+ *
+ * If you'd rather expose it on a dedicated `identity` router, delete this
+ * forwarder and import getMyIdentitySummary directly in that router. No
+ * behavioral difference.
+ */
+export async function getMyIdentitySummaryForUser(
+  userId: string,
+): Promise<IdentitySummary> {
+  return getMyIdentitySummary(userId);
 }

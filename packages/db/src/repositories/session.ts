@@ -169,3 +169,25 @@ export async function updateSessionStatus(
     select: SESSION_SELECT,
   });
 }
+
+/**
+ * Phase 7 addition — /app landing screen's headline stat.
+ *
+ * Program-scoped, LIFETIME: counts every COMPLETED Session across every
+ * TrainingBlock of every ProgramVersion belonging to the Program. Not
+ * block-scoped — the block-scoped variant used by the ARCH-039 close paths
+ * is countCompletedSessionsForBlockInTx (a separate function in
+ * trainingBlock.ts).
+ */
+export async function countCompletedSessionsForProgram(
+  programId: string,
+): Promise<number> {
+  return prisma.session.count({
+    where: {
+      status: "COMPLETED",
+      trainingBlock: {
+        programVersion: { programId },
+      },
+    },
+  });
+}

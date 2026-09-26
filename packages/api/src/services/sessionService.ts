@@ -21,6 +21,11 @@
 // the structure is a per-version projection (ARCH-012), and there is no need
 // for a third read path when the version-with-structure read already produces
 // exactly the shape the session UI needs.
+//
+// Phase 7 additions:
+//   - getCurrentSession: read-only sibling of getOrCreateNext (never creates).
+//   - getSessionContext now resolves exercise display names via listExercises
+//     instead of leaking the exerciseId cuid as exerciseName.
 
 import { TRPCError } from "@trpc/server";
 import {
@@ -31,18 +36,23 @@ import {
   findProgramById,
   findTrainingBlockById,
   findVersionWithStructure,
+  listExercises,
   updateSessionStatus,
   type SessionRecord,
   type SessionStatus,
   type TrainingBlockRecord,
 } from "@training/db";
 import { loadOwnedProgramOrThrow } from "./loadOwnedProgram";
-import { loadOwnedSessionOrThrow } from "./loadOwnedExecution";
+import {
+  loadOwnedSessionOrThrow,
+  loadOwnedTrainingBlockOrThrow,
+} from "./loadOwnedExecution";
 
 interface PrescriptionContext {
   id: string;
   orderIndex: number;
   exerciseId: string;
+  exerciseName: string;
   targetSets: number;
   targetRepsLow: number;
   targetRepsHigh: number;
@@ -181,6 +191,13 @@ export async function getSessionContext(
     );
   }
 
+  // Phase 7 fix: previously returned the exercise cuid as exerciseName — the
+  // session UI displayed a cuid where a human-readable name belongs. Load
+  // the reference data once per call and resolve names below.
+  const allExercises = await listExercises();
+  const nameById = new Map<string, string>();
+  for (const e of allExercises) nameById.set(e.id, e.name);
+
   const workoutDay: WorkoutDayContext = {
     id: day.id,
     name: day.name,
@@ -189,6 +206,8 @@ export async function getSessionContext(
       id: p.id,
       orderIndex: p.orderIndex,
       exerciseId: p.exerciseId,
+      // Phase 7 fix: was `p.exerciseId` — a cuid leaked to the UI.
+      exerciseName: nameById.get(p.exerciseId) ?? p.exerciseId,
       targetSets: p.targetSets,
       targetRepsLow: p.targetRepsLow,
       targetRepsHigh: p.targetRepsHigh,
@@ -262,4 +281,21 @@ export async function markSkipped(
   // completedAt are for the other two transitions; a SKIPPED transition
   // changes only the status.
   return updateSessionStatus(session.id, { status: "SKIPPED" });
+}
+
+// === PHASE 7 ADDITION ===
+/**
+ * Read-only sibling of getOrCreateNext. Returns the current PLANNED or
+ * IN_PROGRESS Session for a block, or null. NEVER creates a Session.
+ *
+ * The /app landing screen's identity summary calls findActiveSessionForBlock
+ * directly; this wrapper exists for callers that want to gate the read on
+ * ownership of the block.
+ */
+export async function getCurrentSession(
+  userId: string,
+  trainingBlockId: string,
+): Promise<SessionRecord | null> {
+  await loadOwnedTrainingBlockOrThrow(userId, trainingBlockId);
+  return findActiveSessionForBlock(trainingBlockId);
 }

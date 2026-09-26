@@ -9,6 +9,9 @@
 //
 // Transitions: PLANNED → IN_PROGRESS → COMPLETED, and PLANNED|IN_PROGRESS
 // → SKIPPED. COMPLETED and SKIPPED are terminal.
+//
+// Phase 7 addition: a regression test asserting getSessionContext returns
+// exercise display names, not cuids.
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -24,6 +27,7 @@ import { createMyDraft, updateMyDraftStructure } from "./draftService";
 import { commitFromDraft } from "./programVersionService";
 import {
   getOrCreateNext,
+  getSessionContext,
   markStarted,
   markCompleted,
   markSkipped,
@@ -228,5 +232,33 @@ describe("sessionService", () => {
     // And the session is untouched.
     const after = await findSessionById(session.id);
     expect(after?.status).toBe("PLANNED");
+  });
+
+  // === PHASE 7 ADDITION ===
+  // Phase 6 bug fix regression: getSessionContext must return the exercise
+  // display name, not the exercise cuid.
+  it("getSessionContext returns exercise display names, not cuids", async () => {
+    const { programId } = await setupCommittedProgram(user);
+    const session = await getOrCreateNext(user.id, programId);
+    const context = await getSessionContext(user.id, session.id);
+
+    const firstPrescription = context.workoutDay.prescriptions[0];
+    if (!firstPrescription) {
+      throw new Error(
+        "Expected at least one prescription in the workout day context",
+      );
+    }
+
+    expect(firstPrescription.exerciseName.length).toBeGreaterThan(0);
+    expect(firstPrescription.exerciseName).not.toBe(
+      firstPrescription.exerciseId,
+    );
+
+    const exercises = await listExercises();
+    const matched = exercises.find(
+      (e) => e.id === firstPrescription.exerciseId,
+    );
+    expect(matched).toBeDefined();
+    expect(firstPrescription.exerciseName).toBe(matched?.name);
   });
 });

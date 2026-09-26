@@ -7,6 +7,7 @@
 //                    training-execution surface (TrainingBlock lifecycle,
 //                    workout Session generation + status transitions, set
 //                    logging, and observation capture).
+// Phase 7 addition:  review — the Assessment-vs-execution Review surface.
 
 import { router } from "./trpc";
 import { userRouter } from "./routers/user";
@@ -21,6 +22,7 @@ import { trainingRouter } from "./routers/training";
 import { sessionRouter } from "./routers/session";
 import { performanceRouter } from "./routers/performance";
 import { observationRouter } from "./routers/observation";
+import { reviewRouter } from "./routers/review";
 
 export const appRouter = router({
   user: userRouter,
@@ -35,6 +37,7 @@ export const appRouter = router({
   session: sessionRouter,
   performance: performanceRouter,
   observation: observationRouter,
+  review: reviewRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -36,11 +36,13 @@ import {
   computeAnalysis,
   computeAssessment,
   computeFitScore,
+  diffStructures,
   goalProfileRegistry,
   ASSESSMENT_ENGINE_VERSION,
   MutationError,
   type MutationSpec,
   type ProgramStructure,
+  type StructureDiffEntry,
 } from "@training/domain";
 import {
   closeTrainingBlockInTx,
@@ -386,4 +388,47 @@ export async function commitFromSimulation(
     via: "AI_APPLIED_SIMULATION",
     simulationId: sim.id,
   });
+}
+
+// === PHASE 7 ADDITION ===
+/**
+ * Structural diff between two versions of the SAME Program.
+ *
+ * Reuses diffStructures from packages/domain (ARCH-037). Computed on demand;
+ * never stored. This is the sole Phase 7 addition to this file — everything
+ * above (commitFromMutation, the two call sites, the TrainingBlock close +
+ * open, the AssessmentSnapshot write, the originVia label handling) is
+ * shipped and unchanged.
+ *
+ * Error semantics (ARCH-040):
+ *   - Either version missing → NOT_FOUND.
+ *   - Versions from different Programs → BAD_REQUEST (wrong input shape,
+ *     not a state failure).
+ *   - Caller does not own the Program → NOT_FOUND (non-disclosure; enforced
+ *     by loadOwnedProgramOrThrow).
+ */
+export async function diffVersions(
+  userId: string,
+  fromVersionId: string,
+  toVersionId: string,
+): Promise<StructureDiffEntry[]> {
+  const from = await findVersionById(fromVersionId);
+  const to = await findVersionById(toVersionId);
+
+  if (!from || !to) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Version not found" });
+  }
+  if (from.programId !== to.programId) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Versions belong to different Programs",
+    });
+  }
+
+  await loadOwnedProgramOrThrow(userId, from.programId);
+
+  return diffStructures(
+    from.structureSnapshot as ProgramStructure,
+    to.structureSnapshot as ProgramStructure,
+  );
 }

@@ -101,8 +101,25 @@ export default async function ProgramDetailPage({ params }: PageProps) {
         )}
       </section>
 
-      <section style={{ marginTop: "2rem" }}>
-        <h2>Versions</h2>
+            <section style={{ marginTop: "2rem" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: "1rem",
+            marginBottom: "0.5rem",
+          }}
+        >
+          <h2 style={{ margin: 0 }}>Versions</h2>
+          {versions.length > 0 ? (
+            <Link
+              href={`/app/programs/${program.id}/history`}
+              style={{ fontSize: "0.9rem", opacity: 0.8 }}
+            >
+              View history &rarr;
+            </Link>
+          ) : null}
+        </div>
         {versions.length === 0 ? (
           <p style={{ opacity: 0.7 }}>
             No committed versions yet. Commit a draft in the Builder.
