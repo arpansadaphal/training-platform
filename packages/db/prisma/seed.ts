@@ -6,7 +6,7 @@
 // The one GoalProfileDefinition seeded (HYPERTROPHY) is deliberately
 // validated: false, configVersion: "0.0.1-unvalidated", thresholds: {}.
 
-import { PrismaClient, MovementPattern } from "@prisma/client";
+import { PrismaClient, type MovementPattern } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
