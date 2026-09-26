@@ -1,0 +1,257 @@
+
+/* apps/web/components/simulation/simulation.module.css
+ *
+ * Styling for the simulation panel and the Gain/Cost/Net display. Uses the
+ * same CSS variables as apps/web/components/assessment/assessment.module.css
+ * (--fg, --bg, --muted, --border, --accent) and inherits whatever palette
+ * globals.css sets. No new variables are introduced — a second module with
+ * different variables would be design-language drift, which the phase 5
+ * kickoff explicitly warned against.
+ *
+ * Class naming mirrors assessment.module.css: plain camelCase classes, one
+ * per visual concept, no BEM-style nesting, no state prefixes beyond what the
+ * component needs to discriminate at render time (variant classes).
+ */
+
+.panel {
+  margin-top: 2rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.panelHeading {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+
+.panelHint {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.fieldRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 10rem;
+}
+
+.fieldLabel {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.select,
+.input {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font: inherit;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.buttonRow {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.primaryButton,
+.secondaryButton {
+  padding: 0.5rem 1rem;
+  border-radius: 3px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.primaryButton {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.errorBanner {
+  color: #b00020;
+  font-size: 0.9rem;
+  margin: 0.5rem 0;
+}
+
+.successBanner {
+  color: var(--fg);
+  background: #eef8ee;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  margin: 0.5rem 0;
+}
+
+/* ── Gain / Cost / Net display ──────────────────────────────────────── */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.netBadge {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.4rem 0.75rem;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  font-size: 0.9rem;
+  width: fit-content;
+}
+
+.netBadgeLabel {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.netBadgeValue {
+  font-weight: 600;
+}
+
+.netPositive {
+  border-left: 4px solid var(--accent);
+}
+
+.netNegative {
+  border-left: 4px solid #b00020;
+}
+
+.netMixed {
+  border-left: 4px solid #c80;
+}
+
+.netNoChange {
+  border-left: 4px solid var(--muted);
+}
+
+.noChangeNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sectionHeading {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0;
+}
+
+.axisList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bandShift {
+  margin: 0;
+}
+
+.bandFrom,
+.bandTo {
+  font-weight: 600;
+}
+
+.transitionList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.transitionItem code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--border);
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+}
+
+/* ── Error / cannot-compute boxes ──────────────────────────────────── */
+
+.errorBox {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #b00020;
+  border-left: 4px solid #b00020;
+  border-radius: 3px;
+  background: #fdf3f3;
+}
+
+.errorBoxTitle {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.errorBoxMessage {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+}
+
+.errorBoxCode {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.cannotComputeBox {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--muted);
+  border-radius: 3px;
+  background: #fafafa;
+}
+
+.cannotComputeTitle {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.cannotComputeReason {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}

@@ -1,9 +1,14 @@
 // tRPC router for ProgramVersion.
 //
-// commitFromDraft is the Builder's "Commit" button — the MANUAL_COMMIT path
-// into the single commit function. get and listForProgram are read-only and
-// return enough for the UI (and Phase 7's Review) to render the version
-// history and the assessment that was actually shown at commit time.
+// Two mutation paths, both routed through commitFromMutation (invariant 2):
+//
+//   - commitFromDraft   — the Builder's manual "Commit" button.
+//   - commitFromSimulation — the manual "Apply this change" button after a
+//                            simulation. Phase 5's second and LAST call site.
+//
+// get and listForProgram are read-only and return enough for the UI (and
+// Phase 7's Review) to render the version history and the assessment that was
+// actually shown at commit time.
 //
 // Per ARCH-011, the commit function is defined in
 // packages/api/src/services/programVersionService.ts and is never imported
@@ -19,10 +24,14 @@ import {
   type ProgramVersionRecord,
 } from "@training/db";
 import { router, protectedProcedure } from "../trpc";
-import { commitFromDraft } from "../services/programVersionService";
+import {
+  commitFromDraft,
+  commitFromSimulation,
+} from "../services/programVersionService";
 import { loadOwnedProgramOrThrow } from "../services/loadOwnedProgram";
 
 const draftIdSchema = z.string().min(1);
+const simulationIdSchema = z.string().min(1);
 const versionIdSchema = z.string().min(1);
 const programIdSchema = z.string().min(1);
 
@@ -37,6 +46,20 @@ export const programVersionRouter = router({
     .input(z.object({ draftId: draftIdSchema }))
     .mutation(({ ctx, input }) =>
       commitFromDraft(ctx.user.id, input.draftId),
+    ),
+
+  /**
+   * Second and final call site of commitFromMutation. The service re-verifies
+   * staleness (invariant 6) inside commitFromMutation against the
+   * Simulation's baseVersionId; a stale simulation raises
+   * StaleSimulationError (CONFLICT), an already-applied one raises
+   * SimulationAlreadyAppliedError (PRECONDITION_FAILED). Both project their
+   * structured payloads onto error.data.cause via the errorFormatter.
+   */
+  commitFromSimulation: protectedProcedure
+    .input(z.object({ simulationId: simulationIdSchema }))
+    .mutation(({ ctx, input }) =>
+      commitFromSimulation(ctx.user.id, input.simulationId),
     ),
 
   get: protectedProcedure

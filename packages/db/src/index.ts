@@ -10,6 +10,11 @@
 // createGoalInTx), the shared TRANSACTION_OPTIONS constant (ARCH-026), and
 // read helpers (getLatestVersionForProgram, findLatestAssessmentSnapshotForVersion,
 // findGoalProfileById, listAllInvolvements).
+//
+// Phase 5 additions: the Simulation repository surface — createSimulation,
+// findSimulationById, and findAppliedRevisionForSimulation (the derived
+// "applied" lookup that avoids a second source of truth for a fact the
+// Revision table already encodes).
 
 export { prisma } from "./client";
 
@@ -56,6 +61,15 @@ export {
   type AssessmentSnapshotReason,
   type CreateProgramVersionInput,
 } from "./repositories/programVersion";
+
+// Simulation (Phase 5)
+export {
+  createSimulation,
+  findSimulationById,
+  findAppliedRevisionForSimulation,
+  type SimulationRecord,
+  type CreateSimulationInput,
+} from "./repositories/simulation";
 
 // Draft
 export {

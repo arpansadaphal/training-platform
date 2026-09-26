@@ -1,9 +1,9 @@
 // packages/api/src/errors.ts
 //
 // Application-level error classes that carry structured payloads the client
-// needs to drive distinct UX — most importantly the stale-draft case, where
-// the UI must offer "clone the current version" rather than a generic
-// failure toast.
+// needs to drive distinct UX — most importantly the stale-draft and
+// stale-simulation cases, where the UI must offer "re-run the simulation"
+// rather than a generic failure toast.
 //
 // These extend TRPCError so no wrapping is needed at the router boundary:
 // tRPC preserves TRPCError subclasses through its middleware, and the
@@ -38,7 +38,35 @@ export interface DraftNotActiveCause {
   draftStatus: string;
 }
 
-export type SafeErrorCause = StaleDraftCause | DraftNotActiveCause;
+/**
+ * The shape of the safe cause payload for a stale-simulation error. Mirrors
+ * StaleDraftCause's structure exactly — same failure mode (invariant 6)
+ * against the sibling entity.
+ */
+export interface StaleSimulationCause {
+  code: "STALE_SIMULATION";
+  simulationId: string;
+  baseVersionId: string;
+  currentVersionId: string | null;
+}
+
+/**
+ * The shape of the safe cause payload for a simulation that has already been
+ * applied (a Revision already references it via sourceSimulationId). Not a
+ * stale-state error in the invariant-6 sense — the simulation is intact, it
+ * has simply already been consumed. The client should not retry.
+ */
+export interface SimulationAlreadyAppliedCause {
+  code: "SIMULATION_ALREADY_APPLIED";
+  simulationId: string;
+  appliedAsVersionId: string;
+}
+
+export type SafeErrorCause =
+  | StaleDraftCause
+  | DraftNotActiveCause
+  | StaleSimulationCause
+  | SimulationAlreadyAppliedCause;
 
 /**
  * Thrown when a Draft was created from a specific ProgramVersion and the
@@ -93,5 +121,61 @@ export class DraftNotActiveError extends TRPCError {
     this.name = "DraftNotActiveError";
     this.draftId = input.draftId;
     this.draftStatus = input.draftStatus;
+  }
+}
+
+/**
+ * Thrown when a Simulation's baseVersionId no longer matches the Program's
+ * active version. Same failure mode as StaleDraftError, against the sibling
+ * entity: invariant 6 ("if the base ProgramVersion changed between simulate
+ * and apply, re-simulation is required") applies to the AI-applied path
+ * exactly as it does to the manual path.
+ *
+ * Transport code: CONFLICT.
+ */
+export class StaleSimulationError extends TRPCError {
+  readonly appCode = "STALE_SIMULATION" as const;
+  readonly simulationId: string;
+  readonly baseVersionId: string;
+  readonly currentVersionId: string | null;
+
+  constructor(input: {
+    simulationId: string;
+    baseVersionId: string;
+    currentVersionId: string | null;
+  }) {
+    super({
+      code: "CONFLICT",
+      message:
+        "This simulation was based on an older version of the program. Re-run the simulation against the current version.",
+    });
+    this.name = "StaleSimulationError";
+    this.simulationId = input.simulationId;
+    this.baseVersionId = input.baseVersionId;
+    this.currentVersionId = input.currentVersionId;
+  }
+}
+
+/**
+ * Thrown when commitFromSimulation is called on a Simulation that has already
+ * produced a Revision — i.e. the mutation was already applied. Distinct from
+ * StaleSimulationError: the simulation is not stale, it has been consumed.
+ * The client should not retry; it should refresh the version list.
+ *
+ * Transport code: PRECONDITION_FAILED.
+ */
+export class SimulationAlreadyAppliedError extends TRPCError {
+  readonly appCode = "SIMULATION_ALREADY_APPLIED" as const;
+  readonly simulationId: string;
+  readonly appliedAsVersionId: string;
+
+  constructor(input: { simulationId: string; appliedAsVersionId: string }) {
+    super({
+      code: "PRECONDITION_FAILED",
+      message: "This simulation has already been applied.",
+    });
+    this.name = "SimulationAlreadyAppliedError";
+    this.simulationId = input.simulationId;
+    this.appliedAsVersionId = input.appliedAsVersionId;
   }
 }

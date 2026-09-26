@@ -4,17 +4,37 @@
 //
 // Phase 1 exposed type definitions only. Phase 2 added the pure Analysis
 // engine (computeAnalysis and its axis calculators) plus the GoalProfile
-// registry surface. Phase 3 adds the Assessment engine (computeAssessment,
-// computeFitScore), the launch gate, and the assessment-layer types.
+// registry surface. Phase 3 added the Assessment engine (computeAssessment,
+// computeFitScore), the launch gate, and the assessment-layer types. Phase 4
+// added the shared mutation function (applyMutation) and its MutationSpec
+// union. Phase 5 adds the pure simulation composition (simulate) and the
+// two diff functions (diffAssessments / diffStructures), plus the types
+// they are expressed in.
 //
-// Mutation/Simulation arrive in Phase 4+ and are still not exported here.
+// Explicit named re-exports, not `export *` — the public surface is a
+// deliberate contract; a new internal module should not silently become part
+// of it.
+
+// ── Mutation / simulation ───────────────────────────────────────────────────
 
 export type {
   MutationSpec,
+  MutationOp,
   MutationErrorCode,
+  SimulationNet,
+  SimulationResult,
+  StructureDiffEntry,
+  WhatChangedResult,
 } from "./mutation/types";
 export { MutationError } from "./mutation/types";
 export { applyMutation } from "./mutation/apply-mutation";
+export { simulate } from "./mutation/simulate";
+export type { SimulateOptions } from "./mutation/simulate";
+export { diffAssessments } from "./mutation/diff-assessments";
+export type { AssessmentDiff } from "./mutation/diff-assessments";
+export { diffStructures } from "./mutation/diff-structures";
+
+// ── Base domain types ───────────────────────────────────────────────────────
 
 export type {
   EvidenceTag,
