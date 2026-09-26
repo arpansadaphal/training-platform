@@ -8,8 +8,11 @@
 //      optional draftId. Implemented here as commitFromDraft, which routes
 //      through commitFromMutation with a REPLACE_STRUCTURE mutation.
 //
-//   2. The AI Coach's client-triggered "Apply this change" — origin
-//      AI_APPLIED_SIMULATION with a simulationId. Implemented in Phase 8.
+//   2. The manual "Apply this change" button after a simulation — origin
+//      AI_APPLIED_SIMULATION with a simulationId. Implemented in Phase 5 as
+//      commitFromSimulation, which loads the Simulation, re-verifies its
+//      baseVersionId is still the program's active version, and delegates to
+//      commitFromMutation with the Simulation's stored mutationSpec.
 //
 // There is no third path. The function that produces the persisted structure
 // is `applyMutation` from @training/domain, the same one simulate uses
@@ -19,6 +22,13 @@
 // IMPORTANT (ARCH-011): this module is exported from packages/api and must
 // never be reachable from packages/ai. The boundary test in
 // packages/ai/src/__tests__/boundary.test.ts enforces that mechanically.
+//
+// Phase 5 change: `createdVia` and `trigger` are now read from origin.via
+// rather than hardcoded "MANUAL_COMMIT". Prior to Phase 5 the AI branch threw
+// before reaching the transaction, so the hardcode was technically correct —
+// but as soon as the branch opened, every AI-applied version would be
+// silently mislabeled. The full-stack invariant test asserts the correct
+// label on both rows as a regression guard. See ARCH-033.
 
 import { TRPCError } from "@trpc/server";
 import {
@@ -36,9 +46,11 @@ import {
   createAssessmentSnapshotInTx,
   createProgramVersionInTx,
   createRevisionInTx,
+  findAppliedRevisionForSimulation,
   findDraftById,
   findGoalById,
   findGoalProfileById,
+  findSimulationById,
   findVersionById,
   getMaxVersionNumber,
   markDraftCommittedInTx,
@@ -47,7 +59,12 @@ import {
   TRANSACTION_OPTIONS,
   type ProgramVersionRecord,
 } from "@training/db";
-import { DraftNotActiveError, StaleDraftError } from "../errors";
+import {
+  DraftNotActiveError,
+  SimulationAlreadyAppliedError,
+  StaleDraftError,
+  StaleSimulationError,
+} from "../errors";
 import { loadOwnedProgramOrThrow } from "./loadOwnedProgram";
 import { loadExerciseReferenceData } from "./referenceDataService";
 
@@ -56,9 +73,9 @@ const EMPTY_STRUCTURE: ProgramStructure = { workoutDays: [] };
 /**
  * Where a commit came from. Widened from 07-versioning-and-simulation.md's
  * literal shape to carry the optional draftId needed to atomically flip a
- * draft to COMMITTED inside the same transaction as the version write.
- * Phase 8 adds nothing to this type — the AI path already fits it. See
- * ARCH-033 (logged at Phase 4 close-out).
+ * draft to COMMITTED inside the same transaction as the version write, and
+ * the simulationId needed to atomically link the Revision back to its
+ * Simulation. See ARCH-033.
  */
 export type CommitOrigin =
   | { via: "MANUAL_COMMIT"; draftId?: string }
@@ -116,7 +133,8 @@ function toNormalizedRows(structure: ProgramStructure) {
  *
  * Pre-transaction work:
  *   - ownership check
- *   - stale-state check (invariant 6) for the manual path
+ *   - stale-state check (invariant 6) for the manual path (draft.baseVersionId)
+ *     and for the AI-applied path (simulation.baseVersionId)
  *   - load reference data, goal, goal profile config
  *   - run applyMutation, computeAnalysis, computeAssessment, computeFitScore
  *
@@ -124,6 +142,15 @@ function toNormalizedRows(structure: ProgramStructure) {
  * (safe outside) or pure computation (no DB connection held). Keeping them
  * outside means the transaction window is as short as possible — the same
  * reason ARCH-026's timeouts exist.
+ *
+ * Concurrency note: the stale check runs before the transaction opens; the
+ * same pattern Phase 4 shipped for the manual path. Two concurrent commits
+ * against the same base can, in a narrow window, both pass the check and both
+ * write — the @@unique([programId, versionNumber]) constraint catches the
+ * version-number collision only if both compute the same N+1. This window is
+ * not closed in Phase 5; the same best-effort semantics apply to both call
+ * sites. A future phase that needs strict serialization would take a row lock
+ * on Program inside the transaction.
  */
 export async function commitFromMutation(
   userId: string,
@@ -133,18 +160,25 @@ export async function commitFromMutation(
 ): Promise<ProgramVersionRecord> {
   const program = await loadOwnedProgramOrThrow(userId, programId);
 
+  // VersionOrigin and RevisionTrigger are distinguished by CommitOrigin.via.
+  // Do NOT hardcode "MANUAL_COMMIT" — the AI_APPLIED_SIMULATION path reaches
+  // this transaction too. See ARCH-033.
+  const originVia = origin.via;
+
   // ── Stale-state check (invariant 6) ────────────────────────────────────────
   //
-  // For MANUAL_COMMIT with a draftId, the draft's baseVersionId is compared to
+  // MANUAL_COMMIT with a draftId: the draft's baseVersionId is compared to
   // the program's current activeVersionId. If they differ, the commit is
-  // rejected with a typed error so the client can offer "clone the current
-  // version and re-apply your edits" rather than silently overwriting whatever
-  // happened in between.
+  // rejected with StaleDraftError so the client can offer "clone the current
+  // version and re-apply your edits" rather than silently overwriting
+  // whatever happened in between.
   //
-  // For AI_APPLIED_SIMULATION, the equivalent check compares a Simulation's
-  // baseVersionId — Phase 8's responsibility. Phase 4 never emits this origin;
-  // the throw makes the un-implemented path impossible to reach silently.
+  // AI_APPLIED_SIMULATION: the equivalent check compares the Simulation's
+  // baseVersionId to the same pointer. A mismatch is a StaleSimulationError,
+  // and the client re-runs simulate() before offering Apply again.
   let sourceDraftId: string | null = null;
+  let sourceSimulationId: string | null = null;
+
   if (origin.via === "MANUAL_COMMIT" && origin.draftId) {
     const draft = await findDraftById(origin.draftId);
     if (!draft || draft.programId !== programId) {
@@ -168,14 +202,21 @@ export async function commitFromMutation(
     }
     sourceDraftId = draft.id;
   } else if (origin.via === "AI_APPLIED_SIMULATION") {
-    // Phase 8 replaces this with the equivalent simulation.baseVersionId
-    // comparison. The throw is deliberate: leaving the branch as a no-op
-    // would let a Phase-8-wired caller reach a commit without the invariant-6
-    // guarantee, which is exactly the silent-overwrite failure the invariant
-    // forbids.
-    throw new Error(
-      "AI_APPLIED_SIMULATION commit path is not implemented until Phase 8",
-    );
+    const sim = await findSimulationById(origin.simulationId);
+    if (!sim || sim.programId !== programId) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Simulation not found",
+      });
+    }
+    if (sim.baseVersionId !== program.activeVersionId) {
+      throw new StaleSimulationError({
+        simulationId: sim.id,
+        baseVersionId: sim.baseVersionId,
+        currentVersionId: program.activeVersionId,
+      });
+    }
+    sourceSimulationId = sim.id;
   }
 
   // ── Load current structure, apply the mutation ─────────────────────────────
@@ -213,9 +254,7 @@ export async function commitFromMutation(
 
   const goal = await findGoalById(goalId);
   if (!goal) {
-    throw new Error(
-      `Program.currentGoalId references missing Goal ${goalId}`,
-    );
+    throw new Error(`Program.currentGoalId references missing Goal ${goalId}`);
   }
   const profileRow = await findGoalProfileById(goal.goalProfileId);
   if (!profileRow) {
@@ -245,7 +284,7 @@ export async function commitFromMutation(
       programId,
       versionNumber: nextVersionNumber,
       structureSnapshot: nextStructure,
-      createdVia: "MANUAL_COMMIT",
+      createdVia: originVia,
       workoutDays: toNormalizedRows(nextStructure),
     });
 
@@ -253,8 +292,8 @@ export async function commitFromMutation(
       programId,
       fromVersionId: program.activeVersionId,
       toVersionId: version.id,
-      trigger: "MANUAL_COMMIT",
-      sourceSimulationId: null,
+      trigger: originVia,
+      sourceSimulationId,
       userNote: null,
     });
 
@@ -277,6 +316,11 @@ export async function commitFromMutation(
     if (sourceDraftId !== null) {
       await markDraftCommittedInTx(tx, sourceDraftId, version.id);
     }
+
+    // No "mark simulation applied" step: the Revision's sourceSimulationId
+    // FK is the single source of truth for "this simulation was applied".
+    // A second write here would be a second source of truth for the same
+    // fact. See ARCH-038.
 
     return version;
   }, TRANSACTION_OPTIONS);
@@ -305,5 +349,46 @@ export async function commitFromDraft(
   return commitFromMutation(userId, draft.programId, mutation, {
     via: "MANUAL_COMMIT",
     draftId: draft.id,
+  });
+}
+
+/**
+ * The manual "Apply this change" path after a simulation. Loads the
+ * Simulation, verifies it has not already been applied, and delegates to
+ * commitFromMutation with the Simulation's stored mutationSpec — the same
+ * mutation the user previewed, re-applied through the same applyMutation
+ * (invariant 2).
+ *
+ * "Already applied" is derived from the Revision table, not stored on the
+ * Simulation (ARCH-038): a Revision with sourceSimulationId = this
+ * simulation's id is definitive evidence the mutation already produced a
+ * version. A second attempt is rejected with SimulationAlreadyAppliedError,
+ * not silently re-applied.
+ */
+export async function commitFromSimulation(
+  userId: string,
+  simulationId: string,
+): Promise<ProgramVersionRecord> {
+  const sim = await findSimulationById(simulationId);
+  if (!sim) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Simulation not found",
+    });
+  }
+
+  const applied = await findAppliedRevisionForSimulation(simulationId);
+  if (applied) {
+    throw new SimulationAlreadyAppliedError({
+      simulationId,
+      appliedAsVersionId: applied.toVersionId,
+    });
+  }
+
+  const mutation = sim.mutationSpec as MutationSpec;
+
+  return commitFromMutation(userId, sim.programId, mutation, {
+    via: "AI_APPLIED_SIMULATION",
+    simulationId: sim.id,
   });
 }
