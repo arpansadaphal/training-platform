@@ -139,3 +139,24 @@ export async function listPerformanceRecordsForSession(
   });
   return rows.map(toRecord);
 }
+
+/**
+ * Phase 7 addition — /app landing screen's headline stat.
+ *
+ * Program-scoped, LIFETIME: counts every PerformanceRecord across every
+ * Session of every TrainingBlock of every ProgramVersion belonging to the
+ * Program.
+ */
+export async function countPerformanceRecordsForProgram(
+  programId: string,
+): Promise<number> {
+  return prisma.performanceRecord.count({
+    where: {
+      session: {
+        trainingBlock: {
+          programVersion: { programId },
+        },
+      },
+    },
+  });
+}

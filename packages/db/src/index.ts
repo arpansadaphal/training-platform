@@ -100,7 +100,7 @@ export {
   type CreateTrainingBlockInput,
 } from "./repositories/trainingBlock";
 
-// Session (Phase 6)
+// Session (Phase 6, Phase 7 addition)
 export {
   findSessionById,
   listSessionsForBlock,
@@ -109,21 +109,22 @@ export {
   createSession,
   createSessionInTx,
   updateSessionStatus,
+  countCompletedSessionsForProgram,
   type SessionRecord,
   type SessionStatus,
   type CreateSessionInput,
   type SessionStatusUpdate,
 } from "./repositories/session";
 
-// PerformanceRecord (Phase 6)
+// PerformanceRecord (Phase 6, Phase 7 addition)
 export {
   createPerformanceRecord,
   createPerformanceRecordsBatch,
   listPerformanceRecordsForSession,
+  countPerformanceRecordsForProgram,
   type PerformanceRecordRecord,
   type CreatePerformanceRecordInput,
 } from "./repositories/performanceRecord";
-
 // Observation (Phase 6)
 export {
   createObservation,

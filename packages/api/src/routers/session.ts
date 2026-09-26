@@ -10,6 +10,12 @@
 // session plus its structural context (block, workout day, prescriptions,
 // program) in one read.
 //
+// Phase 7 addition: getCurrentSession — a READ-ONLY sibling of
+// getOrCreateNext. Returns the current PLANNED / IN_PROGRESS Session for a
+// block, or null. Never creates. The landing screen uses it (via
+// program.getIdentitySummary) so a page render never has the side effect of
+// creating a Session.
+//
 // Status-transition validation lives in sessionService; the router only
 // shapes inputs.
 
@@ -18,6 +24,7 @@ import { router, protectedProcedure } from "../trpc";
 import {
   getOrCreateNext,
   getSessionContext,
+  getCurrentSession,
   markStarted,
   markCompleted,
   markSkipped,
@@ -25,6 +32,7 @@ import {
 
 const programIdSchema = z.string().min(1);
 const sessionIdSchema = z.string().min(1);
+const trainingBlockIdSchema = z.string().min(1);
 
 export const sessionRouter = router({
   getOrCreateNext: protectedProcedure
@@ -37,6 +45,17 @@ export const sessionRouter = router({
     .input(z.object({ sessionId: sessionIdSchema }))
     .query(({ ctx, input }) =>
       getSessionContext(ctx.user.id, input.sessionId),
+    ),
+
+  // === PHASE 7 ADDITION ===
+  /**
+   * Read-only sibling of getOrCreateNext. Returns the current PLANNED or
+   * IN_PROGRESS Session for a TrainingBlock, or null. Never creates.
+   */
+  getCurrentSession: protectedProcedure
+    .input(z.object({ trainingBlockId: trainingBlockIdSchema }))
+    .query(({ ctx, input }) =>
+      getCurrentSession(ctx.user.id, input.trainingBlockId),
     ),
 
   markStarted: protectedProcedure

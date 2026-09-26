@@ -1,0 +1,123 @@
+/* apps/web/app/app/programs/[id]/history/history.module.css
+ *
+ * Version history. A vertical list of cards, ordered newest first. Muted
+ * metadata; one small disclosure per row for the structural diff. No
+ * timeline, no charts — a list.
+ */
+
+.page {
+  padding: 2rem;
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.nav {
+  margin-bottom: 1rem;
+  opacity: 0.7;
+}
+
+.header {
+  margin-top: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.heading {
+  margin: 0 0 0.25rem 0;
+}
+
+.muted {
+  opacity: 0.7;
+}
+
+.empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  opacity: 0.7;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.item {
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--border, #e5e5e5);
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+.itemHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.itemTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.versionNumber {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.triggerBadge {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.5rem;
+  background: #ebf8ff;
+  border: 1px solid #90cdf4;
+  color: #2a4365;
+  border-radius: 999px;
+}
+
+.date {
+  font-size: 0.85rem;
+  opacity: 0.65;
+}
+
+.initial {
+  margin: 0;
+  font-size: 0.95rem;
+  opacity: 0.75;
+}
+
+.toggle {
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  min-height: 32px;
+  font-size: 0.85rem;
+  border: 1px solid var(--border, #ccc);
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.diffList {
+  list-style: none;
+  padding: 0.5rem 0 0 0;
+  margin: 0;
+}
+
+.diffItem {
+  padding: 0.35rem 0;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.diffItem::before {
+  content: "•";
+  margin-right: 0.5rem;
+  opacity: 0.5;
+}

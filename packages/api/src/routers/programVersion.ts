@@ -27,6 +27,7 @@ import { router, protectedProcedure } from "../trpc";
 import {
   commitFromDraft,
   commitFromSimulation,
+  diffVersions,
 } from "../services/programVersionService";
 import { loadOwnedProgramOrThrow } from "../services/loadOwnedProgram";
 
@@ -84,4 +85,26 @@ export const programVersionRouter = router({
       await loadOwnedProgramOrThrow(ctx.user.id, input.programId);
       return listVersionsByProgram(input.programId);
     }),
+
+  // === PHASE 7 ADDITION ===
+  /**
+   * Structural diff between two versions of the same Program. Read-only,
+   * computed on demand (never stored). Used by the version-history screen to
+   * render "what changed" between adjacent versions.
+   *
+   * Error semantics (ARCH-040):
+   *   - Either version missing → NOT_FOUND.
+   *   - Versions from different Programs → BAD_REQUEST.
+   *   - Caller does not own the Program → NOT_FOUND.
+   */
+  diff: protectedProcedure
+    .input(
+      z.object({
+        fromVersionId: versionIdSchema,
+        toVersionId: versionIdSchema,
+      }),
+    )
+    .query(({ ctx, input }) =>
+      diffVersions(ctx.user.id, input.fromVersionId, input.toVersionId),
+    ),
 });

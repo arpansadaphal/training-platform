@@ -1,0 +1,195 @@
+/* apps/web/app/app/dashboard.module.css
+ *
+ * The Identity/Progress landing surface. Styling aims for "this feels like a
+ * training home" rather than "this is a navigation grid" — a single hero
+ * card, three quiet stats, and one block strip. Nothing is a link unless it
+ * takes the user somewhere they will actually go next.
+ */
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.5rem;
+  border-bottom: 1px solid var(--border, #e5e5e5);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.navLink {
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.8;
+  font-size: 0.95rem;
+}
+
+.navLink:hover {
+  opacity: 1;
+}
+
+.signOutButton {
+  background: transparent;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 4px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.page {
+  padding: 2rem;
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.heading {
+  margin-top: 0.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.muted {
+  opacity: 0.7;
+}
+
+/* ── Hero ───────────────────────────────────────────────────────────── */
+
+.hero {
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.heroEyebrow {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+  margin: 0 0 0.35rem 0;
+}
+
+.heroTitle {
+  margin: 0 0 0.35rem 0;
+  font-size: 1.6rem;
+}
+
+.heroMeta {
+  margin: 0 0 1.25rem 0;
+  opacity: 0.75;
+  font-size: 0.95rem;
+}
+
+.heroActions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.primaryButton {
+  display: inline-block;
+  padding: 0.7rem 1.15rem;
+  min-height: 44px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: 1px solid var(--accent, #2b6cb0);
+  background: var(--accent, #2b6cb0);
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.secondaryButton {
+  display: inline-block;
+  padding: 0.7rem 1.15rem;
+  min-height: 44px;
+  font-size: 1rem;
+  border: 1px solid var(--border, #ccc);
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  box-sizing: border-box;
+}
+
+/* ── Stats ──────────────────────────────────────────────────────────── */
+
+.statsRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 6px;
+}
+
+.statValue {
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.statLabel {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.65;
+}
+
+/* ── Block strip ────────────────────────────────────────────────────── */
+
+.blockStrip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 6px;
+  background: #fafafa;
+  flex-wrap: wrap;
+}
+
+.blockStripText {
+  min-width: 12rem;
+}
+
+.blockStripTitle {
+  margin: 0 0 0.15rem 0;
+  font-weight: 600;
+}
+
+/* ── Empty state ────────────────────────────────────────────────────── */
+
+.emptyState {
+  padding: 2rem 1.5rem;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 8px;
+  text-align: left;
+}
+
+.emptyHeading {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.emptyState .primaryButton {
+  margin-top: 1rem;
+}
+
+.footerLink {
+  margin-top: 2rem;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
