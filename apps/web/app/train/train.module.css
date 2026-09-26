@@ -1,0 +1,264 @@
+/* apps/web/app/train/train.module.css
+ *
+ * Styling for /train and /train/session/[id]. Shared by both routes so a
+ * single import covers the picker page and the logging screen.
+ *
+ * The logging screen's UX bar is "table-stakes, not differentiation" per
+ * the Phase 6 file — the aim is to match Strong / Hevy / Boostcamp logging
+ * speed, not beat it. That translates to concrete choices:
+ *   - Large tap targets (min-height 44px on every interactive element).
+ *   - Full-width number inputs on mobile so a thumb can hit them.
+ *   - Minimal vertical whitespace between the exercise and its sets.
+ *   - "Skip session" is a first-class button, not a menu item.
+ */
+
+.page {
+  padding: 2rem;
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+.nav {
+  margin-bottom: 1rem;
+  opacity: 0.7;
+}
+
+.heading {
+  margin-top: 0.5rem;
+}
+
+.muted {
+  opacity: 0.7;
+}
+
+.sectionHeading {
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.programList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.programCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.programName {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.primaryButton {
+  padding: 0.75rem 1.25rem;
+  min-height: 44px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: 1px solid var(--accent, #2b6cb0);
+  background: var(--accent, #2b6cb0);
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  display: inline-block;
+  padding: 0.75rem 1.25rem;
+  min-height: 44px;
+  font-size: 1rem;
+  border: 1px solid var(--border, #ccc);
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+}
+
+.skipButton {
+  padding: 0.75rem 1.25rem;
+  min-height: 44px;
+  font-size: 1rem;
+  border: 1px solid #c53030;
+  color: #c53030;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.errorBanner {
+  padding: 0.75rem 1rem;
+  background: #fff5f5;
+  border: 1px solid #feb2b2;
+  color: #742a2a;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+
+.successBanner {
+  padding: 0.75rem 1rem;
+  background: #f0fff4;
+  border: 1px solid #9ae6b4;
+  color: #22543d;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+
+.statusBanner {
+  padding: 0.75rem 1rem;
+  background: #ebf8ff;
+  border: 1px solid #90cdf4;
+  color: #2a4365;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+
+.exerciseList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.exerciseCard {
+  padding: 1rem;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.exerciseHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.exerciseName {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.exercisePlan {
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+
+.inputRow {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.inputField {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 5rem;
+}
+
+.inputLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+  margin-bottom: 0.2rem;
+}
+
+.numberInput {
+  padding: 0.6rem 0.5rem;
+  min-height: 44px;
+  font-size: 1rem;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.setList {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0 0;
+  font-size: 0.9rem;
+}
+
+.setItem {
+  padding: 0.35rem 0;
+  border-bottom: 1px dashed var(--border, #eee);
+}
+
+.setItem:last-child {
+  border-bottom: none;
+}
+
+.actionRow {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.sessionActions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 2rem;
+  flex-wrap: wrap;
+}
+
+.observationBox {
+  margin-top: 2rem;
+  padding: 1rem;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 6px;
+}
+
+.observationTextarea {
+  width: 100%;
+  min-height: 6rem;
+  padding: 0.6rem;
+  font-size: 1rem;
+  font-family: inherit;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 4px;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.observationList {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0 0;
+}
+
+.observationItem {
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed var(--border, #eee);
+  font-size: 0.95rem;
+  white-space: pre-wrap;
+}
+
+.observationItem:last-child {
+  border-bottom: none;
+}
+
+.emptyState {
+  padding: 2rem 1rem;
+  text-align: center;
+  opacity: 0.7;
+}

@@ -1,4 +1,9 @@
 // Repository layer for Program. Plain-TS in / plain-TS out.
+//
+// Phase 6 addition: archiveProgramInTx. The archive-Program flow must run
+// its TrainingBlock close + the archivedAt write inside one transaction
+// (Phase 6 kickoff fix A6) — the non-tx archiveProgram cannot compose with
+// the block-close writes that must be atomic with it.
 
 import { type Prisma } from "@prisma/client";
 import { prisma } from "../client";
@@ -115,16 +120,32 @@ export async function archiveProgram(id: string): Promise<ProgramRecord> {
 }
 
 /**
+ * Transaction-aware variant of archiveProgram. Used by the Phase 6 archive
+ * flow, which closes the Program's open TrainingBlock in the same transaction
+ * that flips archivedAt. Sets archivedAt = now(); does not close the block
+ * itself — the service composes the two writes.
+ */
+export async function archiveProgramInTx(
+  tx: Prisma.TransactionClient,
+  id: string,
+): Promise<ProgramRecord> {
+  return tx.program.update({
+    where: { id },
+    data: { archivedAt: new Date() },
+    select: PROGRAM_SELECT,
+  });
+}
+
+/**
  * Transaction-aware: sets the Program's activeVersionId. Called from the
  * commit service after the new ProgramVersion row exists, inside the same
  * outer transaction — a partial commit would leave the Program pointing at
  * a version that does not exist, or a version that is not active.
  *
- * Flipping activeVersionId is what triggers the (future) TrainingBlock
- * lifecycle per ARCH-016. Phase 4 does not open a TrainingBlock here — that
- * is deferred to Phase 5 per the phase-04 spec's "no training execution"
- * scope. Phase 5 will either extend this function or add a sibling
- * openTrainingBlockInTx call right after it.
+ * Flipping activeVersionId is what triggers the TrainingBlock lifecycle
+ * (ARCH-016): Phase 6 extends the commit transaction so that the moment this
+ * pointer moves, the prior block is closed and a new one is opened — see
+ * programVersionService.commitFromMutation.
  */
 export async function setActiveVersionInTx(
   tx: Prisma.TransactionClient,

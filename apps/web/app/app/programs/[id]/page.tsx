@@ -1,8 +1,12 @@
 // Program detail. Phase 1: rename + archive. Phase 4 addition: entry point
 // into the Builder, plus a summary of active drafts and committed versions.
+// Phase 6 addition: an "Activate this version" button next to every
+// non-active version — the manual entry point into the TrainingBlock
+// lifecycle (the commit path runs the same close+open sequence
+// automatically; see programVersionService.commitFromMutation).
 //
 // Still a Server Component in the authenticated shell — the interactivity
-// lives one level down in /build.
+// lives one level down in /build and in the activate-action server action.
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -10,6 +14,7 @@ import { TRPCError } from "@trpc/server";
 import { appRouter } from "@training/api";
 import { auth } from "@/src/server/auth";
 import { renameProgramAction, archiveProgramAction } from "../actions";
+import { activateVersionAction } from "./activate-action";
 
 export const dynamic = "force-dynamic";
 
@@ -104,28 +109,61 @@ export default async function ProgramDetailPage({ params }: PageProps) {
           </p>
         ) : (
           <ul style={{ listStyle: "none", padding: 0, marginTop: "0.5rem" }}>
-            {versions.map((v) => (
-              <li
-                key={v.id}
-                style={{
-                  padding: "0.5rem 0",
-                  borderBottom: "1px solid var(--border)",
-                }}
-              >
-                Version {v.versionNumber}
-                {activeVersion?.id === v.id ? (
-                  <span
-                    style={{
-                      marginLeft: "0.5rem",
-                      fontSize: "0.8rem",
-                      color: "var(--muted)",
-                    }}
-                  >
-                    (active)
-                  </span>
-                ) : null}
-              </li>
-            ))}
+            {versions.map((v) => {
+              const isActive = activeVersion?.id === v.id;
+              const canActivate = !program.archivedAt && !isActive;
+              return (
+                <li
+                  key={v.id}
+                  style={{
+                    padding: "0.5rem 0",
+                    borderBottom: "1px solid var(--border)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span>Version {v.versionNumber}</span>
+                  {isActive ? (
+                    <span
+                      style={{
+                        fontSize: "0.8rem",
+                        color: "var(--muted)",
+                      }}
+                    >
+                      (active)
+                    </span>
+                  ) : null}
+                  {canActivate ? (
+                    <form
+                      action={activateVersionAction}
+                      style={{ marginLeft: "auto" }}
+                    >
+                      <input
+                        type="hidden"
+                        name="programVersionId"
+                        value={v.id}
+                      />
+                      <input
+                        type="hidden"
+                        name="programId"
+                        value={program.id}
+                      />
+                      <button
+                        type="submit"
+                        style={{
+                          padding: "0.35rem 0.75rem",
+                          fontSize: "0.85rem",
+                        }}
+                      >
+                        Activate this version
+                      </button>
+                    </form>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
