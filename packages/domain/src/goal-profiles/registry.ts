@@ -1,14 +1,20 @@
 // packages/domain/src/goal-profiles/registry.ts
 //
-// Minimal in-memory registry stub. Phase 2 registers exactly one profile
-// (HYPERTROPHY, unvalidated). Phase 3 will flesh out the roll-up side of the
-// registry and the Strength profile; the interface is frozen here so adding
-// a profile never requires touching the engine.
+// In-memory goal-profile registry.
+//
+// Phase 3 exports the class (`InMemoryGoalProfileRegistry`) so `packages/api`
+// services and Phase-3 tests can construct a fresh registry seeded with a
+// fixture profile without mutating the singleton below. The singleton
+// registers exactly one profile: HYPERTROPHY (unvalidated).
+//
+// Phase 2 shipped this class privately; Phase 3 makes it public so the
+// worked-example test can register a fixture profile alongside — or instead
+// of — the shipped one. The interface itself is unchanged.
 
 import type { GoalProfileDefinition, GoalProfileRegistry } from "./types";
 import { hypertrophyProfile } from "./hypertrophy";
 
-class InMemoryGoalProfileRegistry implements GoalProfileRegistry {
+export class InMemoryGoalProfileRegistry implements GoalProfileRegistry {
   private readonly byKey = new Map<string, GoalProfileDefinition>();
 
   register(profile: GoalProfileDefinition): void {
