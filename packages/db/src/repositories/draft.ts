@@ -3,7 +3,7 @@
 // Drafts are the only mutable structural entity in the domain model.
 // Per ARCH-014, a Program may hold many concurrent ACTIVE drafts.
 
-import { Prisma } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
 import { prisma } from "../client";
 
 export type DraftStatus = "ACTIVE" | "COMMITTED" | "DISCARDED";

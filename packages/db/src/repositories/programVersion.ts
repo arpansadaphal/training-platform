@@ -14,7 +14,7 @@
 // This only affects the interactive-transaction path — single-statement
 // calls in the other repositories are unaffected.
 
-import { Prisma } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
 import { prisma } from "../client";
 
 export type VersionOrigin = "MANUAL_COMMIT" | "AI_APPLIED_SIMULATION";

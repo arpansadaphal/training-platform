@@ -4,7 +4,7 @@
 // reconciliation and later Assessment). Goal rows themselves are created
 // when a user picks a Program's goal — that flow arrives in a later phase.
 
-import { Prisma } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
 import { prisma } from "../client";
 
 export interface GoalProfileDefinitionRecord {
