@@ -10,6 +10,13 @@
 // Mutation/Simulation arrive in Phase 4+ and are still not exported here.
 
 export type {
+  MutationSpec,
+  MutationErrorCode,
+} from "./mutation/types";
+export { MutationError } from "./mutation/types";
+export { applyMutation } from "./mutation/apply-mutation";
+
+export type {
   EvidenceTag,
   LoadScheme,
   ExercisePrescriptionStructure,
@@ -95,3 +102,5 @@ export {
   assertNoUnvalidatedProfilesInProduction,
   PRODUCTION_ENV,
 } from "./assessment/launchGate";
+
+export { ASSESSMENT_ENGINE_VERSION } from "./assessment/version";

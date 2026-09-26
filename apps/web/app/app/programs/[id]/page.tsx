@@ -1,7 +1,8 @@
-// Minimal single-Program view: rename + archive.
+// Program detail. Phase 1: rename + archive. Phase 4 addition: entry point
+// into the Builder, plus a summary of active drafts and committed versions.
 //
-// Phase 1 only. No Draft editing, no Analysis, no commit — those arrive
-// in later phases. Rendered as a Server Component in the authenticated shell.
+// Still a Server Component in the authenticated shell — the interactivity
+// lives one level down in /build.
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -37,6 +38,13 @@ export default async function ProgramDetailPage({ params }: PageProps) {
     throw err;
   }
 
+  const [drafts, versions] = await Promise.all([
+    caller.draft.listForProgram({ programId: id }),
+    caller.programVersion.listForProgram({ programId: id }),
+  ]);
+
+  const activeVersion = versions.find((v) => v.id === program.activeVersionId);
+
   return (
     <main style={{ padding: "2rem", maxWidth: "48rem", margin: "0 auto" }}>
       <p style={{ opacity: 0.7 }}>
@@ -49,6 +57,80 @@ export default async function ProgramDetailPage({ params }: PageProps) {
       ) : null}
 
       <section style={{ marginTop: "1.5rem" }}>
+        <Link
+          href={`/app/programs/${program.id}/build`}
+          style={{
+            display: "inline-block",
+            padding: "0.55rem 0.9rem",
+            border: "1px solid var(--accent)",
+            background: "var(--accent)",
+            color: "#fff",
+            borderRadius: "4px",
+            textDecoration: "none",
+          }}
+        >
+          Open Builder
+        </Link>
+      </section>
+
+      <section style={{ marginTop: "2rem" }}>
+        <h2>Drafts</h2>
+        {drafts.length === 0 ? (
+          <p style={{ opacity: 0.7 }}>
+            No active drafts. Open the Builder to start one.
+          </p>
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0, marginTop: "0.5rem" }}>
+            {drafts.map((d) => (
+              <li
+                key={d.id}
+                style={{
+                  padding: "0.5rem 0",
+                  borderBottom: "1px solid var(--border)",
+                }}
+              >
+                <Link href={`/app/programs/${program.id}/build`}>{d.label}</Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section style={{ marginTop: "2rem" }}>
+        <h2>Versions</h2>
+        {versions.length === 0 ? (
+          <p style={{ opacity: 0.7 }}>
+            No committed versions yet. Commit a draft in the Builder.
+          </p>
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0, marginTop: "0.5rem" }}>
+            {versions.map((v) => (
+              <li
+                key={v.id}
+                style={{
+                  padding: "0.5rem 0",
+                  borderBottom: "1px solid var(--border)",
+                }}
+              >
+                Version {v.versionNumber}
+                {activeVersion?.id === v.id ? (
+                  <span
+                    style={{
+                      marginLeft: "0.5rem",
+                      fontSize: "0.8rem",
+                      color: "var(--muted)",
+                    }}
+                  >
+                    (active)
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section style={{ marginTop: "2rem" }}>
         <h2>Rename</h2>
         <form
           action={renameProgramAction}
