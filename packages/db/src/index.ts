@@ -3,6 +3,13 @@
 // Everything re-exported here returns plain TypeScript shapes — no Prisma
 // types escape this package (ARCH-005). Callers in packages/api,
 // packages/ai, and apps/web import from "@training/db" only.
+//
+// Phase 4 additions: the tx-aware write functions used by the commit service
+// (createProgramVersionInTx, createRevisionInTx, createAssessmentSnapshotInTx,
+// setActiveVersionInTx, markDraftCommittedInTx, createProgramInTx,
+// createGoalInTx), the shared TRANSACTION_OPTIONS constant (ARCH-026), and
+// read helpers (getLatestVersionForProgram, findLatestAssessmentSnapshotForVersion,
+// findGoalProfileById, listAllInvolvements).
 
 export { prisma } from "./client";
 
@@ -18,23 +25,36 @@ export {
 // Program
 export {
   createProgram,
+  createProgramInTx,
   listProgramsByOwner,
   findProgramById,
   renameProgram,
   archiveProgram,
+  setActiveVersionInTx,
   type ProgramRecord,
   type ProgramVisibility,
 } from "./repositories/program";
 
-// ProgramVersion
+// ProgramVersion / Revision / AssessmentSnapshot
 export {
   findVersionById,
   listVersionsByProgram,
+  getLatestVersionForProgram,
   findVersionWithStructure,
+  findLatestAssessmentSnapshotForVersion,
   createProgramVersion,
+  createProgramVersionInTx,
+  createRevisionInTx,
+  createAssessmentSnapshotInTx,
   getMaxVersionNumber,
+  TRANSACTION_OPTIONS,
   type ProgramVersionRecord,
+  type RevisionRecord,
+  type AssessmentSnapshotRecord,
   type VersionOrigin,
+  type RevisionTrigger,
+  type AssessmentSnapshotReason,
+  type CreateProgramVersionInput,
 } from "./repositories/programVersion";
 
 // Draft
@@ -44,6 +64,7 @@ export {
   listActiveDraftsByProgram,
   updateDraftStructure,
   discardDraft,
+  markDraftCommittedInTx,
   type ProgramDraftRecord,
   type DraftStatus,
 } from "./repositories/draft";
@@ -54,6 +75,7 @@ export {
   findExerciseById,
   listMuscleGroups,
   listInvolvementsForExercise,
+  listAllInvolvements,
   type ExerciseRecord,
   type MuscleGroupRecord,
   type ExerciseMuscleInvolvementRecord,
@@ -63,9 +85,26 @@ export {
 // Goals
 export {
   findGoalProfileByKey,
+  findGoalProfileById,
   listGoalProfiles,
   createGoal,
+  createGoalInTx,
   findGoalById,
   type GoalProfileDefinitionRecord,
   type GoalRecord,
 } from "./repositories/goal";
+
+// ─── Test helpers ─────────────────────────────────────────────────────────
+//
+// NOT for production code. Exposed so packages/api's integration tests can
+// reuse the same FK-safe user cleanup the db-level tests use — duplicating
+// the cleanup walk (which depends on FK order and the circular Program ↔
+// ProgramVersion reference) would guarantee drift. A production import of
+// `makeTestUser` or `cleanupTrackedUsers` should be treated as a bug in
+// code review.
+export {
+  assertDefined,
+  makeTestUser,
+  cleanupTrackedUsers,
+  cleanupUser,
+} from "./repositories/tests/helpers";

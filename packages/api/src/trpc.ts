@@ -1,9 +1,36 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import type { Context } from "./context";
+import { StaleDraftError, DraftNotActiveError } from "./errors";
 
 const t = initTRPC.context<Context>().create({
-  errorFormatter({ shape }) {
-    return shape;
+  errorFormatter({ shape, error }) {
+    // Explicit per-type projection. Never forward `error.cause` raw — it can
+    // carry internal Prisma/DB details (SQL fragments, connection strings in
+    // some edge cases) that must not reach a client. Only the two error
+    // classes below are allow-listed; everything else omits `cause` entirely.
+    const safeCause =
+      error instanceof StaleDraftError
+        ? {
+            code: error.appCode,
+            draftId: error.draftId,
+            baseVersionId: error.baseVersionId,
+            currentVersionId: error.currentVersionId,
+          }
+        : error instanceof DraftNotActiveError
+          ? {
+              code: error.appCode,
+              draftId: error.draftId,
+              draftStatus: error.draftStatus,
+            }
+          : undefined;
+
+    return {
+      ...shape,
+      data: {
+        ...shape.data,
+        cause: safeCause,
+      },
+    };
   },
 });
 

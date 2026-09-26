@@ -1,0 +1,185 @@
+/* apps/web/components/assessment/assessment.module.css
+ *
+ * Styling for the Assessment display. Uses the existing CSS variables from
+ * app/globals.css (--fg, --bg, --muted, --border, --accent) so this component
+ * inherits whatever palette a future design pass sets. No new variables are
+ * introduced here.
+ *
+ * Variant classes (variant_strength / variant_attention / variant_opportunity)
+ * are keyed off the AxisCardVariant union; the left border color is the only
+ * visual difference between them.
+ */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sectionHeading {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0;
+}
+
+.overall {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.overallSummary {
+  margin: 0;
+}
+
+.fitScore {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.fitScoreBand {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.axisList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.axisCard {
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 4px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.variant_strength {
+  border-left-color: var(--accent);
+}
+
+.variant_attention {
+  border-left-color: #c80;
+}
+
+.variant_opportunity {
+  border-left-color: #b00020;
+}
+
+.axisCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.axisLabel {
+  font-weight: 600;
+}
+
+.axisBand {
+  font-size: 0.85rem;
+  padding: 0.1rem 0.5rem;
+  background: var(--border);
+  border-radius: 999px;
+}
+
+.axisMeta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
+  gap: 0.25rem 1rem;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.axisMeta > div {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.axisMeta dt {
+  font-weight: 600;
+}
+
+.axisMeta dd {
+  margin: 0;
+}
+
+.actionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.actionItem {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.75rem;
+}
+
+.actionDescription {
+  margin: 0;
+}
+
+.actionRootCause {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.actionRootCause code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--border);
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+}
+
+/* ── Unvalidated state ────────────────────────────────────────────────── */
+
+.unvalidated {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--muted);
+  border-radius: 4px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #fafafa;
+}
+
+.unvalidatedTitle {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.unvalidatedReason {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.unvalidatedHint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
