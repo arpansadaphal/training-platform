@@ -1,0 +1,4157 @@
+########## API SERVICES ##########
+===== packages/api/src/services/loadOwnedProgram.ts =====
+// packages/api/src/services/loadOwnedProgram.ts
+//
+// Shared ownership-check helper. Every service that reads or mutates a
+// Program goes through this — a caller who is not the owner receives
+// NOT_FOUND (deliberately, not FORBIDDEN) so the API does not leak the
+// existence of another user's Program.
+//
+// Extracted from programService.ts in Phase 4 so draftService and
+// programVersionService can reuse it without duplicating the rule.
+
+import { TRPCError } from "@trpc/server";
+import { findProgramById, type ProgramRecord } from "@training/db";
+
+export async function loadOwnedProgramOrThrow(
+  userId: string,
+  programId: string,
+): Promise<ProgramRecord> {
+  const program = await findProgramById(programId);
+  if (!program || program.ownerUserId !== userId) {
+    // Deliberately NOT_FOUND, not FORBIDDEN — do not reveal that another
+    // user's Program exists.
+    throw new TRPCError({ code: "NOT_FOUND", message: "Program not found" });
+  }
+  return program;
+}
+===== packages/api/src/services/programService.ts =====
+// Orchestration service for Program CRUD.
+//
+// Phase 1 proved the schema and repository layer work end-to-end. Phase 4
+// adds the "auto-create a Goal on Program.create" flow (Q5 resolution):
+// MVP has exactly one GoalProfileDefinition (HYPERTROPHY), and every
+// Program needs a currentGoalId from day one so the Builder has an
+// Assessment input without a goal-picker UI.
+//
+// Authorization: every read/mutation below re-checks ownership via
+// loadOwnedProgramOrThrow (extracted in Phase 4 to a shared module).
+
+import {
+  createProgramInTx,
+  createGoalInTx,
+  findGoalProfileByKey,
+  listProgramsByOwner,
+  renameProgram as renameProgramRepo,
+  archiveProgram as archiveProgramRepo,
+  prisma,
+  TRANSACTION_OPTIONS,
+  type ProgramRecord,
+} from "@training/db";
+import { loadOwnedProgramOrThrow } from "./loadOwnedProgram";
+
+/**
+ * Key of the sole GoalProfileDefinition seeded at MVP. When a second profile
+ * lands (Phase 9's Strength), this becomes the "default" choice and a
+ * goal-picker UI appears; Phase 4 just hardwires it.
+ */
+const DEFAULT_GOAL_PROFILE_KEY = "HYPERTROPHY";
+
+/**
+ * Creates a Program together with its initial Goal, in one transaction.
+ *
+ * The transaction ensures a Program never exists momentarily without a
+ * currentGoalId — which would leave the Builder with no Assessment input on
+ * a fresh Program. Flipping the schema to make currentGoalId required is
+ * deliberately not done here; the transactional create gives the same
+ * guarantee at the service layer without a migration.
+ */
+export async function createMyProgram(
+  userId: string,
+  name: string,
+): Promise<ProgramRecord> {
+  const profileRow = await findGoalProfileByKey(DEFAULT_GOAL_PROFILE_KEY);
+  if (!profileRow) {
+    // The seed is a prerequisite for program.create. Failing loudly is
+    // correct — silently creating a Program with no goal would leave the
+    // Builder broken in a way that's harder to diagnose than this error.
+    throw new Error(
+      `Goal profile "${DEFAULT_GOAL_PROFILE_KEY}" is not seeded. Run the seed before creating a Program.`,
+    );
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const goal = await createGoalInTx(tx, { goalProfileId: profileRow.id });
+    return createProgramInTx(tx, {
+      ownerUserId: userId,
+      name,
+      currentGoalId: goal.id,
+    });
+  }, TRANSACTION_OPTIONS);
+}
+
+export async function listMyPrograms(
+  userId: string,
+  includeArchived = false,
+): Promise<ProgramRecord[]> {
+  return listProgramsByOwner(userId, { includeArchived });
+}
+
+export async function getMyProgram(
+  userId: string,
+  programId: string,
+): Promise<ProgramRecord> {
+  return loadOwnedProgramOrThrow(userId, programId);
+}
+
+export async function renameMyProgram(
+  userId: string,
+  programId: string,
+  name: string,
+): Promise<ProgramRecord> {
+  await loadOwnedProgramOrThrow(userId, programId);
+  return renameProgramRepo(programId, name);
+}
+
+export async function archiveMyProgram(
+  userId: string,
+  programId: string,
+): Promise<ProgramRecord> {
+  await loadOwnedProgramOrThrow(userId, programId);
+  return archiveProgramRepo(programId);
+}
+===== packages/api/src/services/programVersionService.ts =====
+// packages/api/src/services/programVersionService.ts
+//
+// The home of commitFromMutation — the ONLY function in the codebase that
+// writes a new ProgramVersion. Two call sites exist by design (invariant 2,
+// 07-versioning-and-simulation.md):
+//
+//   1. The Builder's manual "Commit" button — origin MANUAL_COMMIT with an
+//      optional draftId. Implemented here as commitFromDraft, which routes
+//      through commitFromMutation with a REPLACE_STRUCTURE mutation.
+//
+//   2. The manual "Apply this change" button after a simulation — origin
+//      AI_APPLIED_SIMULATION with a simulationId. Implemented in Phase 5 as
+//      commitFromSimulation, which loads the Simulation, re-verifies its
+//      baseVersionId is still the program's active version, and delegates to
+//      commitFromMutation with the Simulation's stored mutationSpec.
+//
+// There is no third path. The function that produces the persisted structure
+// is `applyMutation` from @training/domain, the same one simulate uses
+// (invariant 2). If you find yourself adding a second write path for a
+// "trivial" case, stop.
+//
+// IMPORTANT (ARCH-011): this module is exported from packages/api and must
+// never be reachable from packages/ai. The boundary test in
+// packages/ai/src/__tests__/boundary.test.ts enforces that mechanically.
+//
+// Phase 5 change: `createdVia` and `trigger` are now read from origin.via
+// rather than hardcoded "MANUAL_COMMIT". Prior to Phase 5 the AI branch threw
+// before reaching the transaction, so the hardcode was technically correct —
+// but as soon as the branch opened, every AI-applied version would be
+// silently mislabeled. The full-stack invariant test asserts the correct
+// label on both rows as a regression guard. See ARCH-033.
+
+import { TRPCError } from "@trpc/server";
+import {
+  applyMutation,
+  computeAnalysis,
+  computeAssessment,
+  computeFitScore,
+  goalProfileRegistry,
+  ASSESSMENT_ENGINE_VERSION,
+  MutationError,
+  type MutationSpec,
+  type ProgramStructure,
+} from "@training/domain";
+import {
+  createAssessmentSnapshotInTx,
+  createProgramVersionInTx,
+  createRevisionInTx,
+  findAppliedRevisionForSimulation,
+  findDraftById,
+  findGoalById,
+  findGoalProfileById,
+  findSimulationById,
+  findVersionById,
+  getMaxVersionNumber,
+  markDraftCommittedInTx,
+  prisma,
+  setActiveVersionInTx,
+  TRANSACTION_OPTIONS,
+  type ProgramVersionRecord,
+} from "@training/db";
+import {
+  DraftNotActiveError,
+  SimulationAlreadyAppliedError,
+  StaleDraftError,
+  StaleSimulationError,
+} from "../errors";
+import { loadOwnedProgramOrThrow } from "./loadOwnedProgram";
+import { loadExerciseReferenceData } from "./referenceDataService";
+
+const EMPTY_STRUCTURE: ProgramStructure = { workoutDays: [] };
+
+/**
+ * Where a commit came from. Widened from 07-versioning-and-simulation.md's
+ * literal shape to carry the optional draftId needed to atomically flip a
+ * draft to COMMITTED inside the same transaction as the version write, and
+ * the simulationId needed to atomically link the Revision back to its
+ * Simulation. See ARCH-033.
+ */
+export type CommitOrigin =
+  | { via: "MANUAL_COMMIT"; draftId?: string }
+  | { via: "AI_APPLIED_SIMULATION"; simulationId: string };
+
+/**
+ * Loads the Program's current committed structure.
+ * Returns an empty structure when the Program has no active version yet
+ * (first commit). The mutation is applied to this value; for
+ * REPLACE_STRUCTURE the input is discarded by applyMutation anyway, but
+ * routing through applyMutation on every commit is what keeps invariant 2
+ * literally true in code.
+ */
+async function loadCurrentStructure(
+  activeVersionId: string | null,
+): Promise<ProgramStructure> {
+  if (activeVersionId === null) return EMPTY_STRUCTURE;
+  const version = await findVersionById(activeVersionId);
+  if (!version) {
+    // A non-null activeVersionId pointing at a missing row is a data-integrity
+    // bug, not a user-facing condition. Fail loudly.
+    throw new Error(
+      `Program.activeVersionId references missing ProgramVersion ${activeVersionId}`,
+    );
+  }
+  return version.structureSnapshot as ProgramStructure;
+}
+
+/**
+ * Converts the domain's ProgramStructure into the shape
+ * createProgramVersionInTx expects. Pure structural reshape — no
+ * interpretation of the prescription fields, no default invention.
+ */
+function toNormalizedRows(structure: ProgramStructure) {
+  return structure.workoutDays.map((day) => ({
+    orderIndex: day.orderIndex,
+    name: day.name,
+    prescriptions: day.prescriptions.map((p) => ({
+      orderIndex: p.orderIndex,
+      exerciseId: p.exerciseId,
+      targetSets: p.targetSets,
+      targetRepsLow: p.targetRepsLow,
+      targetRepsHigh: p.targetRepsHigh,
+      targetRpe: p.targetRpe ?? null,
+      loadScheme: p.loadScheme,
+    })),
+  }));
+}
+
+/**
+ * The single commit function. Writes a new immutable ProgramVersion, its
+ * Revision, its AssessmentSnapshot, flips the Program's activeVersionId, and
+ * (for the manual path) marks the source draft COMMITTED — all in one
+ * transaction with ARCH-026's timeout policy.
+ *
+ * Pre-transaction work:
+ *   - ownership check
+ *   - stale-state check (invariant 6) for the manual path (draft.baseVersionId)
+ *     and for the AI-applied path (simulation.baseVersionId)
+ *   - load reference data, goal, goal profile config
+ *   - run applyMutation, computeAnalysis, computeAssessment, computeFitScore
+ *
+ * Rationale for running these before the transaction: they are either reads
+ * (safe outside) or pure computation (no DB connection held). Keeping them
+ * outside means the transaction window is as short as possible — the same
+ * reason ARCH-026's timeouts exist.
+ *
+ * Concurrency note: the stale check runs before the transaction opens; the
+ * same pattern Phase 4 shipped for the manual path. Two concurrent commits
+ * against the same base can, in a narrow window, both pass the check and both
+ * write — the @@unique([programId, versionNumber]) constraint catches the
+ * version-number collision only if both compute the same N+1. This window is
+ * not closed in Phase 5; the same best-effort semantics apply to both call
+ * sites. A future phase that needs strict serialization would take a row lock
+ * on Program inside the transaction.
+ */
+export async function commitFromMutation(
+  userId: string,
+  programId: string,
+  mutation: MutationSpec,
+  origin: CommitOrigin,
+): Promise<ProgramVersionRecord> {
+  const program = await loadOwnedProgramOrThrow(userId, programId);
+
+  // VersionOrigin and RevisionTrigger are distinguished by CommitOrigin.via.
+  // Do NOT hardcode "MANUAL_COMMIT" — the AI_APPLIED_SIMULATION path reaches
+  // this transaction too. See ARCH-033.
+  const originVia = origin.via;
+
+  // ── Stale-state check (invariant 6) ────────────────────────────────────────
+  //
+  // MANUAL_COMMIT with a draftId: the draft's baseVersionId is compared to
+  // the program's current activeVersionId. If they differ, the commit is
+  // rejected with StaleDraftError so the client can offer "clone the current
+  // version and re-apply your edits" rather than silently overwriting
+  // whatever happened in between.
+  //
+  // AI_APPLIED_SIMULATION: the equivalent check compares the Simulation's
+  // baseVersionId to the same pointer. A mismatch is a StaleSimulationError,
+  // and the client re-runs simulate() before offering Apply again.
+  let sourceDraftId: string | null = null;
+  let sourceSimulationId: string | null = null;
+
+  if (origin.via === "MANUAL_COMMIT" && origin.draftId) {
+    const draft = await findDraftById(origin.draftId);
+    if (!draft || draft.programId !== programId) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Draft not found" });
+    }
+    if (draft.status !== "ACTIVE") {
+      throw new DraftNotActiveError({
+        draftId: draft.id,
+        draftStatus: draft.status,
+      });
+    }
+    if (
+      draft.baseVersionId !== null &&
+      program.activeVersionId !== draft.baseVersionId
+    ) {
+      throw new StaleDraftError({
+        draftId: draft.id,
+        baseVersionId: draft.baseVersionId,
+        currentVersionId: program.activeVersionId,
+      });
+    }
+    sourceDraftId = draft.id;
+  } else if (origin.via === "AI_APPLIED_SIMULATION") {
+    const sim = await findSimulationById(origin.simulationId);
+    if (!sim || sim.programId !== programId) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Simulation not found",
+      });
+    }
+    if (sim.baseVersionId !== program.activeVersionId) {
+      throw new StaleSimulationError({
+        simulationId: sim.id,
+        baseVersionId: sim.baseVersionId,
+        currentVersionId: program.activeVersionId,
+      });
+    }
+    sourceSimulationId = sim.id;
+  }
+
+  // ── Load current structure, apply the mutation ─────────────────────────────
+  const currentStructure = await loadCurrentStructure(program.activeVersionId);
+
+  let nextStructure: ProgramStructure;
+  try {
+    nextStructure = applyMutation(currentStructure, mutation);
+  } catch (err) {
+    if (err instanceof MutationError) {
+      // MutationError is a domain error (invalid id reference, duplicate id,
+      // reorder mismatch, etc.). It must never reach the client as a raw
+      // stack trace — 07-versioning-and-simulation.md explicitly requires a
+      // clear message. Map to BAD_REQUEST so the UI can render it directly.
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: err.message,
+      });
+    }
+    throw err;
+  }
+
+  // ── Load reference data + goal profile config ──────────────────────────────
+  const referenceData = await loadExerciseReferenceData();
+
+  if (!program.currentGoalId) {
+    throw new Error(
+      `Program ${programId} has no currentGoalId — createMyProgram should have set one`,
+    );
+  }
+  // Capture after the narrowing check so the `string` type survives into the
+  // transaction closure below (property-access narrowing does not survive an
+  // async boundary).
+  const goalId: string = program.currentGoalId;
+
+  const goal = await findGoalById(goalId);
+  if (!goal) {
+    throw new Error(`Program.currentGoalId references missing Goal ${goalId}`);
+  }
+  const profileRow = await findGoalProfileById(goal.goalProfileId);
+  if (!profileRow) {
+    throw new Error(
+      `Goal.goalProfileId references missing GoalProfileDefinition ${goal.goalProfileId}`,
+    );
+  }
+  const profileDefinition = goalProfileRegistry.get(profileRow.key);
+  const config = profileDefinition.loadConfig();
+
+  // ── Deterministic engine ───────────────────────────────────────────────────
+  //
+  // computeAnalysis takes (structure, referenceData, config) — the config
+  // supplies the axis band definitions the analysis needs to resolve bands.
+  // The Analysis payload's own programVersionId is null here: the analysis
+  // is computed BEFORE the version row exists, and the version linkage is
+  // recorded by the AssessmentSnapshot row itself, not inside the payload.
+  const analysis = computeAnalysis(nextStructure, referenceData, config);
+  const assessmentResult = computeAssessment(analysis, config, { goalId });
+  const fitScoreResult = computeFitScore(assessmentResult);
+
+  // ── Persist (single transaction) ───────────────────────────────────────────
+  const nextVersionNumber = (await getMaxVersionNumber(programId)) + 1;
+
+  return prisma.$transaction(async (tx) => {
+    const version = await createProgramVersionInTx(tx, {
+      programId,
+      versionNumber: nextVersionNumber,
+      structureSnapshot: nextStructure,
+      createdVia: originVia,
+      workoutDays: toNormalizedRows(nextStructure),
+    });
+
+    await createRevisionInTx(tx, {
+      programId,
+      fromVersionId: program.activeVersionId,
+      toVersionId: version.id,
+      trigger: originVia,
+      sourceSimulationId,
+      userNote: null,
+    });
+
+    await createAssessmentSnapshotInTx(tx, {
+      programVersionId: version.id,
+      goalId,
+      engineVersion: ASSESSMENT_ENGINE_VERSION,
+      thresholdsVersion: profileRow.configVersion,
+      metrics: analysis,
+      assessment: assessmentResult,
+      fitScore: fitScoreResult,
+      reason: "COMMIT",
+      // Assessment.computedAt is the ISO string that arrived via
+      // Analysis.computedAt; convert to Date for the persistence layer.
+      computedAt: new Date(assessmentResult.assessment.computedAt),
+    });
+
+    await setActiveVersionInTx(tx, programId, version.id);
+
+    if (sourceDraftId !== null) {
+      await markDraftCommittedInTx(tx, sourceDraftId, version.id);
+    }
+
+    // No "mark simulation applied" step: the Revision's sourceSimulationId
+    // FK is the single source of truth for "this simulation was applied".
+    // A second write here would be a second source of truth for the same
+    // fact. See ARCH-038.
+
+    return version;
+  }, TRANSACTION_OPTIONS);
+}
+
+/**
+ * The Builder's "Commit" button path: loads the draft's current structure,
+ * wraps it in a REPLACE_STRUCTURE MutationSpec, and routes through
+ * commitFromMutation. The stale check and ownership check both run inside
+ * commitFromMutation — this wrapper does not duplicate them.
+ */
+export async function commitFromDraft(
+  userId: string,
+  draftId: string,
+): Promise<ProgramVersionRecord> {
+  const draft = await findDraftById(draftId);
+  if (!draft) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Draft not found" });
+  }
+
+  const mutation: MutationSpec = {
+    op: "REPLACE_STRUCTURE",
+    structure: draft.structure as ProgramStructure,
+  };
+
+  return commitFromMutation(userId, draft.programId, mutation, {
+    via: "MANUAL_COMMIT",
+    draftId: draft.id,
+  });
+}
+
+/**
+ * The manual "Apply this change" path after a simulation. Loads the
+ * Simulation, verifies it has not already been applied, and delegates to
+ * commitFromMutation with the Simulation's stored mutationSpec — the same
+ * mutation the user previewed, re-applied through the same applyMutation
+ * (invariant 2).
+ *
+ * "Already applied" is derived from the Revision table, not stored on the
+ * Simulation (ARCH-038): a Revision with sourceSimulationId = this
+ * simulation's id is definitive evidence the mutation already produced a
+ * version. A second attempt is rejected with SimulationAlreadyAppliedError,
+ * not silently re-applied.
+ */
+export async function commitFromSimulation(
+  userId: string,
+  simulationId: string,
+): Promise<ProgramVersionRecord> {
+  const sim = await findSimulationById(simulationId);
+  if (!sim) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Simulation not found",
+    });
+  }
+
+  const applied = await findAppliedRevisionForSimulation(simulationId);
+  if (applied) {
+    throw new SimulationAlreadyAppliedError({
+      simulationId,
+      appliedAsVersionId: applied.toVersionId,
+    });
+  }
+
+  const mutation = sim.mutationSpec as MutationSpec;
+
+  return commitFromMutation(userId, sim.programId, mutation, {
+    via: "AI_APPLIED_SIMULATION",
+    simulationId: sim.id,
+  });
+}
+===== packages/api/src/services/simulationService.ts =====
+// packages/api/src/services/simulationService.ts
+//
+// Orchestration for the simulate side of Phase 5.
+//
+//   - simulateAndPersist() — loads the active version, runs the pure
+//                            simulate(), persists the Simulation row, and
+//                            returns both the row id and the SimulationResult.
+//
+// commitFromSimulation() lives in programVersionService.ts next to
+// commitFromDraft. Together they are the two and only two call sites of
+// commitFromMutation (invariant 2); co-locating them makes that countable in
+// code review.
+//
+// Persistence mapping (see the Simulation schema from Phase 1):
+//
+//   resultAnalysis   ← result.mutatedAnalysis       (the "after" Analysis)
+//   resultAssessment ← result.mutatedAssessment     (the "after" Assessment)
+//   diff             ← { kind, baseAnalysis, baseAssessment,
+//                        [COMPUTED: mutatedStructure, gain, cost, net, whatChanged]
+//                        [CANNOT_COMPUTE: reason] }
+//
+// The three Json columns are non-null; CANNOT_COMPUTE is persistable because
+// it now carries both analyses and both assessments (ARCH-036 addendum). The
+// INVALID_MUTATION branch is NOT persistable — there is no mutated structure
+// to analyze — and returns without writing a row.
+//
+// Scope: `simulate()` is called against the Program's ACTIVE version only.
+// The Phase 1 schema's Simulation.baseVersionId is a non-null FK to
+// ProgramVersion; drafts cannot be a base for Phase 5's Simulation. A future
+// phase that wants draft-base simulations would need a schema change.
+
+import { TRPCError } from "@trpc/server";
+import {
+  goalProfileRegistry,
+  simulate,
+  type MutationSpec,
+  type ProgramStructure,
+  type SimulationResult,
+} from "@training/domain";
+import {
+  createSimulation,
+  findGoalById,
+  findGoalProfileById,
+  findVersionById,
+  type SimulationRecord,
+} from "@training/db";
+import { loadOwnedProgramOrThrow } from "./loadOwnedProgram";
+import { loadExerciseReferenceData } from "./referenceDataService";
+
+export interface SimulateAndPersistResult {
+  /**
+   * null when the mutation was invalid and no row was written. Non-null for
+   * COMPUTED and CANNOT_COMPUTE — the two persistable branches.
+   */
+  simulationId: string | null;
+  result: SimulationResult;
+}
+
+/**
+ * The payload written to the `diff` column.
+ *
+ * Deliberately plain objects (not a discriminated-union type) — the column
+ * is opaque JSON from Prisma's perspective, and the shape is a wiring
+ * detail, not a domain contract. The type that consumers read is
+ * SimulationResult; a future phase that needs to read this column back
+ * writes a mapper in this file, not a domain type.
+ */
+function buildDiffPayload(
+  result: Extract<SimulationResult, { kind: "COMPUTED" | "CANNOT_COMPUTE" }>,
+): Record<string, unknown> {
+  if (result.kind === "COMPUTED") {
+    return {
+      kind: "COMPUTED",
+      baseAnalysis: result.baseAnalysis,
+      baseAssessment: result.baseAssessment,
+      mutatedStructure: result.mutatedStructure,
+      gain: result.gain,
+      cost: result.cost,
+      net: result.net,
+      whatChanged: result.whatChanged,
+    };
+  }
+  return {
+    kind: "CANNOT_COMPUTE",
+    reason: result.reason,
+    baseAnalysis: result.baseAnalysis,
+    baseAssessment: result.baseAssessment,
+  };
+}
+
+/**
+ * Loads the base structure, runs the deterministic engine through the pure
+ * simulate(), persists the Simulation row, and returns id + result.
+ *
+ * Throws (never returns a partial success):
+ *   - NOT_FOUND           — caller does not own the program
+ *   - PRECONDITION_FAILED — program has no active version to simulate against
+ *   - Internal errors     — a missing Goal / GoalProfileDefinition (data
+ *                           integrity), same failure modes as
+ *                           commitFromMutation
+ */
+export async function simulateAndPersist(
+  userId: string,
+  programId: string,
+  mutation: MutationSpec,
+): Promise<SimulateAndPersistResult> {
+  const program = await loadOwnedProgramOrThrow(userId, programId);
+
+  if (program.activeVersionId === null) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "This program has no committed version yet. Commit one before simulating a change.",
+    });
+  }
+  const baseVersion = await findVersionById(program.activeVersionId);
+  if (!baseVersion) {
+    throw new Error(
+      `Program.activeVersionId references missing ProgramVersion ${program.activeVersionId}`,
+    );
+  }
+
+  if (!program.currentGoalId) {
+    throw new Error(
+      `Program ${programId} has no currentGoalId — createMyProgram should have set one`,
+    );
+  }
+  const goalId: string = program.currentGoalId;
+
+  const goal = await findGoalById(goalId);
+  if (!goal) {
+    throw new Error(`Program.currentGoalId references missing Goal ${goalId}`);
+  }
+  const profileRow = await findGoalProfileById(goal.goalProfileId);
+  if (!profileRow) {
+    throw new Error(
+      `Goal.goalProfileId references missing GoalProfileDefinition ${goal.goalProfileId}`,
+    );
+  }
+  const profileDefinition = goalProfileRegistry.get(profileRow.key);
+  const config = profileDefinition.loadConfig();
+
+  const referenceData = await loadExerciseReferenceData();
+  const baseStructure = baseVersion.structureSnapshot as ProgramStructure;
+
+  const result = simulate(baseStructure, mutation, config, referenceData, {
+    goalId,
+  });
+
+  // ── INVALID_MUTATION: nothing to persist ──────────────────────────────────
+  //
+  // There is no mutated structure, so resultAnalysis / resultAssessment
+  // cannot be populated. The three Json columns are non-null; writing an
+  // empty marker object would leave a reader unable to distinguish "invalid
+  // mutation" from "empty payload". Return the result without a row.
+  //
+  // This is a first-class return, not an error: the caller checks `kind`.
+  // The Coach (Phase 8) narrates an invalid mutation without a crash; the
+  // router procedure surfaces it identically.
+  if (result.kind === "INVALID_MUTATION") {
+    return { simulationId: null, result };
+  }
+
+  // ── Persist ───────────────────────────────────────────────────────────────
+  //
+  // Both COMPUTED and CANNOT_COMPUTE reach here. The narrowing above leaves
+  // `result` as COMPUTED | CANNOT_COMPUTE; both carry mutatedAnalysis and
+  // mutatedAssessment (the CANNOT_COMPUTE extension is ARCH-036 addendum).
+  const persisted: SimulationRecord = await createSimulation({
+    programId,
+    baseVersionId: baseVersion.id,
+    goalId,
+    mutationSpec: mutation,
+    resultAnalysis: result.mutatedAnalysis,
+    resultAssessment: result.mutatedAssessment,
+    diff: buildDiffPayload(result),
+    createdByConversationId: null, // Phase 8 wires the conversation id
+  });
+
+  return { simulationId: persisted.id, result };
+}
+===== packages/api/src/services/draftService.ts =====
+// packages/api/src/services/draftService.ts
+//
+// Orchestration service for ProgramDraft.
+//
+// Drafts are the only mutable structural entity in the domain model (see
+// 03-domain-model.md). Everything here deals with ACTIVE drafts; a draft
+// whose status is COMMITTED is immutable, and DISCARDED is unused in Phase 4
+// (discard is a hard delete — see ARCH-020-adjacent note in DECISIONS).
+//
+// Ownership: the caller must own the Program the draft belongs to. A draft
+// whose program the caller does not own is NOT_FOUND, matching the
+// program-level rule.
+
+import { TRPCError } from "@trpc/server";
+import {
+  createDraft,
+  findDraftById,
+  listActiveDraftsByProgram,
+  updateDraftStructure,
+  discardDraft as discardDraftRepo,
+  findVersionById,
+  type ProgramDraftRecord,
+  type ProgramVersionRecord,
+} from "@training/db";
+import type { ProgramStructure } from "@training/domain";
+import { DraftNotActiveError } from "../errors";
+import { loadOwnedProgramOrThrow } from "./loadOwnedProgram";
+
+const EMPTY_STRUCTURE: ProgramStructure = { workoutDays: [] };
+
+/**
+ * Loads a draft by id, then verifies the caller owns its Program.
+ * Returns NOT_FOUND if either the draft does not exist or the program is
+ * not owned by the caller — same non-disclosure rule as loadOwnedProgram.
+ */
+async function loadOwnedDraftOrThrow(
+  userId: string,
+  draftId: string,
+): Promise<ProgramDraftRecord> {
+  const draft = await findDraftById(draftId);
+  if (!draft) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Draft not found" });
+  }
+  await loadOwnedProgramOrThrow(userId, draft.programId);
+  return draft;
+}
+
+function assertActive(draft: ProgramDraftRecord): void {
+  if (draft.status !== "ACTIVE") {
+    throw new DraftNotActiveError({
+      draftId: draft.id,
+      draftStatus: draft.status,
+    });
+  }
+}
+
+/**
+ * Creates a new ACTIVE draft on a Program the caller owns.
+ *
+ * Two modes, matching phases/phase-04-builder-and-commit.md's deliverable:
+ *   - from scratch: baseVersionId omitted → structure starts empty.
+ *   - from a base version: baseVersionId set → structure is a copy of that
+ *     version's snapshot. The version must belong to the same Program.
+ *
+ * The structure is stored server-side rather than passed by the client, so
+ * the initial content is authoritative and cannot be spoofed.
+ */
+export async function createMyDraft(
+  userId: string,
+  programId: string,
+  input: { label: string; baseVersionId?: string | null },
+): Promise<ProgramDraftRecord> {
+  await loadOwnedProgramOrThrow(userId, programId);
+
+  let structure: ProgramStructure = EMPTY_STRUCTURE;
+  let baseVersionId: string | null = null;
+
+  if (input.baseVersionId != null) {
+    const base = await findVersionById(input.baseVersionId);
+    if (!base || base.programId !== programId) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Base version not found for this Program",
+      });
+    }
+    structure = base.structureSnapshot as ProgramStructure;
+    baseVersionId = base.id;
+  }
+
+  return createDraft({
+    programId,
+    baseVersionId,
+    label: input.label,
+    structure,
+  });
+}
+
+export async function getMyDraft(
+  userId: string,
+  draftId: string,
+): Promise<ProgramDraftRecord> {
+  return loadOwnedDraftOrThrow(userId, draftId);
+}
+
+export async function listMyDrafts(
+  userId: string,
+  programId: string,
+): Promise<ProgramDraftRecord[]> {
+  await loadOwnedProgramOrThrow(userId, programId);
+  return listActiveDraftsByProgram(programId);
+}
+
+/**
+ * Overwrites a draft's structure. Only ACTIVE drafts are writable — a
+ * COMMITTED draft is an immutable record of what was proposed at commit time.
+ */
+export async function updateMyDraftStructure(
+  userId: string,
+  draftId: string,
+  structure: ProgramStructure,
+): Promise<ProgramDraftRecord> {
+  const draft = await loadOwnedDraftOrThrow(userId, draftId);
+  assertActive(draft);
+  return updateDraftStructure(draftId, structure);
+}
+
+/**
+ * Hard-deletes an ACTIVE draft. Rejected on a COMMITTED draft — the draft
+ * row is the historical record of what was proposed, and deleting it would
+ * sever that provenance even though the schema would technically allow it.
+ */
+export async function discardMyDraft(
+  userId: string,
+  draftId: string,
+): Promise<ProgramDraftRecord> {
+  const draft = await loadOwnedDraftOrThrow(userId, draftId);
+  assertActive(draft);
+  return discardDraftRepo(draftId);
+}
+
+// Re-exported so routers can describe the shape they return without importing
+// from @training/db directly. Keeps the router's import list small.
+export type { ProgramDraftRecord, ProgramVersionRecord };
+===== packages/api/src/errors.ts =====
+// packages/api/src/errors.ts
+//
+// Application-level error classes that carry structured payloads the client
+// needs to drive distinct UX — most importantly the stale-draft and
+// stale-simulation cases, where the UI must offer "re-run the simulation"
+// rather than a generic failure toast.
+//
+// These extend TRPCError so no wrapping is needed at the router boundary:
+// tRPC preserves TRPCError subclasses through its middleware, and the
+// errorFormatter in ./trpc.ts narrows on `instanceof` to project only the
+// safe fields onto the wire. `error.cause` is NEVER forwarded raw — see the
+// comment in trpc.ts for why.
+//
+// The `appCode` field is deliberately NOT named `code`: TRPCError already
+// has a `code` (the transport-level code), and shadowing it in a subclass
+// is a footgun. `appCode` is the application-level discriminator the client
+// reads from `error.data.cause.code`.
+
+import { TRPCError } from "@trpc/server";
+
+/**
+ * The shape of the safe cause payload for a stale-draft error, as it appears
+ * on the wire at `error.data.cause`. The client narrows on `.code`.
+ */
+export interface StaleDraftCause {
+  code: "STALE_DRAFT";
+  draftId: string;
+  baseVersionId: string;
+  currentVersionId: string | null;
+}
+
+/**
+ * The shape of the safe cause payload for a not-active-draft error.
+ */
+export interface DraftNotActiveCause {
+  code: "DRAFT_NOT_ACTIVE";
+  draftId: string;
+  draftStatus: string;
+}
+
+/**
+ * The shape of the safe cause payload for a stale-simulation error. Mirrors
+ * StaleDraftCause's structure exactly — same failure mode (invariant 6)
+ * against the sibling entity.
+ */
+export interface StaleSimulationCause {
+  code: "STALE_SIMULATION";
+  simulationId: string;
+  baseVersionId: string;
+  currentVersionId: string | null;
+}
+
+/**
+ * The shape of the safe cause payload for a simulation that has already been
+ * applied (a Revision already references it via sourceSimulationId). Not a
+ * stale-state error in the invariant-6 sense — the simulation is intact, it
+ * has simply already been consumed. The client should not retry.
+ */
+export interface SimulationAlreadyAppliedCause {
+  code: "SIMULATION_ALREADY_APPLIED";
+  simulationId: string;
+  appliedAsVersionId: string;
+}
+
+export type SafeErrorCause =
+  | StaleDraftCause
+  | DraftNotActiveCause
+  | StaleSimulationCause
+  | SimulationAlreadyAppliedCause;
+
+/**
+ * Thrown when a Draft was created from a specific ProgramVersion and the
+ * Program's active version has since moved on. Committing such a draft would
+ * be a silent overwrite of whatever happened in between, which invariant 6
+ * forbids. The client must offer "clone the current version and re-apply
+ * your edits" rather than retrying the same commit.
+ *
+ * Transport code: CONFLICT.
+ */
+export class StaleDraftError extends TRPCError {
+  readonly appCode = "STALE_DRAFT" as const;
+  readonly draftId: string;
+  readonly baseVersionId: string;
+  readonly currentVersionId: string | null;
+
+  constructor(input: {
+    draftId: string;
+    baseVersionId: string;
+    currentVersionId: string | null;
+  }) {
+    super({
+      code: "CONFLICT",
+      message:
+        "This draft was based on an older version of the program. Clone the current version to apply your edits.",
+    });
+    this.name = "StaleDraftError";
+    this.draftId = input.draftId;
+    this.baseVersionId = input.baseVersionId;
+    this.currentVersionId = input.currentVersionId;
+  }
+}
+
+/**
+ * Thrown when a caller tries to mutate a draft whose status is no longer
+ * ACTIVE (COMMITTED or DISCARDED). The DISCARDED enum value is unused in
+ * Phase 4 — drafts are hard-deleted — but this error class handles both
+ * non-ACTIVE states uniformly for forward compatibility.
+ *
+ * Transport code: PRECONDITION_FAILED.
+ */
+export class DraftNotActiveError extends TRPCError {
+  readonly appCode = "DRAFT_NOT_ACTIVE" as const;
+  readonly draftId: string;
+  readonly draftStatus: string;
+
+  constructor(input: { draftId: string; draftStatus: string }) {
+    super({
+      code: "PRECONDITION_FAILED",
+      message: `Draft is not active (status: ${input.draftStatus}).`,
+    });
+    this.name = "DraftNotActiveError";
+    this.draftId = input.draftId;
+    this.draftStatus = input.draftStatus;
+  }
+}
+
+/**
+ * Thrown when a Simulation's baseVersionId no longer matches the Program's
+ * active version. Same failure mode as StaleDraftError, against the sibling
+ * entity: invariant 6 ("if the base ProgramVersion changed between simulate
+ * and apply, re-simulation is required") applies to the AI-applied path
+ * exactly as it does to the manual path.
+ *
+ * Transport code: CONFLICT.
+ */
+export class StaleSimulationError extends TRPCError {
+  readonly appCode = "STALE_SIMULATION" as const;
+  readonly simulationId: string;
+  readonly baseVersionId: string;
+  readonly currentVersionId: string | null;
+
+  constructor(input: {
+    simulationId: string;
+    baseVersionId: string;
+    currentVersionId: string | null;
+  }) {
+    super({
+      code: "CONFLICT",
+      message:
+        "This simulation was based on an older version of the program. Re-run the simulation against the current version.",
+    });
+    this.name = "StaleSimulationError";
+    this.simulationId = input.simulationId;
+    this.baseVersionId = input.baseVersionId;
+    this.currentVersionId = input.currentVersionId;
+  }
+}
+
+/**
+ * Thrown when commitFromSimulation is called on a Simulation that has already
+ * produced a Revision — i.e. the mutation was already applied. Distinct from
+ * StaleSimulationError: the simulation is not stale, it has been consumed.
+ * The client should not retry; it should refresh the version list.
+ *
+ * Transport code: PRECONDITION_FAILED.
+ */
+export class SimulationAlreadyAppliedError extends TRPCError {
+  readonly appCode = "SIMULATION_ALREADY_APPLIED" as const;
+  readonly simulationId: string;
+  readonly appliedAsVersionId: string;
+
+  constructor(input: { simulationId: string; appliedAsVersionId: string }) {
+    super({
+      code: "PRECONDITION_FAILED",
+      message: "This simulation has already been applied.",
+    });
+    this.name = "SimulationAlreadyAppliedError";
+    this.simulationId = input.simulationId;
+    this.appliedAsVersionId = input.appliedAsVersionId;
+  }
+}
+===== packages/api/src/trpc.ts =====
+import { initTRPC, TRPCError } from "@trpc/server";
+import type { Context } from "./context";
+import {
+  StaleDraftError,
+  DraftNotActiveError,
+  StaleSimulationError,
+  SimulationAlreadyAppliedError,
+} from "./errors";
+
+const t = initTRPC.context<Context>().create({
+  errorFormatter({ shape, error }) {
+    // Explicit per-type projection. Never forward `error.cause` raw — it can
+    // carry internal Prisma/DB details (SQL fragments, connection strings in
+    // some edge cases) that must not reach a client. Only the four error
+    // classes below are allow-listed; everything else omits `cause` entirely.
+    const safeCause =
+      error instanceof StaleDraftError
+        ? {
+            code: error.appCode,
+            draftId: error.draftId,
+            baseVersionId: error.baseVersionId,
+            currentVersionId: error.currentVersionId,
+          }
+        : error instanceof DraftNotActiveError
+          ? {
+              code: error.appCode,
+              draftId: error.draftId,
+              draftStatus: error.draftStatus,
+            }
+          : error instanceof StaleSimulationError
+            ? {
+                code: error.appCode,
+                simulationId: error.simulationId,
+                baseVersionId: error.baseVersionId,
+                currentVersionId: error.currentVersionId,
+              }
+            : error instanceof SimulationAlreadyAppliedError
+              ? {
+                  code: error.appCode,
+                  simulationId: error.simulationId,
+                  appliedAsVersionId: error.appliedAsVersionId,
+                }
+              : undefined;
+
+    return {
+      ...shape,
+      data: {
+        ...shape.data,
+        cause: safeCause,
+      },
+    };
+  },
+});
+
+export const router = t.router;
+export const publicProcedure = t.procedure;
+
+export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+  if (!ctx.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  // Narrow ctx.user from ContextUser | null to ContextUser for downstream.
+  return next({
+    ctx: {
+      ...ctx,
+      user: ctx.user,
+    },
+  });
+});
+===== packages/api/src/context.ts =====
+/**
+ * tRPC request context.
+ *
+ * Deliberately does NOT import from next-auth — packages/api must stay
+ * usable from any transport (Next.js today, a standalone HTTP adapter
+ * later per ARCH-003's escape hatch). The route handler in apps/web maps
+ * the Auth.js session into this plain shape.
+ */
+
+export interface ContextUser {
+  id: string;
+  email: string;
+}
+
+export interface Context {
+  user: ContextUser | null;
+}
+
+export function createContext(input: { user: ContextUser | null }): Context {
+  return { user: input.user };
+}
+===== packages/api/src/router.ts =====
+// Root tRPC router. Routers are organized by domain capability, not by
+// UI page (see 01-architecture-recommendation.md decision #4).
+//
+// Phase 4 additions: draft, analysis, programVersion (the Builder's
+// Build↔Analyze↔Commit loop), plus the two read-only reference-data
+// routers (exercise, muscleGroup) the Builder's exercise picker needs.
+//
+// Phase 5 addition: simulation (the simulate side of the Apply flow).
+
+import { router } from "./trpc";
+import { userRouter } from "./routers/user";
+import { programRouter } from "./routers/program";
+import { draftRouter } from "./routers/draft";
+import { analysisRouter } from "./routers/analysis";
+import { programVersionRouter } from "./routers/programVersion";
+import { exerciseRouter } from "./routers/exercise";
+import { muscleGroupRouter } from "./routers/muscleGroup";
+import { simulationRouter } from "./routers/simulation";
+
+export const appRouter = router({
+  user: userRouter,
+  program: programRouter,
+  draft: draftRouter,
+  analysis: analysisRouter,
+  programVersion: programVersionRouter,
+  exercise: exerciseRouter,
+  muscleGroup: muscleGroupRouter,
+  simulation: simulationRouter,
+});
+
+export type AppRouter = typeof appRouter;
+===== packages/api/src/index.ts =====
+export { appRouter, type AppRouter } from "./router";
+export { createContext, type Context, type ContextUser } from "./context";
+########## API ROUTERS + SCHEMAS ##########
+===== packages/api/src/routers/program.ts =====
+// tRPC router for Program CRUD.
+//
+// Routers are thin: input validation via Zod, authorization + orchestration
+// delegated to programService. No business rules live here (three-layer rule).
+
+import { z } from "zod";
+import { router, protectedProcedure } from "../trpc";
+import {
+  createMyProgram,
+  listMyPrograms,
+  getMyProgram,
+  renameMyProgram,
+  archiveMyProgram,
+} from "../services/programService";
+
+const programNameSchema = z.string().trim().min(1).max(120);
+const programIdSchema = z.string().min(1);
+
+export const programRouter = router({
+  create: protectedProcedure
+    .input(z.object({ name: programNameSchema }))
+    .mutation(({ ctx, input }) => createMyProgram(ctx.user.id, input.name)),
+
+  listMine: protectedProcedure
+    .input(
+      z
+        .object({ includeArchived: z.boolean().optional() })
+        .optional(),
+    )
+    .query(({ ctx, input }) =>
+      listMyPrograms(ctx.user.id, input?.includeArchived ?? false),
+    ),
+
+  get: protectedProcedure
+    .input(z.object({ id: programIdSchema }))
+    .query(({ ctx, input }) => getMyProgram(ctx.user.id, input.id)),
+
+  rename: protectedProcedure
+    .input(z.object({ id: programIdSchema, name: programNameSchema }))
+    .mutation(({ ctx, input }) =>
+      renameMyProgram(ctx.user.id, input.id, input.name),
+    ),
+
+  archive: protectedProcedure
+    .input(z.object({ id: programIdSchema }))
+    .mutation(({ ctx, input }) => archiveMyProgram(ctx.user.id, input.id)),
+});
+===== packages/api/src/routers/programVersion.ts =====
+// tRPC router for ProgramVersion.
+//
+// Two mutation paths, both routed through commitFromMutation (invariant 2):
+//
+//   - commitFromDraft   — the Builder's manual "Commit" button.
+//   - commitFromSimulation — the manual "Apply this change" button after a
+//                            simulation. Phase 5's second and LAST call site.
+//
+// get and listForProgram are read-only and return enough for the UI (and
+// Phase 7's Review) to render the version history and the assessment that was
+// actually shown at commit time.
+//
+// Per ARCH-011, the commit function is defined in
+// packages/api/src/services/programVersionService.ts and is never imported
+// from packages/ai. That boundary is enforced by a test in packages/ai.
+
+import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import {
+  findVersionById,
+  listVersionsByProgram,
+  findLatestAssessmentSnapshotForVersion,
+  type AssessmentSnapshotRecord,
+  type ProgramVersionRecord,
+} from "@training/db";
+import { router, protectedProcedure } from "../trpc";
+import {
+  commitFromDraft,
+  commitFromSimulation,
+} from "../services/programVersionService";
+import { loadOwnedProgramOrThrow } from "../services/loadOwnedProgram";
+
+const draftIdSchema = z.string().min(1);
+const simulationIdSchema = z.string().min(1);
+const versionIdSchema = z.string().min(1);
+const programIdSchema = z.string().min(1);
+
+export interface VersionWithSnapshot {
+  version: ProgramVersionRecord;
+  /** The most recent AssessmentSnapshot for this version, or null if none. */
+  snapshot: AssessmentSnapshotRecord | null;
+}
+
+export const programVersionRouter = router({
+  commitFromDraft: protectedProcedure
+    .input(z.object({ draftId: draftIdSchema }))
+    .mutation(({ ctx, input }) =>
+      commitFromDraft(ctx.user.id, input.draftId),
+    ),
+
+  /**
+   * Second and final call site of commitFromMutation. The service re-verifies
+   * staleness (invariant 6) inside commitFromMutation against the
+   * Simulation's baseVersionId; a stale simulation raises
+   * StaleSimulationError (CONFLICT), an already-applied one raises
+   * SimulationAlreadyAppliedError (PRECONDITION_FAILED). Both project their
+   * structured payloads onto error.data.cause via the errorFormatter.
+   */
+  commitFromSimulation: protectedProcedure
+    .input(z.object({ simulationId: simulationIdSchema }))
+    .mutation(({ ctx, input }) =>
+      commitFromSimulation(ctx.user.id, input.simulationId),
+    ),
+
+  get: protectedProcedure
+    .input(z.object({ versionId: versionIdSchema }))
+    .query(async ({ ctx, input }): Promise<VersionWithSnapshot> => {
+      const version = await findVersionById(input.versionId);
+      if (!version) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Version not found" });
+      }
+      // Ownership via the program the version belongs to. A caller who is not
+      // the program's owner receives NOT_FOUND (same non-disclosure rule as
+      // elsewhere) — do not reveal that another user's version exists.
+      await loadOwnedProgramOrThrow(ctx.user.id, version.programId);
+
+      const snapshot = await findLatestAssessmentSnapshotForVersion(version.id);
+      return { version, snapshot };
+    }),
+
+  listForProgram: protectedProcedure
+    .input(z.object({ programId: programIdSchema }))
+    .query(async ({ ctx, input }): Promise<ProgramVersionRecord[]> => {
+      await loadOwnedProgramOrThrow(ctx.user.id, input.programId);
+      return listVersionsByProgram(input.programId);
+    }),
+});
+===== packages/api/src/routers/simulation.ts =====
+// tRPC router for Simulation.
+//
+// One procedure: `simulate`. It applies a MutationSpec to the Program's
+// active version, persists a Simulation row (except for INVALID_MUTATION,
+// which has nothing to persist), and returns both the row id and the full
+// SimulationResult.
+//
+// The response shape is `{ simulationId, result }` rather than just
+// SimulationResult because the client needs the id to call
+// programVersion.commitFromSimulation later. On INVALID_MUTATION,
+// simulationId is null — the caller inspects result.kind and narrates the
+// failure; it does not attempt a commit.
+//
+// The manual UI panel (apps/web) is the only Phase 5 caller. Phase 8's Coach
+// tool handler will call the underlying service function directly
+// (simulationService.simulateAndPersist), not this procedure — same service,
+// no HTTP round-trip. See phase-05 kickoff "commitFromMutation's final
+// two-call-site signature".
+
+import { z } from "zod";
+import { router, protectedProcedure } from "../trpc";
+import { simulateAndPersist } from "../services/simulationService";
+import { mutationSpecSchema } from "../schemas/mutation";
+
+const programIdSchema = z.string().min(1);
+
+export const simulationRouter = router({
+  simulate: protectedProcedure
+    .input(
+      z.object({
+        programId: programIdSchema,
+        mutation: mutationSpecSchema,
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      simulateAndPersist(ctx.user.id, input.programId, input.mutation),
+    ),
+});
+===== packages/api/src/routers/draft.ts =====
+// tRPC router for ProgramDraft.
+//
+// Thin by design: input validation via Zod, authorization + orchestration
+// delegated to draftService. No business rules live here.
+
+import { z } from "zod";
+import { router, protectedProcedure } from "../trpc";
+import {
+  createMyDraft,
+  getMyDraft,
+  listMyDrafts,
+  updateMyDraftStructure,
+  discardMyDraft,
+} from "../services/draftService";
+import { programStructureSchema } from "../schemas/programStructure";
+
+const draftIdSchema = z.string().min(1);
+const programIdSchema = z.string().min(1);
+const draftLabelSchema = z.string().trim().min(1).max(120);
+
+export const draftRouter = router({
+  create: protectedProcedure
+    .input(
+      z.object({
+        programId: programIdSchema,
+        label: draftLabelSchema,
+        baseVersionId: z.string().min(1).nullable().optional(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      createMyDraft(ctx.user.id, input.programId, {
+        label: input.label,
+        baseVersionId: input.baseVersionId ?? null,
+      }),
+    ),
+
+  get: protectedProcedure
+    .input(z.object({ draftId: draftIdSchema }))
+    .query(({ ctx, input }) => getMyDraft(ctx.user.id, input.draftId)),
+
+  listForProgram: protectedProcedure
+    .input(z.object({ programId: programIdSchema }))
+    .query(({ ctx, input }) => listMyDrafts(ctx.user.id, input.programId)),
+
+  updateStructure: protectedProcedure
+    .input(
+      z.object({
+        draftId: draftIdSchema,
+        structure: programStructureSchema,
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      updateMyDraftStructure(ctx.user.id, input.draftId, input.structure),
+    ),
+
+  discard: protectedProcedure
+    .input(z.object({ draftId: draftIdSchema }))
+    .mutation(({ ctx, input }) => discardMyDraft(ctx.user.id, input.draftId)),
+});
+===== packages/api/src/schemas/programStructure.ts =====
+// packages/api/src/schemas/programStructure.ts
+//
+// Zod schema mirroring the domain's ProgramStructure. Lives in packages/api
+// (not packages/domain) because input validation is a router-layer concern,
+// not a domain concern — the domain trusts its callers and asserts internally
+// what it needs (see applyMutation's invariant checks).
+//
+// The schema is intentionally strict on shape and permissive on quantity:
+//   - Every field the domain type declares is required here, so the wire
+//     contract cannot drift from ProgramStructure without a test failure.
+//   - Numeric bounds (targetSets, reps) are checked for sign / integrality
+//     because negative sets would flow through the engine and produce a
+//     nonsensical Assessment. Upper bounds are not enforced — that's a
+//     UX concern, not a correctness one, and any upper limit would be a
+//     fabricated threshold ([SCIENTIFIC INPUT REQUIRED]).
+//   - `loadScheme` is a discriminated union so the four variants stay in
+//     lockstep with the domain's LoadScheme type.
+
+import { z } from "zod";
+
+const loadSchemeSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("PERCENT_1RM"),
+    percent: z.number().min(0).max(200),
+  }),
+  z.object({
+    type: z.literal("RPE_BASED"),
+    rpe: z.number().min(1).max(10),
+  }),
+  z.object({
+    type: z.literal("FIXED_WEIGHT"),
+    weight: z.number().min(0),
+    unit: z.union([z.literal("kg"), z.literal("lb")]),
+  }),
+  z.object({
+    type: z.literal("BODYWEIGHT"),
+  }),
+]);
+
+const exercisePrescriptionSchema = z.object({
+  id: z.string().min(1),
+  orderIndex: z.number().int().nonnegative(),
+  exerciseId: z.string().min(1),
+  targetSets: z.number().int().min(1),
+  targetRepsLow: z.number().int().min(1),
+  targetRepsHigh: z.number().int().min(1),
+  targetRpe: z.number().min(1).max(10).optional(),
+  loadScheme: loadSchemeSchema,
+});
+
+const workoutDaySchema = z.object({
+  id: z.string().min(1),
+  orderIndex: z.number().int().nonnegative(),
+  name: z.string().trim().min(1).max(120),
+  prescriptions: z.array(exercisePrescriptionSchema),
+});
+
+export const programStructureSchema = z.object({
+  workoutDays: z.array(workoutDaySchema),
+});
+
+export type ProgramStructureInput = z.infer<typeof programStructureSchema>;
+===== packages/api/src/schemas/mutation.ts =====
+// packages/api/src/schemas/mutation.ts
+//
+// Zod schema for the MutationSpec discriminated union. Mirrors
+// packages/domain/src/mutation/types.ts op-for-op; a change to that union
+// must change this file in the same PR, or the API surface silently diverges
+// from the domain.
+//
+// Import risk flagged in the Phase 5 kickoff: `programStructureSchema` is
+// assumed to exist at ./programStructure and to describe
+// `{ workoutDays: [...] }` with prescription/day sub-shapes matching the
+// domain's ProgramStructure. The sub-schemas (workoutDayStructureSchema,
+// exercisePrescriptionStructureSchema, loadSchemeSchema) are defined here
+// because the existing programStructure.ts does not export them. If it does
+// — in a future refactor — the local definitions become imports and this
+// comment is deleted.
+
+import { z } from "zod";
+import { programStructureSchema } from "./programStructure";
+
+/**
+ * LoadScheme discriminated union — mirrors the domain's LoadScheme exactly.
+ * Every member is a closed object with a literal `type` discriminant; Zod's
+ * discriminatedUnion gives a clear parse error on a wrong `type` value.
+ */
+const loadSchemeSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("PERCENT_1RM"), percent: z.number() }),
+  z.object({ type: z.literal("RPE_BASED"), rpe: z.number() }),
+  z.object({
+    type: z.literal("FIXED_WEIGHT"),
+    weight: z.number(),
+    unit: z.union([z.literal("kg"), z.literal("lb")]),
+  }),
+  z.object({ type: z.literal("BODYWEIGHT") }),
+]);
+
+const exercisePrescriptionStructureSchema = z.object({
+  id: z.string().min(1),
+  orderIndex: z.number().int().nonnegative(),
+  exerciseId: z.string().min(1),
+  targetSets: z.number().int().nonnegative(),
+  targetRepsLow: z.number().int().nonnegative(),
+  targetRepsHigh: z.number().int().nonnegative(),
+  targetRpe: z.number().optional(),
+  loadScheme: loadSchemeSchema,
+});
+
+const workoutDayStructureSchema = z.object({
+  id: z.string().min(1),
+  orderIndex: z.number().int().nonnegative(),
+  name: z.string(),
+  prescriptions: z.array(exercisePrescriptionStructureSchema),
+});
+
+/**
+ * The full MutationSpec union.
+ *
+ * Using discriminatedUnion on `op` (rather than a plain union of objects)
+ * means a caller who sends `{ op: "ADD_WORKOUT_DAY" }` without a `day`
+ * field gets a clear "day: required" error at the right path, not a generic
+ * "input did not match any variant".
+ */
+export const mutationSpecSchema = z.discriminatedUnion("op", [
+  z.object({
+    op: z.literal("ADD_WORKOUT_DAY"),
+    day: workoutDayStructureSchema,
+  }),
+  z.object({
+    op: z.literal("REMOVE_WORKOUT_DAY"),
+    workoutDayId: z.string().min(1),
+  }),
+  z.object({
+    op: z.literal("ADD_EXERCISE_PRESCRIPTION"),
+    workoutDayId: z.string().min(1),
+    prescription: exercisePrescriptionStructureSchema,
+  }),
+  z.object({
+    op: z.literal("REMOVE_EXERCISE_PRESCRIPTION"),
+    prescriptionId: z.string().min(1),
+  }),
+  z.object({
+    op: z.literal("MODIFY_EXERCISE_PRESCRIPTION"),
+    prescriptionId: z.string().min(1),
+    // Partial — same field set as the full prescription, all optional.
+    // `id` and `orderIndex` are excluded deliberately: applyMutation pins
+    // `id` back to the original and normalizeStructure renumbers
+    // `orderIndex`, so accepting them here would only confuse a caller who
+    // thought they meant something.
+    changes: exercisePrescriptionStructureSchema
+      .omit({ id: true, orderIndex: true })
+      .partial(),
+  }),
+  z.object({
+    op: z.literal("REORDER_EXERCISE_PRESCRIPTIONS"),
+    workoutDayId: z.string().min(1),
+    orderedIds: z.array(z.string().min(1)),
+  }),
+  z.object({
+    op: z.literal("REPLACE_STRUCTURE"),
+    structure: programStructureSchema,
+  }),
+]);
+
+export type MutationSpecInput = z.infer<typeof mutationSpecSchema>;
+########## DB REPOSITORIES ##########
+===== packages/db/src/repositories/programVersion.ts =====
+// Repository layer for ProgramVersion and its nested structure rows.
+//
+// Per ARCH-012, a ProgramVersion stores BOTH:
+//   1. structureSnapshot — canonical immutable JSON
+//   2. normalized WorkoutDay/ExercisePrescription rows — derived projection
+//
+// Both are written in the same transaction and never independently edited.
+//
+// Phase 4 changes:
+//  - TRANSACTION_OPTIONS is now exported so the commit service composes the
+//    wider commit transaction (version + revision + snapshot + active-pointer
+//    + draft-status) under the same timeout/maxWait policy (ARCH-026).
+//  - The inner write of createProgramVersion is extracted to
+//    createProgramVersionInTx(tx, input) so the service can call it inside an
+//    outer transaction. The original createProgramVersion(input) remains as a
+//    thin wrapper, so any Phase-1-era caller keeps working.
+//  - createRevisionInTx and createAssessmentSnapshotInTx are added.
+//
+// TRANSACTION TIMEOUT NOTE:
+// Remote Neon dev branch latency can exceed Prisma's default 5s transaction
+// timeout; 20s gives headroom without masking genuine deadlocks (Postgres
+// still enforces its own lock timeout). The maxWait bump (default 2s -> 10s)
+// accounts for the same latency when acquiring a connection from the pool.
+// This only affects the interactive-transaction path — single-statement
+// calls in the other repositories are unaffected.
+
+import { type Prisma } from "@prisma/client";
+import { prisma } from "../client";
+
+export type VersionOrigin = "MANUAL_COMMIT" | "AI_APPLIED_SIMULATION";
+export type RevisionTrigger = "MANUAL_COMMIT" | "AI_APPLIED_SIMULATION";
+export type AssessmentSnapshotReason =
+  | "COMMIT"
+  | "BLOCK_END"
+  | "MANUAL_RECOMPUTE";
+
+export interface ProgramVersionRecord {
+  id: string;
+  programId: string;
+  versionNumber: number;
+  structureSnapshot: unknown; // ProgramStructure — see @training/domain types
+  createdVia: VersionOrigin;
+  createdAt: Date;
+}
+
+export interface RevisionRecord {
+  id: string;
+  programId: string;
+  fromVersionId: string | null;
+  toVersionId: string;
+  trigger: RevisionTrigger;
+  sourceSimulationId: string | null;
+  userNote: string | null;
+  createdAt: Date;
+}
+
+export interface AssessmentSnapshotRecord {
+  id: string;
+  programVersionId: string;
+  goalId: string;
+  engineVersion: string;
+  thresholdsVersion: string;
+  metrics: unknown; // Analysis payload
+  assessment: unknown; // Assessment payload
+  fitScore: unknown; // FitScore payload
+  reason: AssessmentSnapshotReason;
+  computedAt: Date;
+}
+
+/**
+ * Explicit transaction options, exported so the commit service (packages/api)
+ * uses the same numbers as the version-write path (ARCH-026).
+ */
+export const TRANSACTION_OPTIONS = {
+  timeout: 20000,
+  maxWait: 10000,
+} as const;
+
+const VERSION_SELECT = {
+  id: true,
+  programId: true,
+  versionNumber: true,
+  structureSnapshot: true,
+  createdVia: true,
+  createdAt: true,
+} as const;
+
+const REVISION_SELECT = {
+  id: true,
+  programId: true,
+  fromVersionId: true,
+  toVersionId: true,
+  trigger: true,
+  sourceSimulationId: true,
+  userNote: true,
+  createdAt: true,
+} as const;
+
+const SNAPSHOT_SELECT = {
+  id: true,
+  programVersionId: true,
+  goalId: true,
+  engineVersion: true,
+  thresholdsVersion: true,
+  metrics: true,
+  assessment: true,
+  fitScore: true,
+  reason: true,
+  computedAt: true,
+} as const;
+
+export async function findVersionById(
+  id: string,
+): Promise<ProgramVersionRecord | null> {
+  return prisma.programVersion.findUnique({
+    where: { id },
+    select: VERSION_SELECT,
+  });
+}
+
+export async function listVersionsByProgram(
+  programId: string,
+): Promise<ProgramVersionRecord[]> {
+  return prisma.programVersion.findMany({
+    where: { programId },
+    select: VERSION_SELECT,
+    orderBy: { versionNumber: "desc" },
+  });
+}
+
+/**
+ * Returns the latest committed ProgramVersion for a Program, or null if none.
+ * "Latest" is by versionNumber, which is monotonic per Program (enforced by
+ * @@unique([programId, versionNumber])).
+ */
+export async function getLatestVersionForProgram(
+  programId: string,
+): Promise<ProgramVersionRecord | null> {
+  return prisma.programVersion.findFirst({
+    where: { programId },
+    orderBy: { versionNumber: "desc" },
+    select: VERSION_SELECT,
+  });
+}
+
+/**
+ * Round-trip read: returns a ProgramVersion with its normalized
+ * WorkoutDay / ExercisePrescription rows expanded, for tests and for
+ * any caller that wants the projected view.
+ */
+export async function findVersionWithStructure(id: string) {
+  return prisma.programVersion.findUnique({
+    where: { id },
+    select: {
+      ...VERSION_SELECT,
+      workoutDays: {
+        orderBy: { orderIndex: "asc" },
+        select: {
+          id: true,
+          orderIndex: true,
+          name: true,
+          prescriptions: {
+            orderBy: { orderIndex: "asc" },
+            select: {
+              id: true,
+              orderIndex: true,
+              exerciseId: true,
+              targetSets: true,
+              targetRepsLow: true,
+              targetRepsHigh: true,
+              targetRpe: true,
+              loadScheme: true,
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+export interface CreateProgramVersionInput {
+  programId: string;
+  versionNumber: number;
+  structureSnapshot: unknown;
+  createdVia: VersionOrigin;
+  workoutDays: Array<{
+    orderIndex: number;
+    name: string;
+    prescriptions: Array<{
+      orderIndex: number;
+      exerciseId: string;
+      targetSets: number;
+      targetRepsLow: number;
+      targetRepsHigh: number;
+      targetRpe?: number | null;
+      loadScheme: unknown;
+    }>;
+  }>;
+}
+
+/**
+ * Transaction-aware: writes a new ProgramVersion plus its derived normalized
+ * rows. Does NOT open its own transaction — the caller (either
+ * createProgramVersion below, or the commit service) is inside one.
+ *
+ * Does NOT flip the Program's activeVersionId — that is the service's job,
+ * also inside the same outer transaction.
+ */
+export async function createProgramVersionInTx(
+  tx: Prisma.TransactionClient,
+  input: CreateProgramVersionInput,
+): Promise<ProgramVersionRecord> {
+  const version = await tx.programVersion.create({
+    data: {
+      programId: input.programId,
+      versionNumber: input.versionNumber,
+      structureSnapshot: input.structureSnapshot as Prisma.InputJsonValue,
+      createdVia: input.createdVia,
+    },
+    select: VERSION_SELECT,
+  });
+
+  for (const day of input.workoutDays) {
+    const createdDay = await tx.workoutDay.create({
+      data: {
+        programVersionId: version.id,
+        orderIndex: day.orderIndex,
+        name: day.name,
+      },
+      select: { id: true },
+    });
+
+    for (const p of day.prescriptions) {
+      await tx.exercisePrescription.create({
+        data: {
+          workoutDayId: createdDay.id,
+          orderIndex: p.orderIndex,
+          exerciseId: p.exerciseId,
+          targetSets: p.targetSets,
+          targetRepsLow: p.targetRepsLow,
+          targetRepsHigh: p.targetRepsHigh,
+          targetRpe: p.targetRpe ?? null,
+          loadScheme: p.loadScheme as Prisma.InputJsonValue,
+        },
+      });
+    }
+  }
+
+  return version;
+}
+
+/**
+ * Writes a new ProgramVersion together with its derived normalized rows in a
+ * single transaction. Thin wrapper around createProgramVersionInTx for callers
+ * that do not need to compose a wider transaction.
+ */
+export async function createProgramVersion(
+  input: CreateProgramVersionInput,
+): Promise<ProgramVersionRecord> {
+  return prisma.$transaction(
+    (tx) => createProgramVersionInTx(tx, input),
+    TRANSACTION_OPTIONS,
+  );
+}
+
+/**
+ * Transaction-aware: records the Revision that produced toVersionId from
+ * fromVersionId. fromVersionId is null for a Program's very first commit.
+ *
+ * Phase 4 always sets trigger to "MANUAL_COMMIT" and sourceSimulationId to
+ * null; Phase 8 will set trigger to "AI_APPLIED_SIMULATION" and populate
+ * sourceSimulationId. The service layer decides.
+ */
+export async function createRevisionInTx(
+  tx: Prisma.TransactionClient,
+  input: {
+    programId: string;
+    fromVersionId: string | null;
+    toVersionId: string;
+    trigger: RevisionTrigger;
+    sourceSimulationId?: string | null;
+    userNote?: string | null;
+  },
+): Promise<RevisionRecord> {
+  return tx.revision.create({
+    data: {
+      programId: input.programId,
+      fromVersionId: input.fromVersionId,
+      toVersionId: input.toVersionId,
+      trigger: input.trigger,
+      sourceSimulationId: input.sourceSimulationId ?? null,
+      userNote: input.userNote ?? null,
+    },
+    select: REVISION_SELECT,
+  });
+}
+
+/**
+ * Transaction-aware: freezes the Assessment produced at Commit (or at
+ * Block-End, which is Phase 5+; Phase 4 only writes COMMIT). Historical
+ * snapshots must remain readable after engineVersion / thresholdsVersion
+ * change, so all three payloads are stored verbatim and never recomputed for
+ * a historical version (07-versioning-and-simulation.md, "Historical
+ * reproducibility").
+ *
+ * metrics = Analysis, assessment = Assessment, fitScore = FitScore.
+ * computedAt is the caller's responsibility — the service uses the
+ * Assessment's own computedAt so the snapshot matches what the user saw.
+ */
+export async function createAssessmentSnapshotInTx(
+  tx: Prisma.TransactionClient,
+  input: {
+    programVersionId: string;
+    goalId: string;
+    engineVersion: string;
+    thresholdsVersion: string;
+    metrics: unknown;
+    assessment: unknown;
+    fitScore: unknown;
+    reason: AssessmentSnapshotReason;
+    computedAt: Date;
+  },
+): Promise<AssessmentSnapshotRecord> {
+  return tx.assessmentSnapshot.create({
+    data: {
+      programVersionId: input.programVersionId,
+      goalId: input.goalId,
+      engineVersion: input.engineVersion,
+      thresholdsVersion: input.thresholdsVersion,
+      metrics: input.metrics as Prisma.InputJsonValue,
+      assessment: input.assessment as Prisma.InputJsonValue,
+      fitScore: input.fitScore as Prisma.InputJsonValue,
+      reason: input.reason,
+      computedAt: input.computedAt,
+    },
+    select: SNAPSHOT_SELECT,
+  });
+}
+
+/**
+ * Returns the most recent AssessmentSnapshot for a ProgramVersion, or null
+ * if none exists.
+ *
+ * Phase 4's commit flow writes exactly one snapshot per committed version
+ * (reason: COMMIT). A later phase will add BLOCK_END and MANUAL_RECOMPUTE
+ * snapshots against the same version; this function returns the latest by
+ * computedAt, which is "what the user most recently saw" — the semantic that
+ * Review (Phase 7) needs. Callers that want a specific reason should filter
+ * client-side, or a future variant can take a reason argument.
+ */
+export async function findLatestAssessmentSnapshotForVersion(
+  versionId: string,
+): Promise<AssessmentSnapshotRecord | null> {
+  return prisma.assessmentSnapshot.findFirst({
+    where: { programVersionId: versionId },
+    orderBy: { computedAt: "desc" },
+    select: SNAPSHOT_SELECT,
+  });
+}
+
+/**
+ * Returns the highest versionNumber currently used for a Program, or 0 if none.
+ * Caller computes the next number (N+1). No separate counter table.
+ *
+ * Note: this is a read outside the commit transaction. The commit transaction
+ * relies on @@unique([programId, versionNumber]) to catch races — if two
+ * commits compute the same N+1 concurrently, exactly one wins the unique
+ * constraint and the loser retries against the fresh max.
+ */
+export async function getMaxVersionNumber(programId: string): Promise<number> {
+  const row = await prisma.programVersion.findFirst({
+    where: { programId },
+    orderBy: { versionNumber: "desc" },
+    select: { versionNumber: true },
+  });
+  return row?.versionNumber ?? 0;
+}
+===== packages/db/src/repositories/program.ts =====
+// Repository layer for Program. Plain-TS in / plain-TS out.
+
+import { type Prisma } from "@prisma/client";
+import { prisma } from "../client";
+
+export type ProgramVisibility = "PRIVATE" | "SHARED" | "PUBLIC";
+
+export interface ProgramRecord {
+  id: string;
+  ownerUserId: string;
+  name: string;
+  currentGoalId: string | null;
+  activeVersionId: string | null;
+  visibility: ProgramVisibility;
+  publicShowsExecutionHistory: boolean;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const PROGRAM_SELECT = {
+  id: true,
+  ownerUserId: true,
+  name: true,
+  currentGoalId: true,
+  activeVersionId: true,
+  visibility: true,
+  publicShowsExecutionHistory: true,
+  archivedAt: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+export async function createProgram(input: {
+  ownerUserId: string;
+  name: string;
+}): Promise<ProgramRecord> {
+  return prisma.program.create({
+    data: {
+      ownerUserId: input.ownerUserId,
+      name: input.name,
+    },
+    select: PROGRAM_SELECT,
+  });
+}
+
+/**
+ * Transaction-aware variant of createProgram, for the "auto-create a Goal on
+ * Program.create" flow in Phase 4: a Program is created and its currentGoalId
+ * is set in the same transaction, so a Program never exists momentarily
+ * without a Goal.
+ *
+ * `currentGoalId` is required here — a caller that has no Goal to attach
+ * should use the regular createProgram and set it later, but Phase 4's
+ * program.create always passes it.
+ */
+export async function createProgramInTx(
+  tx: Prisma.TransactionClient,
+  input: {
+    ownerUserId: string;
+    name: string;
+    currentGoalId: string;
+  },
+): Promise<ProgramRecord> {
+  return tx.program.create({
+    data: {
+      ownerUserId: input.ownerUserId,
+      name: input.name,
+      currentGoalId: input.currentGoalId,
+    },
+    select: PROGRAM_SELECT,
+  });
+}
+
+export async function listProgramsByOwner(
+  ownerUserId: string,
+  options?: { includeArchived?: boolean },
+): Promise<ProgramRecord[]> {
+  return prisma.program.findMany({
+    where: {
+      ownerUserId,
+      ...(options?.includeArchived ? {} : { archivedAt: null }),
+    },
+    select: PROGRAM_SELECT,
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function findProgramById(
+  id: string,
+): Promise<ProgramRecord | null> {
+  return prisma.program.findUnique({
+    where: { id },
+    select: PROGRAM_SELECT,
+  });
+}
+
+export async function renameProgram(
+  id: string,
+  name: string,
+): Promise<ProgramRecord> {
+  return prisma.program.update({
+    where: { id },
+    data: { name },
+    select: PROGRAM_SELECT,
+  });
+}
+
+export async function archiveProgram(id: string): Promise<ProgramRecord> {
+  return prisma.program.update({
+    where: { id },
+    data: { archivedAt: new Date() },
+    select: PROGRAM_SELECT,
+  });
+}
+
+/**
+ * Transaction-aware: sets the Program's activeVersionId. Called from the
+ * commit service after the new ProgramVersion row exists, inside the same
+ * outer transaction — a partial commit would leave the Program pointing at
+ * a version that does not exist, or a version that is not active.
+ *
+ * Flipping activeVersionId is what triggers the (future) TrainingBlock
+ * lifecycle per ARCH-016. Phase 4 does not open a TrainingBlock here — that
+ * is deferred to Phase 5 per the phase-04 spec's "no training execution"
+ * scope. Phase 5 will either extend this function or add a sibling
+ * openTrainingBlockInTx call right after it.
+ */
+export async function setActiveVersionInTx(
+  tx: Prisma.TransactionClient,
+  programId: string,
+  versionId: string,
+): Promise<ProgramRecord> {
+  return tx.program.update({
+    where: { id: programId },
+    data: { activeVersionId: versionId },
+    select: PROGRAM_SELECT,
+  });
+}
+===== packages/db/src/repositories/draft.ts =====
+// Repository layer for ProgramDraft.
+//
+// Drafts are the only mutable structural entity in the domain model.
+// Per ARCH-014, a Program may hold many concurrent ACTIVE drafts.
+//
+// Phase 4 change: discardDraft is now a hard delete. The DISCARDED enum value
+// still exists in the schema (removing it is a later migration), but nothing
+// writes it — a soft-deleted draft would leave zombie rows that render nowhere
+// and would complicate the "list ACTIVE drafts" query. See DECISIONS.md.
+
+import { type Prisma } from "@prisma/client";
+import { prisma } from "../client";
+
+export type DraftStatus = "ACTIVE" | "COMMITTED" | "DISCARDED";
+
+export interface ProgramDraftRecord {
+  id: string;
+  programId: string;
+  baseVersionId: string | null;
+  label: string;
+  structure: unknown;
+  status: DraftStatus;
+  committedAsVersionId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const DRAFT_SELECT = {
+  id: true,
+  programId: true,
+  baseVersionId: true,
+  label: true,
+  structure: true,
+  status: true,
+  committedAsVersionId: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+export async function createDraft(input: {
+  programId: string;
+  baseVersionId?: string | null;
+  label: string;
+  structure: unknown;
+}): Promise<ProgramDraftRecord> {
+  return prisma.programDraft.create({
+    data: {
+      programId: input.programId,
+      baseVersionId: input.baseVersionId ?? null,
+      label: input.label,
+      structure: input.structure as Prisma.InputJsonValue,
+    },
+    select: DRAFT_SELECT,
+  });
+}
+
+export async function findDraftById(
+  id: string,
+): Promise<ProgramDraftRecord | null> {
+  return prisma.programDraft.findUnique({
+    where: { id },
+    select: DRAFT_SELECT,
+  });
+}
+
+export async function listActiveDraftsByProgram(
+  programId: string,
+): Promise<ProgramDraftRecord[]> {
+  return prisma.programDraft.findMany({
+    where: { programId, status: "ACTIVE" },
+    select: DRAFT_SELECT,
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function updateDraftStructure(
+  id: string,
+  structure: unknown,
+): Promise<ProgramDraftRecord> {
+  return prisma.programDraft.update({
+    where: { id },
+    data: { structure: structure as Prisma.InputJsonValue },
+    select: DRAFT_SELECT,
+  });
+}
+
+/**
+ * Hard-deletes an ACTIVE draft. Rows with status COMMITTED are immutable and
+ * must not be deleted — that would break the `committedAsVersionId` foreign
+ * key relationship in the schema (which is @unique but not nullable on the
+ * version side). Callers should treat this as "the user closed this draft
+ * without committing," and it is irreversible.
+ */
+export async function discardDraft(id: string): Promise<ProgramDraftRecord> {
+  return prisma.programDraft.delete({
+    where: { id },
+    select: DRAFT_SELECT,
+  });
+}
+
+/**
+ * Transaction-aware: flips a draft to COMMITTED and sets its
+ * committedAsVersionId. Called only from the commit service, inside the outer
+ * commit transaction — if the transaction rolls back, the draft stays ACTIVE.
+ *
+ * A draft is never mutated after this — a subsequent edit produces a NEW
+ * draft, per the "ProgramDraft is the only mutable structural entity, and
+ * only while ACTIVE" rule.
+ */
+export async function markDraftCommittedInTx(
+  tx: Prisma.TransactionClient,
+  draftId: string,
+  versionId: string,
+): Promise<ProgramDraftRecord> {
+  return tx.programDraft.update({
+    where: { id: draftId },
+    data: {
+      status: "COMMITTED",
+      committedAsVersionId: versionId,
+    },
+    select: DRAFT_SELECT,
+  });
+}
+===== packages/db/src/repositories/simulation.ts =====
+// Repository layer for Simulation.
+//
+// A Simulation is an immutable record once created — no update path exists.
+// "Applied" is not a stored field: it is detected by the presence of a
+// Revision whose sourceSimulationId points at this Simulation (see
+// findAppliedRevisionForSimulation). That keeps the schema free of a second
+// source of truth for a fact the Revision row already encodes, and it matches
+// the Phase 1 schema exactly — no migration in Phase 5.
+//
+// The persisted shape maps SimulationResult onto the three non-null Json
+// columns the schema froze:
+//
+//   resultAnalysis   ← the MUTATED Analysis  (the "after" side)
+//   resultAssessment ← the MUTATED AssessmentResult
+//   diff             ← { kind, baseAnalysis, baseAssessment, ... }
+//                       (Gain/Cost/Net + What-Changed for COMPUTED;
+//                        reason-only marker for CANNOT_COMPUTE)
+//
+// The translation lives in the service (packages/api/src/services/simulationService.ts),
+// not here — this file is a dumb read/write boundary. It receives whatever
+// the service hands it and never inspects the payload.
+
+import { type Prisma } from "@prisma/client";
+import { prisma } from "../client";
+
+export interface SimulationRecord {
+  id: string;
+  programId: string;
+  baseVersionId: string;
+  goalId: string;
+  mutationSpec: unknown; // MutationSpec
+  resultAnalysis: unknown; // Analysis (mutated side)
+  resultAssessment: unknown; // AssessmentResult (mutated side)
+  diff: unknown; // { kind, baseAnalysis, baseAssessment, ... }
+  createdByConversationId: string | null;
+  createdAt: Date;
+}
+
+const SIMULATION_SELECT = {
+  id: true,
+  programId: true,
+  baseVersionId: true,
+  goalId: true,
+  mutationSpec: true,
+  resultAnalysis: true,
+  resultAssessment: true,
+  diff: true,
+  createdByConversationId: true,
+  createdAt: true,
+} as const;
+
+export interface CreateSimulationInput {
+  programId: string;
+  baseVersionId: string;
+  goalId: string;
+  mutationSpec: unknown; // MutationSpec
+  resultAnalysis: unknown; // Analysis (mutated side)
+  resultAssessment: unknown; // AssessmentResult (mutated side)
+  diff: unknown; // { kind, baseAnalysis, baseAssessment, ... }
+  createdByConversationId?: string | null;
+}
+
+/**
+ * Writes a Simulation row. No transaction needed at the Phase 5 call sites:
+ * the write is a single-statement INSERT with no dependencies on other rows
+ * it produces or reads.
+ *
+ * `as Prisma.InputJsonValue` casts are the same boundary enforcement as in
+ * programVersion.ts (ARCH-010): the caller has a plain domain value; Prisma
+ * wants an InputJsonValue; the cast says "yes, this is JSON-serializable" and
+ * keeps Prisma types out of the repository's public interface.
+ */
+export async function createSimulation(
+  input: CreateSimulationInput,
+): Promise<SimulationRecord> {
+  return prisma.simulation.create({
+    data: {
+      programId: input.programId,
+      baseVersionId: input.baseVersionId,
+      goalId: input.goalId,
+      mutationSpec: input.mutationSpec as Prisma.InputJsonValue,
+      resultAnalysis: input.resultAnalysis as Prisma.InputJsonValue,
+      resultAssessment: input.resultAssessment as Prisma.InputJsonValue,
+      diff: input.diff as Prisma.InputJsonValue,
+      createdByConversationId: input.createdByConversationId ?? null,
+    },
+    select: SIMULATION_SELECT,
+  });
+}
+
+export async function findSimulationById(
+  id: string,
+): Promise<SimulationRecord | null> {
+  return prisma.simulation.findUnique({
+    where: { id },
+    select: SIMULATION_SELECT,
+  });
+}
+
+/**
+ * Returns the Revision that applied this Simulation, or null if none has.
+ *
+ * "Applied" is derived, not stored: the Revision table's sourceSimulationId
+ * FK is the single source of truth for "this simulation was applied to
+ * produce a new version". commitFromSimulation calls this before proceeding
+ * so a second apply attempt on the same Simulation is rejected rather than
+ * silently creating a duplicate Revision.
+ */
+export async function findAppliedRevisionForSimulation(simulationId: string) {
+  return prisma.revision.findFirst({
+    where: { sourceSimulationId: simulationId },
+    select: {
+      id: true,
+      programId: true,
+      toVersionId: true,
+      createdAt: true,
+    },
+  });
+}
+===== packages/db/src/repositories/tests/helpers.ts =====
+// Shared test helpers for packages/db repository tests.
+//
+// These helpers are deliberately dependency-ordered to match the FK
+// constraints declared in prisma/schema.prisma. Most relations are
+// ON DELETE RESTRICT, so children must be deleted before parents, and
+// the circular Program ↔ ProgramVersion reference must be broken with
+// an updateMany first.
+//
+// The cleanup walk covers every table a Program-owned test user could
+// accumulate, not just the tables Phase 1's tests currently create — so
+// future phases can add tests without amending this file.
+//
+// No $transaction wrapping: on remote Neon the whole walk routinely
+// exceeds Prisma's 5s interactive-transaction timeout.
+
+import { prisma, createUser, type UserRecord } from "../../index";
+
+const trackedUserIds: string[] = [];
+
+/**
+ * Narrows a T | undefined | null to T, throwing if the value is missing.
+ * Satisfies noUncheckedIndexedAccess without falling back to non-null
+ * assertions.
+ */
+export function assertDefined<T>(
+  value: T | undefined | null,
+  label: string,
+): T {
+  if (value === undefined || value === null) {
+    throw new Error(`Expected ${label} to be present`);
+  }
+  return value;
+}
+
+/**
+ * Creates a fresh user with a unique email and registers it for cleanup.
+ * Pass a distinct displayName per test file so failures are greppable.
+ */
+export async function makeTestUser(
+  displayName = "Test User",
+): Promise<UserRecord> {
+  const slug = displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const user = await createUser({
+    email: `phase1-${slug}-${crypto.randomUUID()}@example.test`,
+    passwordHash: "not-a-real-hash",
+    displayName,
+  });
+  trackedUserIds.push(user.id);
+  return user;
+}
+
+/**
+ * Drains every tracked user through cleanupUser. Intended for use as:
+ *   afterEach(cleanupTrackedUsers);
+ */
+export async function cleanupTrackedUsers(): Promise<void> {
+  while (trackedUserIds.length > 0) {
+    const id = assertDefined(trackedUserIds.pop(), "trackedUserIds.pop()");
+    await cleanupUser(id);
+  }
+}
+
+/**
+ * Deletes a user and everything the test surface could have created for
+ * them, in FK-safe dependency order. Exported so individual tests can
+ * clean up early if they need to; the normal path is cleanupTrackedUsers.
+ */
+export async function cleanupUser(userId: string): Promise<void> {
+  // 1. Break the circular Program ↔ ProgramVersion reference so neither
+  //    side blocks the other's delete below.
+  await prisma.program.updateMany({
+    where: { ownerUserId: userId },
+    data: { activeVersionId: null, currentGoalId: null },
+  });
+
+  // 2. Training execution data — deepest dependents first.
+  await prisma.performanceRecord.deleteMany({
+    where: { session: { trainingBlock: { userId } } },
+  });
+  await prisma.session.deleteMany({
+    where: { trainingBlock: { userId } },
+  });
+  await prisma.observation.deleteMany({ where: { userId } });
+  await prisma.trainingBlock.deleteMany({ where: { userId } });
+
+  // 3. Version-scoped and program-scoped derived data.
+  await prisma.assessmentSnapshot.deleteMany({
+    where: { programVersion: { program: { ownerUserId: userId } } },
+  });
+  await prisma.revision.deleteMany({
+    where: { program: { ownerUserId: userId } },
+  });
+  await prisma.simulation.deleteMany({
+    where: { program: { ownerUserId: userId } },
+  });
+  await prisma.programDraft.deleteMany({
+    where: { program: { ownerUserId: userId } },
+  });
+  await prisma.exercisePrescription.deleteMany({
+    where: {
+      workoutDay: { programVersion: { program: { ownerUserId: userId } } },
+    },
+  });
+  await prisma.workoutDay.deleteMany({
+    where: { programVersion: { program: { ownerUserId: userId } } },
+  });
+  await prisma.programVersion.deleteMany({
+    where: { program: { ownerUserId: userId } },
+  });
+  await prisma.program.deleteMany({ where: { ownerUserId: userId } });
+
+  // 4. User-scoped data.
+  await prisma.constraint.deleteMany({ where: { userId } });
+  await prisma.temporaryConstraint.deleteMany({ where: { userId } });
+  await prisma.aIMessage.deleteMany({
+    where: { aiConversation: { userId } },
+  });
+  await prisma.aIConversation.deleteMany({ where: { userId } });
+
+  // 5. The user.
+  await prisma.user.delete({ where: { id: userId } });
+}
+===== packages/db/src/index.ts =====
+// Public surface of @training/db.
+//
+// Everything re-exported here returns plain TypeScript shapes — no Prisma
+// types escape this package (ARCH-005). Callers in packages/api,
+// packages/ai, and apps/web import from "@training/db" only.
+//
+// Phase 4 additions: the tx-aware write functions used by the commit service
+// (createProgramVersionInTx, createRevisionInTx, createAssessmentSnapshotInTx,
+// setActiveVersionInTx, markDraftCommittedInTx, createProgramInTx,
+// createGoalInTx), the shared TRANSACTION_OPTIONS constant (ARCH-026), and
+// read helpers (getLatestVersionForProgram, findLatestAssessmentSnapshotForVersion,
+// findGoalProfileById, listAllInvolvements).
+//
+// Phase 5 additions: the Simulation repository surface — createSimulation,
+// findSimulationById, and findAppliedRevisionForSimulation (the derived
+// "applied" lookup that avoids a second source of truth for a fact the
+// Revision table already encodes).
+
+export { prisma } from "./client";
+
+// User
+export {
+  findUserById,
+  findUserByEmailWithHash,
+  createUser,
+  type UserRecord,
+  type UserWithHash,
+} from "./repositories/user";
+
+// Program
+export {
+  createProgram,
+  createProgramInTx,
+  listProgramsByOwner,
+  findProgramById,
+  renameProgram,
+  archiveProgram,
+  setActiveVersionInTx,
+  type ProgramRecord,
+  type ProgramVisibility,
+} from "./repositories/program";
+
+// ProgramVersion / Revision / AssessmentSnapshot
+export {
+  findVersionById,
+  listVersionsByProgram,
+  getLatestVersionForProgram,
+  findVersionWithStructure,
+  findLatestAssessmentSnapshotForVersion,
+  createProgramVersion,
+  createProgramVersionInTx,
+  createRevisionInTx,
+  createAssessmentSnapshotInTx,
+  getMaxVersionNumber,
+  TRANSACTION_OPTIONS,
+  type ProgramVersionRecord,
+  type RevisionRecord,
+  type AssessmentSnapshotRecord,
+  type VersionOrigin,
+  type RevisionTrigger,
+  type AssessmentSnapshotReason,
+  type CreateProgramVersionInput,
+} from "./repositories/programVersion";
+
+// Simulation (Phase 5)
+export {
+  createSimulation,
+  findSimulationById,
+  findAppliedRevisionForSimulation,
+  type SimulationRecord,
+  type CreateSimulationInput,
+} from "./repositories/simulation";
+
+// Draft
+export {
+  createDraft,
+  findDraftById,
+  listActiveDraftsByProgram,
+  updateDraftStructure,
+  discardDraft,
+  markDraftCommittedInTx,
+  type ProgramDraftRecord,
+  type DraftStatus,
+} from "./repositories/draft";
+
+// Reference data
+export {
+  listExercises,
+  findExerciseById,
+  listMuscleGroups,
+  listInvolvementsForExercise,
+  listAllInvolvements,
+  type ExerciseRecord,
+  type MuscleGroupRecord,
+  type ExerciseMuscleInvolvementRecord,
+  type MovementPattern,
+} from "./repositories/exercise";
+
+// Goals
+export {
+  findGoalProfileByKey,
+  findGoalProfileById,
+  listGoalProfiles,
+  createGoal,
+  createGoalInTx,
+  findGoalById,
+  type GoalProfileDefinitionRecord,
+  type GoalRecord,
+} from "./repositories/goal";
+
+// ─── Test helpers ─────────────────────────────────────────────────────────
+//
+// NOT for production code. Exposed so packages/api's integration tests can
+// reuse the same FK-safe user cleanup the db-level tests use — duplicating
+// the cleanup walk (which depends on FK order and the circular Program ↔
+// ProgramVersion reference) would guarantee drift. A production import of
+// `makeTestUser` or `cleanupTrackedUsers` should be treated as a bug in
+// code review.
+export {
+  assertDefined,
+  makeTestUser,
+  cleanupTrackedUsers,
+  cleanupUser,
+} from "./repositories/tests/helpers";
+########## WEB ##########
+===== apps/web/app/layout.tsx =====
+import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "Training Platform",
+  description:
+    "A program-design intelligence system: build a training program, get it evaluated transparently against a stated goal, train it, and revise it.",
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+===== apps/web/app/app/page.tsx =====
+import { redirect } from "next/navigation";
+import { appRouter } from "@training/api";
+import { auth, signOut } from "@/src/server/auth";
+
+/**
+ * Authenticated empty dashboard shell.
+ *
+ * Server Component — calls the tRPC appRouter's caller directly (no HTTP
+ * hop), which is the intended pattern for server-rendered reads. The HTTP
+ * route handler at app/api/trpc/[trpc]/route.ts exists for client-side
+ * callers and future mobile clients.
+ */
+export const dynamic = "force-dynamic";
+
+export default async function DashboardPage() {
+  const session = await auth();
+  if (!session?.user?.id || !session.user.email) {
+    redirect("/login");
+  }
+
+  const caller = appRouter.createCaller({
+    user: { id: session.user.id, email: session.user.email },
+  });
+  const me = await caller.user.getSelf();
+
+  return (
+    <>
+      <nav>
+        <strong>Training Platform</strong>
+        <span style={{ flex: 1 }} />
+        <form
+          action={async () => {
+            "use server";
+            await signOut({ redirectTo: "/" });
+          }}
+        >
+          <button type="submit">Sign out</button>
+        </form>
+      </nav>
+      <main>
+        <h1>Dashboard</h1>
+        <p>
+          Signed in as <strong>{me.email}</strong>
+          {me.displayName ? ` (${me.displayName})` : ""}.
+        </p>
+        <p className="muted">
+          This shell is intentionally empty. Program builder, analysis, and coach arrive in later
+          phases.
+        </p>
+      </main>
+    </>
+  );
+}
+===== apps/web/app/app/programs/page.tsx =====
+// Minimal Program list + create UI.
+//
+// Phase 1 only: enough to exercise the new API by hand. The real Builder
+// arrives in Phase 4. Rendered as a Server Component in the existing
+// authenticated shell — same pattern as apps/web/app/app/page.tsx.
+
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { appRouter } from "@training/api";
+import { auth } from "@/src/server/auth";
+import { createProgramAction } from "./actions";
+
+export const dynamic = "force-dynamic";
+
+export default async function ProgramsPage() {
+  const session = await auth();
+  if (!session?.user?.id || !session.user.email) {
+    redirect("/login");
+  }
+
+  const caller = appRouter.createCaller({
+    user: { id: session.user.id, email: session.user.email },
+  });
+  const programs = await caller.program.listMine({ includeArchived: false });
+
+  return (
+    <main style={{ padding: "2rem", maxWidth: "48rem", margin: "0 auto" }}>
+      <h1>Your Programs</h1>
+
+      <section style={{ marginTop: "1.5rem" }}>
+        <h2>Create a new Program</h2>
+        <form
+          action={createProgramAction}
+          style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}
+        >
+          <input
+            name="name"
+            placeholder="e.g. 4-day upper/lower"
+            required
+            maxLength={120}
+            style={{ flex: 1, padding: "0.5rem" }}
+          />
+          <button type="submit" style={{ padding: "0.5rem 1rem" }}>
+            Create
+          </button>
+        </form>
+      </section>
+
+      <section style={{ marginTop: "2rem" }}>
+        <h2>Existing</h2>
+        {programs.length === 0 ? (
+          <p style={{ opacity: 0.7 }}>No programs yet.</p>
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0, marginTop: "0.5rem" }}>
+            {programs.map((p) => (
+              <li
+                key={p.id}
+                style={{
+                  padding: "0.75rem 0",
+                  borderBottom: "1px solid #eee",
+                }}
+              >
+                <Link href={`/app/programs/${p.id}`}>{p.name}</Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </main>
+  );
+}
+===== apps/web/app/app/programs/[id]/page.tsx =====
+// Program detail. Phase 1: rename + archive. Phase 4 addition: entry point
+// into the Builder, plus a summary of active drafts and committed versions.
+//
+// Still a Server Component in the authenticated shell — the interactivity
+// lives one level down in /build.
+
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { TRPCError } from "@trpc/server";
+import { appRouter } from "@training/api";
+import { auth } from "@/src/server/auth";
+import { renameProgramAction, archiveProgramAction } from "../actions";
+
+export const dynamic = "force-dynamic";
+
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default async function ProgramDetailPage({ params }: PageProps) {
+  const session = await auth();
+  if (!session?.user?.id || !session.user.email) {
+    redirect("/login");
+  }
+  const { id } = await params;
+
+  const caller = appRouter.createCaller({
+    user: { id: session.user.id, email: session.user.email },
+  });
+
+  let program;
+  try {
+    program = await caller.program.get({ id });
+  } catch (err) {
+    if (err instanceof TRPCError && err.code === "NOT_FOUND") {
+      notFound();
+    }
+    throw err;
+  }
+
+  const [drafts, versions] = await Promise.all([
+    caller.draft.listForProgram({ programId: id }),
+    caller.programVersion.listForProgram({ programId: id }),
+  ]);
+
+  const activeVersion = versions.find((v) => v.id === program.activeVersionId);
+
+  return (
+    <main style={{ padding: "2rem", maxWidth: "48rem", margin: "0 auto" }}>
+      <p style={{ opacity: 0.7 }}>
+        <Link href="/app/programs">&larr; All programs</Link>
+      </p>
+
+      <h1>{program.name}</h1>
+      {program.archivedAt ? (
+        <p style={{ color: "#a00" }}>Archived</p>
+      ) : null}
+
+      <section style={{ marginTop: "1.5rem" }}>
+        <Link
+          href={`/app/programs/${program.id}/build`}
+          style={{
+            display: "inline-block",
+            padding: "0.55rem 0.9rem",
+            border: "1px solid var(--accent)",
+            background: "var(--accent)",
+            color: "#fff",
+            borderRadius: "4px",
+            textDecoration: "none",
+          }}
+        >
+          Open Builder
+        </Link>
+      </section>
+
+      <section style={{ marginTop: "2rem" }}>
+        <h2>Drafts</h2>
+        {drafts.length === 0 ? (
+          <p style={{ opacity: 0.7 }}>
+            No active drafts. Open the Builder to start one.
+          </p>
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0, marginTop: "0.5rem" }}>
+            {drafts.map((d) => (
+              <li
+                key={d.id}
+                style={{
+                  padding: "0.5rem 0",
+                  borderBottom: "1px solid var(--border)",
+                }}
+              >
+                <Link href={`/app/programs/${program.id}/build`}>{d.label}</Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section style={{ marginTop: "2rem" }}>
+        <h2>Versions</h2>
+        {versions.length === 0 ? (
+          <p style={{ opacity: 0.7 }}>
+            No committed versions yet. Commit a draft in the Builder.
+          </p>
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0, marginTop: "0.5rem" }}>
+            {versions.map((v) => (
+              <li
+                key={v.id}
+                style={{
+                  padding: "0.5rem 0",
+                  borderBottom: "1px solid var(--border)",
+                }}
+              >
+                Version {v.versionNumber}
+                {activeVersion?.id === v.id ? (
+                  <span
+                    style={{
+                      marginLeft: "0.5rem",
+                      fontSize: "0.8rem",
+                      color: "var(--muted)",
+                    }}
+                  >
+                    (active)
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section style={{ marginTop: "2rem" }}>
+        <h2>Rename</h2>
+        <form
+          action={renameProgramAction}
+          style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}
+        >
+          <input type="hidden" name="id" value={program.id} />
+          <input
+            name="name"
+            defaultValue={program.name}
+            required
+            maxLength={120}
+            style={{ flex: 1, padding: "0.5rem" }}
+          />
+          <button type="submit" style={{ padding: "0.5rem 1rem" }}>
+            Save
+          </button>
+        </form>
+      </section>
+
+      {!program.archivedAt ? (
+        <section style={{ marginTop: "2rem" }}>
+          <h2>Archive</h2>
+          <form action={archiveProgramAction} style={{ marginTop: "0.5rem" }}>
+            <input type="hidden" name="id" value={program.id} />
+            <button type="submit" style={{ padding: "0.5rem 1rem" }}>
+              Archive this Program
+            </button>
+          </form>
+        </section>
+      ) : null}
+    </main>
+  );
+}
+===== apps/web/app/app/programs/[id]/build/BuilderClient.tsx =====
+// apps/web/app/app/programs/[id]/build/BuilderClient.tsx
+//
+// The interactive Builder: draft switcher, structure editor, live Analyze
+// panel, save/commit/discard actions.
+//
+// Data flow:
+//   - Draft list: trpc.draft.listForProgram (initialData from RSC)
+//   - Exercises: trpc.exercise.listAll (initialData from RSC)
+//   - Analysis preview: trpc.analysis.previewAnalyze (per selected draft)
+//
+// Model: explicit save-on-demand, per the Phase 4 kickoff. Local edits to
+// `localStructure` are not pushed to the server until the user clicks Save.
+// The Unsaved-changes indicator tells the user when the panel (which reads
+// the persisted structure) is behind their edits.
+
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";                          // NEW
+import type { ProgramStructure } from "@training/domain";
+import type { ExerciseRecord } from "@training/db";
+import { TRPCProvider, trpc } from "@/src/lib/trpc";
+import { AssessmentDisplay } from "@/components/assessment/AssessmentDisplay";
+import { StructureEditor } from "./StructureEditor";
+import { SimulateChangePanel } from "./SimulateChangePanel";          // NEW
+import styles from "./build.module.css";
+
+/**
+ * Client-side shape of a draft.
+ *
+ * Deliberately NOT `ProgramDraftRecord` from `@training/db`. The tRPC client
+ * delivers a shape that differs from the DB record in two specific ways:
+ *
+ *   1. Date fields arrive as strings. tRPC has no Date transformer configured
+ *      (the default wire codec is JSON), so a mutation's onSuccess callback
+ *      receives `createdAt: string`, not `createdAt: Date`. `ProgramDraftRecord`
+ *      declares Dates, so it cannot accurately describe the client-side value.
+ *
+ *   2. `structure` is optional on the wire. tRPC's `Serialize<>` type produces
+ *      `structure?: unknown` where the DB record has `structure: unknown`. The
+ *      client state must accept the optional form.
+ *
+ * The UI reads only id / label / structure / status / baseVersionId, so the
+ * date fields are intentionally omitted here — a future refactor that starts
+ * using them will hit the Date-vs-string mismatch immediately and can decide
+ * then whether to configure a wire transformer or normalize at the call site.
+ * (Configuring superjson on both ends of tRPC is the natural remedy; it is not
+ * done in Phase 4 because nothing yet reads the date fields.)
+ *
+ * The RSC page passes `ProgramDraftRecord[]` as `initialDrafts`; because
+ * ProgramDraftRecord is a structural superset of ClientDraft, that assignment
+ * is fine without a cast.
+ */
+export type ClientDraft = {
+  id: string;
+  programId: string;
+  baseVersionId: string | null;
+  label: string;
+  structure?: unknown;
+  status: "ACTIVE" | "COMMITTED" | "DISCARDED";
+  committedAsVersionId: string | null;
+};
+
+interface Props {
+  programId: string;
+  initialDrafts: ClientDraft[];
+  initialExercises: ExerciseRecord[];
+  initialActiveVersionId: string | null;                              // NEW
+  initialActiveVersionStructure: ProgramStructure | null;             // NEW
+}
+
+/**
+ * TRPCProvider wraps the client component so its descendants can use the
+ * trpc.* hooks. RSC pages that don't need interactive tRPC (all of Phase 1's)
+ * don't pay this cost — the provider is a boundary, not a root layout.
+ */
+export function BuilderClient(props: Props) {
+  return (
+    <TRPCProvider>
+      <BuilderClientInner {...props} />
+    </TRPCProvider>
+  );
+}
+
+function isProgramStructure(v: unknown): v is ProgramStructure {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    Array.isArray((v as { workoutDays?: unknown }).workoutDays)
+  );
+}
+
+function asProgramStructure(draft: ClientDraft): ProgramStructure {
+  if (!isProgramStructure(draft.structure)) {
+    // A draft whose structure failed validation is a data-integrity issue —
+    // the schema's Json column accepts anything, but every writer goes
+    // through this shape. Fail loudly rather than rendering a broken editor.
+    throw new Error(
+      `Draft ${draft.id} has a structure that is not a ProgramStructure.`,
+    );
+  }
+  return draft.structure;
+}
+
+function BuilderClientInner({
+  programId,
+  initialDrafts,
+  initialExercises,
+  initialActiveVersionId,
+  initialActiveVersionStructure,
+}: Props) {
+  const utils = trpc.useUtils();
+  const router = useRouter();      
+
+  const [drafts, setDrafts] = useState<ClientDraft[]>(initialDrafts);
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(
+    initialDrafts[0]?.id ?? null,
+  );
+  const [localStructure, setLocalStructure] = useState<ProgramStructure | null>(
+    () => {
+      const first = initialDrafts[0];
+      return first ? asProgramStructure(first) : null;
+    },
+  );
+  const [isDirty, setIsDirty] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [staleInfo, setStaleInfo] = useState<{
+    baseVersionId: string;
+    currentVersionId: string | null;
+  } | null>(null);
+  const [newDraftLabel, setNewDraftLabel] = useState("");
+
+  // ── Queries ──────────────────────────────────────────────────────────────
+
+  const previewQuery = trpc.analysis.previewAnalyze.useQuery(
+    { draftId: selectedDraftId ?? "" },
+    { enabled: selectedDraftId !== null },
+  );
+
+  // ── Mutations ────────────────────────────────────────────────────────────
+
+  const createDraftMutation = trpc.draft.create.useMutation({
+    onSuccess: (created) => {
+      setDrafts((prev) => [...prev, created]);
+      selectDraft(created);
+      setNewDraftLabel("");
+    },
+    onError: (err) => setErrorMessage(err.message),
+  });
+
+  const updateStructureMutation = trpc.draft.updateStructure.useMutation({
+    onSuccess: (updated) => {
+      setDrafts((prev) =>
+        prev.map((d) => (d.id === updated.id ? updated : d)),
+      );
+      setIsDirty(false);
+      void utils.analysis.previewAnalyze.invalidate({
+        draftId: updated.id,
+      });
+    },
+    onError: (err) => setErrorMessage(err.message),
+  });
+
+  const discardDraftMutation = trpc.draft.discard.useMutation({
+    onSuccess: (_discarded, variables) => {
+      const remaining = drafts.filter((d) => d.id !== variables.draftId);
+      setDrafts(remaining);
+      if (selectedDraftId === variables.draftId) {
+        selectDraft(remaining[0] ?? null);
+      }
+    },
+    onError: (err) => setErrorMessage(err.message),
+  });
+
+  const commitMutation = trpc.programVersion.commitFromDraft.useMutation({
+    onSuccess: (version) => {
+      // Reflect the committed state locally: the draft is now COMMITTED and
+      // no longer in the active list. The dedicated versions UI is Phase 5+.
+      setDrafts((prev) => prev.filter((d) => d.id !== selectedDraftId));
+      setSelectedDraftId(null);
+      setLocalStructure(null);
+      setIsDirty(false);
+      setErrorMessage(
+        `Committed as version ${version.versionNumber}. ` +
+          `The versioning UI arrives in a later phase.`,
+      );
+      void utils.draft.listForProgram.invalidate({ programId });
+      router.refresh(); 
+    },
+    onError: (err) => {
+      // The errorFormatter (packages/api/src/trpc.ts) projects StaleDraftError
+      // onto error.data.cause with a discriminated shape. Inspecting
+      // structured data here rather than parsing err.message is what the
+      // errorFormatter extension was for.
+      const cause = (
+        err.data as
+          | {
+              cause?: {
+                code?: string;
+                baseVersionId?: string;
+                currentVersionId?: string | null;
+              };
+            }
+          | undefined
+      )?.cause;
+      if (cause?.code === "STALE_DRAFT" && cause.baseVersionId) {
+        setStaleInfo({
+          baseVersionId: cause.baseVersionId,
+          currentVersionId: cause.currentVersionId ?? null,
+        });
+      } else {
+        setErrorMessage(err.message);
+      }
+    },
+  });
+
+  // ── Selection / navigation ──────────────────────────────────────────────
+
+  function selectDraft(draft: ClientDraft | null) {
+    if (draft === null) {
+      setSelectedDraftId(null);
+      setLocalStructure(null);
+      setIsDirty(false);
+      return;
+    }
+    setSelectedDraftId(draft.id);
+    setLocalStructure(asProgramStructure(draft));
+    setIsDirty(false);
+    setErrorMessage(null);
+    setStaleInfo(null);
+  }
+
+  function handleSelectExisting(draft: ClientDraft) {
+    if (isDirty) {
+      const ok = window.confirm(
+        "You have unsaved changes. Discard them and switch drafts?",
+      );
+      if (!ok) return;
+    }
+    selectDraft(draft);
+  }
+
+  const selectedDraft = useMemo(
+    () => drafts.find((d) => d.id === selectedDraftId) ?? null,
+    [drafts, selectedDraftId],
+  );
+
+  // ── Actions ─────────────────────────────────────────────────────────────
+
+  function handleStructureChange(next: ProgramStructure) {
+    setLocalStructure(next);
+    setIsDirty(true);
+  }
+
+  function handleSave() {
+    if (!selectedDraftId || !localStructure) return;
+    setErrorMessage(null);
+    updateStructureMutation.mutate({
+      draftId: selectedDraftId,
+      structure: localStructure,
+    });
+  }
+
+  function handleCommit() {
+    if (!selectedDraftId) return;
+    setErrorMessage(null);
+    setStaleInfo(null);
+    commitMutation.mutate({ draftId: selectedDraftId });
+  }
+
+  function handleCreateDraft() {
+    const label = newDraftLabel.trim();
+    if (!label) {
+      setErrorMessage("Give the new draft a label first.");
+      return;
+    }
+    createDraftMutation.mutate({ programId, label });
+  }
+
+  function handleDiscard() {
+    if (!selectedDraftId) return;
+    const ok = window.confirm(
+      "Discard this draft? This permanently deletes it.",
+    );
+    if (!ok) return;
+    discardDraftMutation.mutate({ draftId: selectedDraftId });
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────
+
+  return (
+    <>
+    <div className={styles.layout}>
+      <aside className={styles.rail}>
+        <h2 className={styles.railHeading}>Drafts</h2>
+        {drafts.length === 0 ? (
+          <p className={styles.muted}>No active drafts.</p>
+        ) : (
+          <ul className={styles.draftList}>
+            {drafts.map((d) => (
+              <li key={d.id}>
+                <button
+                  type="button"
+                  onClick={() => handleSelectExisting(d)}
+                  className={
+                    d.id === selectedDraftId
+                      ? styles.draftItemSelected
+                      : styles.draftItem
+                  }
+                >
+                  {d.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className={styles.newDraftBlock}>
+          <label>
+            New draft label
+            <input
+              value={newDraftLabel}
+              onChange={(e) => setNewDraftLabel(e.target.value)}
+              maxLength={120}
+              placeholder="Option B"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={handleCreateDraft}
+            disabled={createDraftMutation.isPending}
+          >
+            {createDraftMutation.isPending ? "Creating…" : "Create draft"}
+          </button>
+        </div>
+      </aside>
+
+      <section className={styles.editor}>
+        {errorMessage ? (
+          <p className={styles.errorBanner}>{errorMessage}</p>
+        ) : null}
+
+        {staleInfo ? (
+          <div className={styles.staleBanner}>
+            <p>
+              This draft was based on version{" "}
+              {staleInfo.baseVersionId.slice(0, 8)}…, but the program has
+              moved on
+              {staleInfo.currentVersionId
+                ? ` (active: ${staleInfo.currentVersionId.slice(0, 8)}…)`
+                : ""}
+              . Cloning the current version to re-apply your edits arrives in
+              a later phase.
+            </p>
+            <button
+              type="button"
+              onClick={() => setStaleInfo(null)}
+              className={styles.dismissButton}
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
+
+        {selectedDraft === null || localStructure === null ? (
+          <div className={styles.emptyState}>
+            <p className={styles.muted}>
+              Select a draft on the left, or create one to start building.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className={styles.editorHeader}>
+              <h2 className={styles.editorHeading}>
+                {selectedDraft.label}
+                {isDirty ? (
+                  <span className={styles.dirtyTag}> · unsaved changes</span>
+                ) : null}
+              </h2>
+              <div className={styles.actions}>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={
+                    !isDirty || updateStructureMutation.isPending
+                  }
+                >
+                  {updateStructureMutation.isPending ? "Saving…" : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCommit}
+                  disabled={isDirty || commitMutation.isPending}
+                  title={
+                    isDirty
+                      ? "Save your changes before committing"
+                      : undefined
+                  }
+                >
+                  {commitMutation.isPending ? "Committing…" : "Commit"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDiscard}
+                  className={styles.secondaryButton}
+                  disabled={discardDraftMutation.isPending}
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+
+            <StructureEditor
+              structure={localStructure}
+              exercises={initialExercises}
+              onChange={handleStructureChange}
+            />
+          </>
+        )}
+      </section>
+
+      <section className={styles.analyze}>
+        <h2 className={styles.railHeading}>Assessment</h2>
+        {isDirty ? (
+          <p className={styles.staleTag}>
+            The assessment below reflects your last saved draft. Save to
+            update.
+          </p>
+        ) : null}
+        {selectedDraftId === null ? (
+          <p className={styles.muted}>Select a draft to see its assessment.</p>
+        ) : previewQuery.isLoading ? (
+          <p className={styles.muted}>Loading…</p>
+        ) : previewQuery.isError ? (
+          <p className={styles.errorBanner}>{previewQuery.error.message}</p>
+        ) : previewQuery.data ? (
+          <AssessmentDisplay
+            result={previewQuery.data.assessment}
+            fitScore={previewQuery.data.fitScore}
+          />
+        ) : null}
+      </section>
+    </div>
+     {/* Phase 5 — the simulate/apply panel. Placed outside the three-column
+          grid so it spans full width; the panel owns its own layout. */}
+      <SimulateChangePanel
+        programId={programId}
+        activeVersionId={initialActiveVersionId}
+        activeVersionStructure={initialActiveVersionStructure}
+        exercises={initialExercises}
+      />
+    </>
+  );
+}
+===== apps/web/app/app/programs/[id]/build/SimulateChangePanel.tsx =====
+// apps/web/app/app/programs/[id]/build/SimulateChangePanel.tsx
+//
+// The Phase 5 manual simulate/apply UI. Deliberately minimal: a dropdown to
+// pick one MutationSpec op, the fields that op needs, a Simulate button, and
+// — for the two persistable branches (COMPUTED, CANNOT_COMPUTE) — an Apply
+// button that calls programVersion.commitFromSimulation.
+//
+// What this panel is for: proving the full simulate → persist → apply stack
+// works end-to-end before Phase 8 adds an AI Coach in front of it. It is not
+// a general editor; the general editor is the StructureEditor next door. The
+// panel exists so the invariant-2 path has a manual trigger that isn't the
+// manual Commit button, letting the two paths be exercised side by side.
+//
+// Scope notes:
+//   - It operates against the Program's ACTIVE version, never against a
+//     draft (Q3: the Phase 1 schema's Simulation.baseVersionId is a non-null
+//     FK to ProgramVersion; drafts are not a legal base).
+//   - It supports 5 of the 7 MutationSpec ops. REPLACE_STRUCTURE and
+//     REORDER_EXERCISE_PRESCRIPTIONS are excluded — the first is trivially
+//     equivalent to the manual commit path, the second is a rare adjustment
+//     better served by a real editor.
+//   - On Apply success it calls router.refresh() so the RSC page re-loads
+//     with the new active version — the panel's props update in place.
+
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import type {
+  ExercisePrescriptionStructure,
+  MutationSpec,
+  ProgramStructure,
+  SimulationResult,
+  WorkoutDayStructure,
+} from "@training/domain";
+import type { ExerciseRecord } from "@training/db";
+import { trpc } from "@/src/lib/trpc";
+import { GainCostNetDisplay } from "@/components/simulation/GainCostNetDisplay";
+import styles from "@/components/simulation/simulation.module.css";
+
+type PanelOp =
+  | "MODIFY_EXERCISE_PRESCRIPTION"
+  | "ADD_EXERCISE_PRESCRIPTION"
+  | "REMOVE_EXERCISE_PRESCRIPTION"
+  | "ADD_WORKOUT_DAY"
+  | "REMOVE_WORKOUT_DAY";
+
+const OP_LABELS: Record<PanelOp, string> = {
+  MODIFY_EXERCISE_PRESCRIPTION: "Change target sets on an exercise",
+  ADD_EXERCISE_PRESCRIPTION: "Add an exercise to a workout day",
+  REMOVE_EXERCISE_PRESCRIPTION: "Remove an exercise",
+  ADD_WORKOUT_DAY: "Add a workout day",
+  REMOVE_WORKOUT_DAY: "Remove a workout day",
+};
+
+interface Props {
+  programId: string;
+  activeVersionId: string | null;
+  activeVersionStructure: ProgramStructure | null;
+  exercises: ExerciseRecord[];
+}
+
+export function SimulateChangePanel({
+  programId,
+  activeVersionId,
+  activeVersionStructure,
+  exercises,
+}: Props) {
+  const router = useRouter();
+  const utils = trpc.useUtils();
+
+  const [op, setOp] = useState<PanelOp>("MODIFY_EXERCISE_PRESCRIPTION");
+  const [workoutDayId, setWorkoutDayId] = useState<string>("");
+  const [prescriptionId, setPrescriptionId] = useState<string>("");
+  const [targetSets, setTargetSets] = useState<number>(4);
+  const [addExerciseId, setAddExerciseId] = useState<string>("");
+  const [newDayName, setNewDayName] = useState<string>("");
+
+  const [simulationId, setSimulationId] = useState<string | null>(null);
+  const [result, setResult] = useState<SimulationResult | null>(null);
+  const [simulateError, setSimulateError] = useState<string | null>(null);
+  const [applyMessage, setApplyMessage] = useState<string | null>(null);
+
+  const exerciseNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const ex of exercises) m.set(ex.id, ex.name);
+    return m;
+  }, [exercises]);
+
+  const days: readonly WorkoutDayStructure[] =
+    activeVersionStructure?.workoutDays ?? [];
+
+  const selectedDay = useMemo(
+    () => days.find((d) => d.id === workoutDayId) ?? null,
+    [days, workoutDayId],
+  );
+
+  // ── Mutations ────────────────────────────────────────────────────────────
+
+  const simulateMutation = trpc.simulation.simulate.useMutation({
+    onSuccess: ({ simulationId: sid, result: res }) => {
+      setSimulationId(sid);
+      setResult(res);
+      setSimulateError(null);
+      setApplyMessage(null);
+    },
+    onError: (err) => {
+      setSimulateError(err.message);
+      setSimulationId(null);
+      setResult(null);
+    },
+  });
+
+  const applyMutation = trpc.programVersion.commitFromSimulation.useMutation({
+    onSuccess: (version) => {
+      setApplyMessage(`Applied as version ${version.versionNumber}.`);
+      setSimulationId(null);
+      setResult(null);
+      // Refresh the RSC payload so this panel (and the Versions list on the
+      // program page) see the new active version.
+      void utils.programVersion.listForProgram.invalidate({ programId });
+      router.refresh();
+    },
+    onError: (err) => {
+      // The errorFormatter projects StaleSimulationError /
+      // SimulationAlreadyAppliedError onto error.data.cause. Inspect
+      // structured data rather than parse the message.
+      const cause = (
+        err.data as
+          | {
+              cause?: {
+                code?: string;
+                currentVersionId?: string | null;
+                appliedAsVersionId?: string;
+              };
+            }
+          | undefined
+      )?.cause;
+      if (cause?.code === "STALE_SIMULATION") {
+        setSimulateError(
+          "The program moved on since this simulation was run. Re-run Simulate and try again.",
+        );
+      } else if (cause?.code === "SIMULATION_ALREADY_APPLIED") {
+        setSimulateError(
+          "This simulation has already been applied. Refresh to see the new version.",
+        );
+      } else {
+        setSimulateError(err.message);
+      }
+      // Either way, drop the current simulation — it is no longer actionable.
+      setSimulationId(null);
+      setResult(null);
+    },
+  });
+
+  // ── MutationSpec builder ─────────────────────────────────────────────────
+
+  function buildMutation(): MutationSpec | { error: string } {
+    switch (op) {
+      case "MODIFY_EXERCISE_PRESCRIPTION": {
+        if (!prescriptionId) {
+          return { error: "Choose an exercise to modify." };
+        }
+        return {
+          op: "MODIFY_EXERCISE_PRESCRIPTION",
+          prescriptionId,
+          changes: { targetSets },
+        };
+      }
+      case "ADD_EXERCISE_PRESCRIPTION": {
+        if (!workoutDayId) return { error: "Choose a workout day." };
+        if (!addExerciseId) return { error: "Choose an exercise to add." };
+        const prescription: ExercisePrescriptionStructure = {
+          // The id is generated client-side. applyMutation only requires
+          // uniqueness within the resulting structure; a random id is fine.
+          id: `rx-sim-${crypto.randomUUID()}`,
+          orderIndex: selectedDay?.prescriptions.length ?? 0,
+          exerciseId: addExerciseId,
+          targetSets,
+          targetRepsLow: 5,
+          targetRepsHigh: 8,
+          loadScheme: { type: "BODYWEIGHT" },
+        };
+        return {
+          op: "ADD_EXERCISE_PRESCRIPTION",
+          workoutDayId,
+          prescription,
+        };
+      }
+      case "REMOVE_EXERCISE_PRESCRIPTION": {
+        if (!prescriptionId) {
+          return { error: "Choose an exercise to remove." };
+        }
+        return {
+          op: "REMOVE_EXERCISE_PRESCRIPTION",
+          prescriptionId,
+        };
+      }
+      case "ADD_WORKOUT_DAY": {
+        const name = newDayName.trim();
+        if (!name) return { error: "Give the new workout day a name." };
+        return {
+          op: "ADD_WORKOUT_DAY",
+          day: {
+            id: `day-sim-${crypto.randomUUID()}`,
+            orderIndex: days.length,
+            name,
+            prescriptions: [],
+          },
+        };
+      }
+      case "REMOVE_WORKOUT_DAY": {
+        if (!workoutDayId) return { error: "Choose a workout day." };
+        return { op: "REMOVE_WORKOUT_DAY", workoutDayId };
+      }
+    }
+  }
+
+  function handleOpChange(next: PanelOp) {
+    setOp(next);
+    setResult(null);
+    setSimulationId(null);
+    setSimulateError(null);
+    setApplyMessage(null);
+  }
+
+  function handleSimulate() {
+    setApplyMessage(null);
+    setSimulateError(null);
+    const built = buildMutation();
+    if ("error" in built) {
+      setSimulateError(built.error);
+      return;
+    }
+    simulateMutation.mutate({ programId, mutation: built });
+  }
+
+  function handleApply() {
+    if (!simulationId) return;
+    setSimulateError(null);
+    applyMutation.mutate({ simulationId });
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────
+
+  if (activeVersionId === null || activeVersionStructure === null) {
+    return (
+      <section className={styles.panel}>
+        <h2 className={styles.panelHeading}>Try a specific change</h2>
+        <p className={styles.panelHint}>
+          Commit a version first. Simulation always runs against the current
+          active version.
+        </p>
+      </section>
+    );
+  }
+
+  const canApply =
+    simulationId !== null &&
+    result !== null &&
+    (result.kind === "COMPUTED" || result.kind === "CANNOT_COMPUTE");
+
+  return (
+    <section className={styles.panel}>
+      <h2 className={styles.panelHeading}>Try a specific change</h2>
+      <p className={styles.panelHint}>
+        Propose one atomic change to the active version, see what the
+        assessment engine says about it, then apply it — a new immutable
+        version is created through the same code path as a manual commit.
+      </p>
+
+      <div className={styles.fieldRow}>
+        <label className={styles.field}>
+          <span className={styles.fieldLabel}>Operation</span>
+          <select
+            className={styles.select}
+            value={op}
+            onChange={(e) => handleOpChange(e.target.value as PanelOp)}
+          >
+            {(Object.keys(OP_LABELS) as PanelOp[]).map((k) => (
+              <option key={k} value={k}>
+                {OP_LABELS[k]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {(op === "MODIFY_EXERCISE_PRESCRIPTION" ||
+          op === "ADD_EXERCISE_PRESCRIPTION" ||
+          op === "REMOVE_EXERCISE_PRESCRIPTION") && (
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Workout day</span>
+            <select
+              className={styles.select}
+              value={workoutDayId}
+              onChange={(e) => {
+                setWorkoutDayId(e.target.value);
+                setPrescriptionId("");
+              }}
+            >
+              <option value="">Choose a workout day…</option>
+              {days.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {(op === "MODIFY_EXERCISE_PRESCRIPTION" ||
+          op === "REMOVE_EXERCISE_PRESCRIPTION") && (
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Prescription</span>
+            <select
+              className={styles.select}
+              value={prescriptionId}
+              onChange={(e) => setPrescriptionId(e.target.value)}
+              disabled={!selectedDay}
+            >
+              <option value="">Choose an exercise…</option>
+              {(selectedDay?.prescriptions ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {exerciseNameById.get(p.exerciseId) ?? p.exerciseId}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {op === "ADD_EXERCISE_PRESCRIPTION" && (
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>New exercise</span>
+            <select
+              className={styles.select}
+              value={addExerciseId}
+              onChange={(e) => setAddExerciseId(e.target.value)}
+            >
+              <option value="">Choose an exercise…</option>
+              {exercises.map((ex) => (
+                <option key={ex.id} value={ex.id}>
+                  {ex.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {(op === "MODIFY_EXERCISE_PRESCRIPTION" ||
+          op === "ADD_EXERCISE_PRESCRIPTION") && (
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Target sets</span>
+            <input
+              type="number"
+              min={1}
+              className={styles.input}
+              value={targetSets}
+              onChange={(e) => setTargetSets(Number(e.target.value))}
+            />
+          </label>
+        )}
+
+        {op === "ADD_WORKOUT_DAY" && (
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>New day name</span>
+            <input
+              type="text"
+              maxLength={120}
+              className={styles.input}
+              value={newDayName}
+              onChange={(e) => setNewDayName(e.target.value)}
+            />
+          </label>
+        )}
+
+        {op === "REMOVE_WORKOUT_DAY" && (
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Workout day</span>
+            <select
+              className={styles.select}
+              value={workoutDayId}
+              onChange={(e) => setWorkoutDayId(e.target.value)}
+            >
+              <option value="">Choose a workout day…</option>
+              {days.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+
+      {simulateError ? (
+        <p className={styles.errorBanner}>{simulateError}</p>
+      ) : null}
+      {applyMessage ? (
+        <p className={styles.successBanner}>{applyMessage}</p>
+      ) : null}
+
+      <div className={styles.buttonRow}>
+        <button
+          type="button"
+          className={styles.primaryButton}
+          onClick={handleSimulate}
+          disabled={simulateMutation.isPending}
+        >
+          {simulateMutation.isPending ? "Simulating…" : "Simulate"}
+        </button>
+        {canApply ? (
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={handleApply}
+            disabled={applyMutation.isPending}
+          >
+            {applyMutation.isPending ? "Applying…" : "Apply this change"}
+          </button>
+        ) : null}
+      </div>
+
+      {result ? <GainCostNetDisplay result={result} /> : null}
+    </section>
+  );
+}
+===== apps/web/src/lib/trpc.tsx =====
+// apps/web/src/lib/trpc.tsx
+//
+// Client-side tRPC wiring. Phase 1's RSC pages used
+// `appRouter.createCaller(...)` directly — no client transport existed. The
+// Builder is the first interactive surface, so this file introduces the
+// client side for the first time.
+//
+// TRPCProvider is a client component. RSC pages that need client-side tRPC
+// hooks render it as a boundary around their interactive child tree; there
+// is no root-layout provider so that pages that don't need client tRPC (all
+// of Phase 1's) continue to ship zero of this JavaScript.
+//
+// The QueryClient is created per TRPCProvider instance (via useState's lazy
+// initializer) rather than module-scoped, so two mounted providers don't
+// share cache state. This is the tRPC v11 recommended pattern.
+
+"use client";
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { httpBatchLink } from "@trpc/client";
+import { createTRPCReact } from "@trpc/react-query";
+import { useState, type ReactNode } from "react";
+import type { AppRouter } from "@training/api";
+
+export const trpc = createTRPCReact<AppRouter>();
+
+export function TRPCProvider({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(() => new QueryClient());
+  const [trpcClient] = useState(() =>
+    trpc.createClient({
+      links: [
+        httpBatchLink({
+          // The Next.js route handler at apps/web/app/api/trpc/[trpc]/route.ts
+          // mounts the same appRouter used by RSC callers. Relative URL so
+          // this works in dev, preview, and production without env config.
+          url: "/api/trpc",
+        }),
+      ],
+    }),
+  );
+
+  return (
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    </trpc.Provider>
+  );
+}
+===== apps/web/e2e/builder.spec.ts =====
+import { test, expect, type Page } from "@playwright/test";
+
+/**
+ * Phase 4's Builder E2E.
+ *
+ * Rewritten per the Q3 ruling at the Phase 4 kickoff: the shipped
+ * HYPERTROPHY_CONFIG has all-null thresholds per ARCH-029–031, so
+ * computeAssessment returns UNVALIDATED and there is no banded
+ * Assessment to render. The phase file's original acceptance criterion
+ * ("verify the Assessment screen surfaces it as Biggest Opportunity") was
+ * unsatisfiable without fabricating thresholds, which the freeze forbids.
+ *
+ * The rewritten test asserts the honest state instead:
+ *   - the Assessment panel shows "Assessment not yet available",
+ *   - none of the VALIDATED-only sections (Strengths / Attention areas /
+ *     Biggest Opportunity / Actions) render,
+ *   - committing produces a real version, visible on the program page.
+ *
+ * The negative assertions are the substance of the Q3 test: without them,
+ * a future regression that starts rendering bands on an unvalidated config
+ * would still pass the "commit succeeds" path. Asserting absence of the
+ * section headings — rather than absence of specific band strings — keeps
+ * the test structural and independent of the provisional band names.
+ *
+ * No cleanup of the test user after the run. Phase 0's E2E leaves its
+ * fixtures in place too; a test-data sweep belongs to a future phase, not
+ * to a per-test afterEach in Phase 4.
+ */
+
+/**
+ * Signs up a fresh user with a per-run unique email, so parallel runs and
+ * repeated runs on the same DB don't collide on the email unique constraint.
+ * Lands on /app (the signup action redirects there on success).
+ */
+async function signUpFreshUser(page: Page): Promise<string> {
+  const email = `phase4-builder-${crypto.randomUUID()}@example.test`;
+  const password = "correct-horse-battery-staple";
+
+  await page.goto("/signup");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  // Signup redirects to /app on success. 30s rather than Playwright's 5s
+  // default: the first POST to a Server Action in `next dev` triggers a
+  // lazy compile that can exceed 5s in a monorepo, and this is the very
+  // first Server Action call any given dev server handles. Production
+  // builds have no such cost — this timeout is a dev-environment
+  // accommodation, not a claim about production latency.
+  await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
+  return email;
+}
+
+/**
+ * Creates a Program via the existing form on /app/programs and returns the
+ * absolute path of its detail page.
+ *
+ * Why the reload:
+ *
+ * createProgramAction calls revalidatePath("/app/programs") but does not
+ * redirect. revalidatePath invalidates the server cache; it does not
+ * reliably push a client re-render within the test's patience window in
+ * `next dev`. Reloading is deterministic and tests the same observable
+ * outcome: after create, the program exists and is listed. (A future
+ * phase may change createProgramAction to redirect, which would make
+ * this reload unnecessary — the product behavior, not the mechanism, is
+ * what Phase 4 verifies.)
+ */
+async function createProgram(page: Page, name: string): Promise<string> {
+  await page.goto("/app/programs");
+
+  await page
+    .getByPlaceholder("e.g. 4-day upper/lower")
+    .fill(name);
+  await page.getByRole("button", { name: "Create" }).click();
+
+  // Wait for the Server Action POST to complete, then reload so the
+  // fresh RSC payload — including the new program — is what the test
+  // observes. Without this, the assertion races Next's revalidation.
+  await page.waitForLoadState("networkidle");
+  await page.reload();
+
+  const programLink = page.getByRole("link", { name, exact: true });
+  await expect(programLink).toBeVisible();
+
+  const href = await programLink.getAttribute("href");
+  if (!href) {
+    throw new Error(
+      `Program link "${name}" is visible but has no href attribute`,
+    );
+  }
+  return href;
+}
+
+test("Builder: build a draft, see the unvalidated Assessment state, commit a version", async ({
+  page,
+}) => {
+  // `next dev` compiles each route lazily on first request. This test
+  // navigates through five routes (/signup → /app → /app/programs →
+  // /app/programs/[id] → /app/programs/[id]/build → back), each of which
+  // pays a first-compile cost in the 2-6s range on this machine. The
+  // default 30s Playwright timeout is not enough for the full flow on a
+  // cold dev server. 120s is generous enough to survive even a slow cold
+  // start without being long enough to mask a genuine hang.
+  //
+  // A future phase can eliminate this class of slowness entirely by
+  // changing the Playwright webServer.command from `pnpm dev` to
+  // `pnpm build && pnpm start` — noted in PROJECT_STATE, not done here
+  // because it makes every future E2E run pay a full build before
+  // starting.
+  test.setTimeout(120_000);
+
+  const programName = `E2E Program ${Date.now()}`;
+  await signUpFreshUser(page);
+
+  const programHref = await createProgram(page, programName);
+  await page.goto(programHref);
+  await expect(page).toHaveURL(/\/app\/programs\/[^/]+$/);
+
+  // ── Open the Builder from the program detail page ─────────────────────
+  //
+  // This page was loaded via a fresh page.goto (no pending RSC re-render),
+  // so hydration is complete and the click is a legitimate test of the
+  // product's navigation.
+  await page.getByRole("link", { name: "Open Builder" }).click();
+  await expect(page).toHaveURL(/\/app\/programs\/[^/]+\/build$/);
+
+  // ── Create a draft ────────────────────────────────────────────────────
+  await page.getByPlaceholder("Option B").fill("Option A");
+  await page.getByRole("button", { name: "Create draft" }).click();
+
+  // The draft's label becomes the editor heading.
+  await expect(
+    page.getByRole("heading", { name: /Option A/ }),
+  ).toBeVisible();
+
+  // ── Add a workout day and one exercise ────────────────────────────────
+  await page.getByRole("button", { name: "+ Add workout day" }).click();
+
+  // Exercise picker: choose the first real option (index 0 is the
+  // "Choose an exercise…" placeholder).
+  await page
+    .getByLabel("Choose an exercise")
+    .selectOption({ index: 1 });
+  await page.getByRole("button", { name: "Add exercise" }).click();
+
+  // ── Save, and wait for the assessment panel to reflect the saved draft ─
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+
+  // ── The Q3 assertions ─────────────────────────────────────────────────
+  const assessmentPanel = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Assessment" }),
+  });
+
+  await expect(
+    assessmentPanel.getByRole("heading", {
+      name: "Assessment not yet available",
+    }),
+  ).toBeVisible();
+
+  // None of the VALIDATED-only sections render. Asserting their absence is
+  // the structural equivalent of "no banded assessment was rendered" and
+  // stays valid across provisional band-name revisions.
+  for (const heading of [
+    "Strengths",
+    "Attention areas",
+    "Biggest Opportunity",
+    "Actions",
+  ]) {
+    await expect(
+      assessmentPanel.getByRole("heading", { name: heading }),
+    ).toHaveCount(0);
+  }
+
+  // ── Commit, and verify the version on the program page ────────────────
+  await page.getByRole("button", { name: "Commit", exact: true }).click();
+
+  // Commit success clears the selected draft and shows a confirmation.
+  await expect(
+    page.getByText(/Committed as version 1\./),
+  ).toBeVisible();
+
+  // Navigate back to the program detail page via the breadcrumb.
+  await page
+    .getByRole("link", { name: new RegExp(`← ${programName}`) })
+    .click();
+  await expect(page).toHaveURL(/\/app\/programs\/[^/]+$/);
+
+  // The Versions section now lists version 1, marked active.
+  const versionsSection = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Versions" }),
+  });
+  await expect(
+    versionsSection.getByText("Version 1"),
+  ).toBeVisible();
+  await expect(versionsSection.getByText("(active)")).toBeVisible();
+});
+===== apps/web/e2e/builder-simulate.spec.ts =====
+import { test, expect, type Page } from "@playwright/test";
+
+/**
+ * Phase 5's simulate/apply E2E.
+ *
+ * The shipped HYPERTROPHY_CONFIG is unvalidated (ARCH-029/031), so a valid
+ * simulation always lands on the CANNOT_COMPUTE branch of SimulationResult.
+ * The test asserts that honest state — NOT a fabricated Gain/Cost/Net — then
+ * applies the change through commitFromSimulation and verifies a new version
+ * appears on the program page.
+ *
+ * The negative assertions (no "Gain" / "Cost" / "Net" heading rendered
+ * before Apply) are the structural equivalent of "no fabricated diff was
+ * shown". They stay valid across provisional band-name revisions.
+ *
+ * Reuses the signup + program-creation helpers from builder.spec.ts by
+ * duplication rather than extraction — Phase 4 chose the same pattern and
+ * extracting a shared helper is a future concern, not a Phase 5 one.
+ *
+ * No cleanup after the run. Same policy as builder.spec.ts.
+ */
+
+async function signUpFreshUser(page: Page): Promise<string> {
+  const email = `phase5-simulate-${crypto.randomUUID()}@example.test`;
+  const password = "correct-horse-battery-staple";
+
+  await page.goto("/signup");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
+  return email;
+}
+
+async function createProgram(page: Page, name: string): Promise<string> {
+  await page.goto("/app/programs");
+  await page.getByPlaceholder("e.g. 4-day upper/lower").fill(name);
+  await page.getByRole("button", { name: "Create" }).click();
+  await page.waitForLoadState("networkidle");
+  await page.reload();
+
+  const programLink = page.getByRole("link", { name, exact: true });
+  await expect(programLink).toBeVisible();
+  const href = await programLink.getAttribute("href");
+  if (!href) {
+    throw new Error(`Program link "${name}" is visible but has no href`);
+  }
+  return href;
+}
+
+test("Simulate: propose one change, see the honest cannot-compute state, apply it", async ({
+  page,
+}) => {
+  // Same cold-compile accommodation as the Phase 4 Builder E2E.
+  test.setTimeout(180_000);
+
+  const programName = `E2E Simulate ${Date.now()}`;
+  await signUpFreshUser(page);
+
+  const programHref = await createProgram(page, programName);
+  await page.goto(programHref);
+  await expect(page).toHaveURL(/\/app\/programs\/[^/]+$/);
+
+  // ── Open Builder, create draft, add a day + exercise, commit ───────────
+  await page.getByRole("link", { name: "Open Builder" }).click();
+  await expect(page).toHaveURL(/\/app\/programs\/[^/]+\/build$/);
+
+  await page.getByPlaceholder("Option B").fill("Option A");
+  await page.getByRole("button", { name: "Create draft" }).click();
+  await expect(page.getByRole("heading", { name: /Option A/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "+ Add workout day" }).click();
+  await page.getByLabel("Choose an exercise").selectOption({ index: 1 });
+  await page.getByRole("button", { name: "Add exercise" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+
+  await page.getByRole("button", { name: "Commit", exact: true }).click();
+  await expect(page.getByText(/Committed as version 1\./)).toBeVisible();
+
+  // ── The simulate panel is now live (router.refresh() re-loaded the RSC) ─
+  //
+  // Wait for the panel's picker to become populated. The panel renders a
+  // "Commit a version first" hint until activeVersionStructure is non-null;
+  // after the refresh it renders the op selector.
+  await expect(
+    page.getByRole("heading", { name: "Try a specific change" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Operation")).toBeVisible();
+
+  // ── Build and run a MODIFY_EXERCISE_PRESCRIPTION simulation ────────────
+  await page.getByLabel("Operation").selectOption(
+    "MODIFY_EXERCISE_PRESCRIPTION",
+  );
+ // Anchored regex, not a plain string: the Operation selector's option list
+// ("…on an exercise", "…to a workout day", "Remove a workout day") bleeds
+// into its accessible name, which makes the unanchored `getByLabel("Workout
+// day")` collide with this selector under Playwright's strict mode. The `^`
+// pins the match to the target label. Same reasoning for Prescription —
+// anchored for symmetry and to survive future option-text additions.
+// Durable fix (distinct label text per field) is a polish item, not this
+// closing batch.
+await page
+  .getByRole("combobox", { name: /^Workout day/ })
+  .selectOption({ index: 1 });
+await page
+  .getByRole("combobox", { name: /^Prescription/ })
+  .selectOption({ index: 1 });
+  // Role-anchored, same reason as the two combobox selectors above: the
+// Operation select's accessible name includes every option's text, so
+// "Change target sets on an exercise" bleeds into an unanchored
+// getByLabel("Target sets") and collides with this input. Pinning to the
+// spinbutton role matches only the intended element.
+await page.getByRole("spinbutton", { name: /^Target sets/ }).fill("5");
+  await page.getByRole("button", { name: "Simulate", exact: true }).click();
+
+  // ── The honest CANNOT_COMPUTE state ────────────────────────────────────
+  //
+  // The shipped config is unvalidated, so the engine refuses to classify the
+  // change. Assert the honest state; assert no Gain/Cost/Net headings
+  // appeared (the negative check that would fail if the panel ever started
+  // fabricating a computed diff against an unvalidated config).
+  await expect(
+    page.getByText(/Cannot compute Gain \/ Cost \/ Net/),
+  ).toBeVisible();
+
+  for (const heading of ["Gain", "Cost"]) {
+    await expect(
+      page.getByRole("heading", { name: heading, exact: true }),
+    ).toHaveCount(0);
+  }
+
+  // ── Apply ──────────────────────────────────────────────────────────────
+  await page
+    .getByRole("button", { name: "Apply this change", exact: true })
+    .click();
+  await expect(page.getByText(/Applied as version 2\./)).toBeVisible();
+
+  // ── Verify the new version on the program page ─────────────────────────
+  await page
+    .getByRole("link", { name: new RegExp(`← ${programName}`) })
+    .click();
+  await expect(page).toHaveURL(/\/app\/programs\/[^/]+$/);
+
+  const versionsSection = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Versions" }),
+  });
+  await expect(versionsSection.getByText("Version 2")).toBeVisible();
+});

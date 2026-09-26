@@ -4,17 +4,18 @@
 // types escape this package (ARCH-005). Callers in packages/api,
 // packages/ai, and apps/web import from "@training/db" only.
 //
-// Phase 4 additions: the tx-aware write functions used by the commit service
-// (createProgramVersionInTx, createRevisionInTx, createAssessmentSnapshotInTx,
-// setActiveVersionInTx, markDraftCommittedInTx, createProgramInTx,
-// createGoalInTx), the shared TRANSACTION_OPTIONS constant (ARCH-026), and
-// read helpers (getLatestVersionForProgram, findLatestAssessmentSnapshotForVersion,
-// findGoalProfileById, listAllInvolvements).
+// Phase 6 additions: the training-execution surface — TrainingBlock,
+// Session, PerformanceRecord, Observation repositories. Notably,
+// PerformanceRecord's record type carries `actualLoad: number | null` and
+// `actualRpe: number | null`, NOT Prisma.Decimal — the repository converts
+// Decimal → number at this boundary so no Prisma type reaches the wire.
+// This is the first Decimal on the wire in the codebase and establishes the
+// convention: convert at the repository boundary, `Number(decimal)` on read
+// and `new Prisma.Decimal(number)` on write.
 //
-// Phase 5 additions: the Simulation repository surface — createSimulation,
-// findSimulationById, and findAppliedRevisionForSimulation (the derived
-// "applied" lookup that avoids a second source of truth for a fact the
-// Revision table already encodes).
+// Also Phase 6: archiveProgramInTx, added so the archive-Program flow can
+// close the Program's open TrainingBlock in the same transaction that sets
+// archivedAt (kickoff fix A6).
 
 export { prisma } from "./client";
 
@@ -35,6 +36,7 @@ export {
   findProgramById,
   renameProgram,
   archiveProgram,
+  archiveProgramInTx,
   setActiveVersionInTx,
   type ProgramRecord,
   type ProgramVisibility,
@@ -82,6 +84,55 @@ export {
   type ProgramDraftRecord,
   type DraftStatus,
 } from "./repositories/draft";
+
+// TrainingBlock (Phase 6)
+export {
+  findTrainingBlockById,
+  findActiveTrainingBlockForProgram,
+  findActiveTrainingBlockForProgramInTx,
+  listTrainingBlocksForProgram,
+  createTrainingBlockInTx,
+  closeTrainingBlockInTx,
+  countCompletedSessionsInBlock,
+  countCompletedSessionsForBlockInTx,
+  type TrainingBlockRecord,
+  type TrainingBlockStatus,
+  type CreateTrainingBlockInput,
+} from "./repositories/trainingBlock";
+
+// Session (Phase 6)
+export {
+  findSessionById,
+  listSessionsForBlock,
+  findLatestSessionForBlock,
+  findActiveSessionForBlock,
+  createSession,
+  createSessionInTx,
+  updateSessionStatus,
+  type SessionRecord,
+  type SessionStatus,
+  type CreateSessionInput,
+  type SessionStatusUpdate,
+} from "./repositories/session";
+
+// PerformanceRecord (Phase 6)
+export {
+  createPerformanceRecord,
+  createPerformanceRecordsBatch,
+  listPerformanceRecordsForSession,
+  type PerformanceRecordRecord,
+  type CreatePerformanceRecordInput,
+} from "./repositories/performanceRecord";
+
+// Observation (Phase 6)
+export {
+  createObservation,
+  findObservationById,
+  listObservationsForBlock,
+  listObservationsForSession,
+  type ObservationRecord,
+  type CreateObservationInput,
+} from "./repositories/observation";
 
 // Reference data
 export {

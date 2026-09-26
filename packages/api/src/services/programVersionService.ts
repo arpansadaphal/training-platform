@@ -1,34 +1,34 @@
 // packages/api/src/services/programVersionService.ts
 //
 // The home of commitFromMutation — the ONLY function in the codebase that
-// writes a new ProgramVersion. Two call sites exist by design (invariant 2,
-// 07-versioning-and-simulation.md):
+// writes a new ProgramVersion. Two call sites exist by design (invariant 2):
 //
-//   1. The Builder's manual "Commit" button — origin MANUAL_COMMIT with an
-//      optional draftId. Implemented here as commitFromDraft, which routes
-//      through commitFromMutation with a REPLACE_STRUCTURE mutation.
-//
-//   2. The manual "Apply this change" button after a simulation — origin
-//      AI_APPLIED_SIMULATION with a simulationId. Implemented in Phase 5 as
-//      commitFromSimulation, which loads the Simulation, re-verifies its
-//      baseVersionId is still the program's active version, and delegates to
-//      commitFromMutation with the Simulation's stored mutationSpec.
+//   1. commitFromDraft      — the Builder's manual "Commit" button
+//                             (origin MANUAL_COMMIT with an optional draftId).
+//   2. commitFromSimulation — the manual "Apply this change" button after a
+//                             simulation (origin AI_APPLIED_SIMULATION with
+//                             a simulationId).
 //
 // There is no third path. The function that produces the persisted structure
 // is `applyMutation` from @training/domain, the same one simulate uses
 // (invariant 2). If you find yourself adding a second write path for a
 // "trivial" case, stop.
 //
+// Phase 6 change (ARCH-039 at close-out): a successful commit runs the same
+// TrainingBlock close+open sequence as activateVersion. When
+// Program.activeVersionId moves — whether via the manual "set active"
+// action or as part of a commit — the prior block closes (COMPLETED if it
+// had ≥1 COMPLETED Session, else ABANDONED) and a new one opens against the
+// newly active version. This closes a gap in the phase-06 file's narrow
+// reading of ARCH-016: without it, a fresh commit would leave the Program
+// pointing at an active version with no block, and getOrCreateNext would
+// have nowhere to put a Session (Session.trainingBlockId is non-null).
+// Everything runs inside the SAME commit transaction — no new call site, no
+// second mutation path.
+//
 // IMPORTANT (ARCH-011): this module is exported from packages/api and must
 // never be reachable from packages/ai. The boundary test in
 // packages/ai/src/__tests__/boundary.test.ts enforces that mechanically.
-//
-// Phase 5 change: `createdVia` and `trigger` are now read from origin.via
-// rather than hardcoded "MANUAL_COMMIT". Prior to Phase 5 the AI branch threw
-// before reaching the transaction, so the hardcode was technically correct —
-// but as soon as the branch opened, every AI-applied version would be
-// silently mislabeled. The full-stack invariant test asserts the correct
-// label on both rows as a regression guard. See ARCH-033.
 
 import { TRPCError } from "@trpc/server";
 import {
@@ -43,9 +43,13 @@ import {
   type ProgramStructure,
 } from "@training/domain";
 import {
+  closeTrainingBlockInTx,
+  countCompletedSessionsForBlockInTx,
   createAssessmentSnapshotInTx,
   createProgramVersionInTx,
   createRevisionInTx,
+  createTrainingBlockInTx,
+  findActiveTrainingBlockForProgramInTx,
   findAppliedRevisionForSimulation,
   findDraftById,
   findGoalById,
@@ -84,10 +88,7 @@ export type CommitOrigin =
 /**
  * Loads the Program's current committed structure.
  * Returns an empty structure when the Program has no active version yet
- * (first commit). The mutation is applied to this value; for
- * REPLACE_STRUCTURE the input is discarded by applyMutation anyway, but
- * routing through applyMutation on every commit is what keeps invariant 2
- * literally true in code.
+ * (first commit).
  */
 async function loadCurrentStructure(
   activeVersionId: string | null,
@@ -95,8 +96,6 @@ async function loadCurrentStructure(
   if (activeVersionId === null) return EMPTY_STRUCTURE;
   const version = await findVersionById(activeVersionId);
   if (!version) {
-    // A non-null activeVersionId pointing at a missing row is a data-integrity
-    // bug, not a user-facing condition. Fail loudly.
     throw new Error(
       `Program.activeVersionId references missing ProgramVersion ${activeVersionId}`,
     );
@@ -106,8 +105,7 @@ async function loadCurrentStructure(
 
 /**
  * Converts the domain's ProgramStructure into the shape
- * createProgramVersionInTx expects. Pure structural reshape — no
- * interpretation of the prescription fields, no default invention.
+ * createProgramVersionInTx expects. Pure structural reshape.
  */
 function toNormalizedRows(structure: ProgramStructure) {
   return structure.workoutDays.map((day) => ({
@@ -127,30 +125,30 @@ function toNormalizedRows(structure: ProgramStructure) {
 
 /**
  * The single commit function. Writes a new immutable ProgramVersion, its
- * Revision, its AssessmentSnapshot, flips the Program's activeVersionId, and
- * (for the manual path) marks the source draft COMMITTED — all in one
+ * Revision, its AssessmentSnapshot, flips the Program's activeVersionId,
+ * closes any prior TrainingBlock + opens a new one against the new version,
+ * and (for the manual path) marks the source draft COMMITTED — all in one
  * transaction with ARCH-026's timeout policy.
  *
- * Pre-transaction work:
+ * Pre-transaction work (reads and pure computation; no DB connection held):
  *   - ownership check
- *   - stale-state check (invariant 6) for the manual path (draft.baseVersionId)
- *     and for the AI-applied path (simulation.baseVersionId)
+ *   - stale-state check (invariant 6) for both paths
  *   - load reference data, goal, goal profile config
  *   - run applyMutation, computeAnalysis, computeAssessment, computeFitScore
  *
- * Rationale for running these before the transaction: they are either reads
- * (safe outside) or pure computation (no DB connection held). Keeping them
- * outside means the transaction window is as short as possible — the same
- * reason ARCH-026's timeouts exist.
+ * In-transaction work (all writes must succeed or fail together):
+ *   - create ProgramVersion + derived rows
+ *   - create Revision
+ *   - create AssessmentSnapshot
+ *   - flip Program.activeVersionId
+ *   - close prior TrainingBlock (if any) + open a new one for the new version
+ *   - mark source draft COMMITTED (manual path only)
  *
- * Concurrency note: the stale check runs before the transaction opens; the
- * same pattern Phase 4 shipped for the manual path. Two concurrent commits
- * against the same base can, in a narrow window, both pass the check and both
- * write — the @@unique([programId, versionNumber]) constraint catches the
- * version-number collision only if both compute the same N+1. This window is
- * not closed in Phase 5; the same best-effort semantics apply to both call
- * sites. A future phase that needs strict serialization would take a row lock
- * on Program inside the transaction.
+ * Concurrency note: the stale check runs before the transaction opens. Two
+ * concurrent commits against the same base can, in a narrow window, both
+ * pass the check and both write — @@unique([programId, versionNumber])
+ * catches the version-number collision only if both compute the same N+1.
+ * Best-effort semantics apply to both call sites, same as Phase 4/5.
  */
 export async function commitFromMutation(
   userId: string,
@@ -165,17 +163,7 @@ export async function commitFromMutation(
   // this transaction too. See ARCH-033.
   const originVia = origin.via;
 
-  // ── Stale-state check (invariant 6) ────────────────────────────────────────
-  //
-  // MANUAL_COMMIT with a draftId: the draft's baseVersionId is compared to
-  // the program's current activeVersionId. If they differ, the commit is
-  // rejected with StaleDraftError so the client can offer "clone the current
-  // version and re-apply your edits" rather than silently overwriting
-  // whatever happened in between.
-  //
-  // AI_APPLIED_SIMULATION: the equivalent check compares the Simulation's
-  // baseVersionId to the same pointer. A mismatch is a StaleSimulationError,
-  // and the client re-runs simulate() before offering Apply again.
+  // ── Stale-state check (invariant 6) ────────────────────────────────────
   let sourceDraftId: string | null = null;
   let sourceSimulationId: string | null = null;
 
@@ -219,7 +207,7 @@ export async function commitFromMutation(
     sourceSimulationId = sim.id;
   }
 
-  // ── Load current structure, apply the mutation ─────────────────────────────
+  // ── Load current structure, apply the mutation ─────────────────────────
   const currentStructure = await loadCurrentStructure(program.activeVersionId);
 
   let nextStructure: ProgramStructure;
@@ -227,10 +215,6 @@ export async function commitFromMutation(
     nextStructure = applyMutation(currentStructure, mutation);
   } catch (err) {
     if (err instanceof MutationError) {
-      // MutationError is a domain error (invalid id reference, duplicate id,
-      // reorder mismatch, etc.). It must never reach the client as a raw
-      // stack trace — 07-versioning-and-simulation.md explicitly requires a
-      // clear message. Map to BAD_REQUEST so the UI can render it directly.
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: err.message,
@@ -239,7 +223,7 @@ export async function commitFromMutation(
     throw err;
   }
 
-  // ── Load reference data + goal profile config ──────────────────────────────
+  // ── Load reference data + goal profile config ──────────────────────────
   const referenceData = await loadExerciseReferenceData();
 
   if (!program.currentGoalId) {
@@ -247,9 +231,6 @@ export async function commitFromMutation(
       `Program ${programId} has no currentGoalId — createMyProgram should have set one`,
     );
   }
-  // Capture after the narrowing check so the `string` type survives into the
-  // transaction closure below (property-access narrowing does not survive an
-  // async boundary).
   const goalId: string = program.currentGoalId;
 
   const goal = await findGoalById(goalId);
@@ -265,18 +246,12 @@ export async function commitFromMutation(
   const profileDefinition = goalProfileRegistry.get(profileRow.key);
   const config = profileDefinition.loadConfig();
 
-  // ── Deterministic engine ───────────────────────────────────────────────────
-  //
-  // computeAnalysis takes (structure, referenceData, config) — the config
-  // supplies the axis band definitions the analysis needs to resolve bands.
-  // The Analysis payload's own programVersionId is null here: the analysis
-  // is computed BEFORE the version row exists, and the version linkage is
-  // recorded by the AssessmentSnapshot row itself, not inside the payload.
+  // ── Deterministic engine ───────────────────────────────────────────────
   const analysis = computeAnalysis(nextStructure, referenceData, config);
   const assessmentResult = computeAssessment(analysis, config, { goalId });
   const fitScoreResult = computeFitScore(assessmentResult);
 
-  // ── Persist (single transaction) ───────────────────────────────────────────
+  // ── Persist (single transaction) ───────────────────────────────────────
   const nextVersionNumber = (await getMaxVersionNumber(programId)) + 1;
 
   return prisma.$transaction(async (tx) => {
@@ -306,12 +281,36 @@ export async function commitFromMutation(
       assessment: assessmentResult,
       fitScore: fitScoreResult,
       reason: "COMMIT",
-      // Assessment.computedAt is the ISO string that arrived via
-      // Analysis.computedAt; convert to Date for the persistence layer.
       computedAt: new Date(assessmentResult.assessment.computedAt),
     });
 
     await setActiveVersionInTx(tx, programId, version.id);
+
+    // ── TrainingBlock close + open (Phase 6, ARCH-039) ───────────────────
+    //
+    // Per ARCH-016, a commit moves activeVersionId, which IS activation.
+    // The prior block closes (same COMPLETED/ABANDONED resolution as the
+    // explicit activateVersion path), and a new block opens against the
+    // just-committed version. Reads happen inside the transaction because
+    // TrainingBlock has no unique constraint that would catch two ACTIVE
+    // blocks for the same Program (Phase 6 kickoff fix).
+    const currentBlock = await findActiveTrainingBlockForProgramInTx(
+      tx,
+      programId,
+    );
+    if (currentBlock !== null) {
+      const completedCount = await countCompletedSessionsForBlockInTx(
+        tx,
+        currentBlock.id,
+      );
+      const closingStatus = completedCount > 0 ? "COMPLETED" : "ABANDONED";
+      await closeTrainingBlockInTx(tx, currentBlock.id, closingStatus);
+    }
+    await createTrainingBlockInTx(tx, {
+      userId,
+      programVersionId: version.id,
+      plannedLengthWeeks: null,
+    });
 
     if (sourceDraftId !== null) {
       await markDraftCommittedInTx(tx, sourceDraftId, version.id);
@@ -319,8 +318,7 @@ export async function commitFromMutation(
 
     // No "mark simulation applied" step: the Revision's sourceSimulationId
     // FK is the single source of truth for "this simulation was applied".
-    // A second write here would be a second source of truth for the same
-    // fact. See ARCH-038.
+    // See ARCH-038.
 
     return version;
   }, TRANSACTION_OPTIONS);
@@ -355,15 +353,12 @@ export async function commitFromDraft(
 /**
  * The manual "Apply this change" path after a simulation. Loads the
  * Simulation, verifies it has not already been applied, and delegates to
- * commitFromMutation with the Simulation's stored mutationSpec — the same
- * mutation the user previewed, re-applied through the same applyMutation
- * (invariant 2).
+ * commitFromMutation with the Simulation's stored mutationSpec.
  *
  * "Already applied" is derived from the Revision table, not stored on the
  * Simulation (ARCH-038): a Revision with sourceSimulationId = this
  * simulation's id is definitive evidence the mutation already produced a
- * version. A second attempt is rejected with SimulationAlreadyAppliedError,
- * not silently re-applied.
+ * version. A second attempt is rejected with SimulationAlreadyAppliedError.
  */
 export async function commitFromSimulation(
   userId: string,
