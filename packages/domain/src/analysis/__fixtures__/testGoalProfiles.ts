@@ -9,6 +9,12 @@
 // must never be copied into a shipped HYPERTROPHY/Strength profile without
 // explicit sign-off. configValidation.test.ts asserts `validated: false`
 // on every export from this module.
+//
+// Phase-3 patch: each config gains the four fields Phase 3 added to
+// `GoalProfileConfig` — `severityMap`, `severityWeightTable`,
+// `materialitySeverityThreshold`, `fitScoreProjection`. The values are
+// illustrative and provisional (same class of placeholder as Phase 2's
+// arbitrary numeric bounds), and both configs stay `validated: false`.
 
 import type { GoalProfileConfig, AxisBandDefinition } from "../types";
 
@@ -42,6 +48,57 @@ const ALL_NULL_RC: AxisBandDefinition[] = [
   { status: "Excessive", lowerBound: null, upperBound: null },
 ];
 
+// --- Phase-3 additions: severity / leverage / fit-score fixtures ---
+
+// PROVISIONAL — see file header. Same class of illustrative placeholder as
+// the arbitrary numeric bounds above; do NOT copy into a shipped profile.
+const TEST_SEVERITY_MAP: GoalProfileConfig["severityMap"] = {
+  VOLUME: {
+    Low: "MAJOR",
+    Adequate: "NONE",
+    High: "MINOR",
+    Excessive: "MODERATE",
+  },
+  FREQUENCY: {
+    Low: "MAJOR",
+    Adequate: "NONE",
+    High: "MINOR",
+  },
+  EXERCISE_SELECTION_BALANCE: {
+    Balanced: "NONE",
+    "Gaps present": "MODERATE",
+  },
+  PROGRESSION_SOUNDNESS: {
+    Sound: "NONE",
+    "Issue found": "MODERATE",
+  },
+  RECOVERY_COST: {
+    Low: "NONE",
+    Moderate: "MINOR",
+    High: "MINOR",
+    Excessive: "MODERATE",
+  },
+};
+
+// PROVISIONAL — 12-cell table, cell contents illustrative.
+const TEST_SEVERITY_WEIGHT_TABLE: GoalProfileConfig["severityWeightTable"] = {
+  NONE: { LOW: "NONE", MEDIUM: "NONE", HIGH: "NONE" },
+  MINOR: { LOW: "NONE", MEDIUM: "LOW", HIGH: "MODERATE" },
+  MODERATE: { LOW: "LOW", MEDIUM: "MODERATE", HIGH: "HIGH" },
+  MAJOR: { LOW: "MODERATE", MEDIUM: "HIGH", HIGH: "HIGH" },
+};
+
+// PROVISIONAL — ordinal projection, generic band names.
+const TEST_FIT_SCORE_PROJECTION: GoalProfileConfig["fitScoreProjection"] = {
+  leverageOrdinal: ["NONE", "LOW", "MODERATE", "HIGH"],
+  worstLeverageToBand: {
+    NONE: "STRONG",
+    LOW: "STRONG",
+    MODERATE: "DECENT",
+    HIGH: "NEEDS_WORK",
+  },
+};
+
 /** All bounds null — the shipped HYPERTROPHY shape. Every axis -> UNVALIDATED. */
 export const TEST_CONFIG_ALL_NULL: GoalProfileConfig = {
   goalProfileKey: "TEST_FIXTURE_ALL_NULL",
@@ -53,6 +110,10 @@ export const TEST_CONFIG_ALL_NULL: GoalProfileConfig = {
     PROGRESSION_SOUNDNESS: ALL_NULL_PS,
     RECOVERY_COST: ALL_NULL_RC,
   },
+  severityMap: TEST_SEVERITY_MAP,
+  severityWeightTable: TEST_SEVERITY_WEIGHT_TABLE,
+  materialitySeverityThreshold: "MODERATE",
+  fitScoreProjection: TEST_FIT_SCORE_PROJECTION,
   validated: false,
   sourceNote: "TEST FIXTURE ONLY — all bounds deliberately null.",
 };
@@ -91,6 +152,10 @@ export const TEST_CONFIG_BOUNDED: GoalProfileConfig = {
       { status: "Excessive", lowerBound: 160, upperBound: null },
     ],
   },
+  severityMap: TEST_SEVERITY_MAP,
+  severityWeightTable: TEST_SEVERITY_WEIGHT_TABLE,
+  materialitySeverityThreshold: "MODERATE",
+  fitScoreProjection: TEST_FIT_SCORE_PROJECTION,
   validated: false,
   sourceNote:
     "TEST FIXTURE ONLY — bounds are arbitrary numbers chosen to exercise banding, not recommendations.",
