@@ -1,0 +1,9 @@
+# Placeholder so the directory exists for Phase 8g's tool tests.
+# Files land here in batch 8g:
+#   grounding.test.ts
+#   confirmation-boundary.test.ts
+#   tool-authorization.test.ts
+#   structured-output.test.ts
+#   failure-degradation.test.ts
+#   simulation-consistency.test.ts
+# Do not add tests to this file. This is a placeholder only.

@@ -1,10 +1,17 @@
 // packages/api/src/services/simulationService.ts
 //
-// Orchestration for the simulate side of Phase 5.
+// Orchestration for the simulate side of Phase 5, plus the Phase 8 Coach
+// adapter.
 //
-//   - simulateAndPersist() — loads the active version, runs the pure
-//                            simulate(), persists the Simulation row, and
-//                            returns both the row id and the SimulationResult.
+//   - simulateAndPersist()          — loads the active version, runs the pure
+//                                     simulate(), persists the Simulation row,
+//                                     returns id + SimulationResult.
+//   - simulateAndPersistForCoach()  — the Phase 8 adapter. Same underlying
+//                                     service call, wrapped in the shape
+//                                     CoachToolDeps.simulateAndPersist expects
+//                                     (object input, not positional).
+//   - loadOwnedSimulationForCoach() — ownership-checked load of a persisted
+//                                     Simulation, projected to SimulationSummary.
 //
 // commitFromSimulation() lives in programVersionService.ts next to
 // commitFromDraft. Together they are the two and only two call sites of
@@ -41,6 +48,7 @@ import {
   createSimulation,
   findGoalById,
   findGoalProfileById,
+  findSimulationById,
   findVersionById,
   type SimulationRecord,
 } from "@training/db";
@@ -103,6 +111,12 @@ export async function simulateAndPersist(
   userId: string,
   programId: string,
   mutation: MutationSpec,
+  /**
+   * Provenance marker. Non-null when the simulation originated in a Coach
+   * conversation; null when it originated from the simulation.simulate UI
+   * path. Written verbatim to the row.
+   */
+  createdByConversationId: string | null = null,
 ): Promise<SimulateAndPersistResult> {
   const program = await loadOwnedProgramOrThrow(userId, programId);
 
@@ -166,7 +180,7 @@ export async function simulateAndPersist(
   // Both COMPUTED and CANNOT_COMPUTE reach here. The narrowing above leaves
   // `result` as COMPUTED | CANNOT_COMPUTE; both carry mutatedAnalysis and
   // mutatedAssessment (the CANNOT_COMPUTE extension is ARCH-036 addendum).
-  const persisted: SimulationRecord = await createSimulation({
+const persisted: SimulationRecord = await createSimulation({
     programId,
     baseVersionId: baseVersion.id,
     goalId,
@@ -174,8 +188,152 @@ export async function simulateAndPersist(
     resultAnalysis: result.mutatedAnalysis,
     resultAssessment: result.mutatedAssessment,
     diff: buildDiffPayload(result),
-    createdByConversationId: null, // Phase 8 wires the conversation id
+    createdByConversationId,
   });
 
   return { simulationId: persisted.id, result };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 8 — Coach adapter
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The Coach's simulate_program_change tool needs the same work the
+// simulation.simulate tRPC procedure does. The tool cannot import this
+// service directly (boundary test at
+// packages/ai/src/__tests__/boundary.test.ts forbids @training/api imports
+// from packages/ai). The coach router wires these two functions into
+// CoachToolDeps, which is the sanctioned injection point (ARCH-011, ARCH-018,
+// Phase 8 Q1).
+//
+// These adapters exist as NAMED functions — rather than inline arrows in the
+// router — so a grep for either name lands on exactly one call site, and so
+// a future change to the underlying service's signature touches this file,
+// not the router.
+//
+// Neither adapter calls commitFromMutation or commitFromSimulation. The
+// Coach cannot apply anything; the apply is a client-triggered procedure
+// (ARCH-018).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Adapter shape for `CoachToolDeps.simulateAndPersist`.
+ *
+ * Structurally compatible with `SimulateAndPersistInput` in
+ * packages/ai/src/tools/types.ts. Defined here (rather than imported) so
+ * this service has no compile-time dependency on packages/ai — the wiring
+ * is the router's job, and a drift between the two shapes fails type check
+ * at the router's call site, which is where a reviewer is looking.
+ *
+ * `baseVersionId` is accepted but IGNORED. The underlying
+ * `simulateAndPersist` always simulates against the program's
+ * `activeVersionId`; the Coach has no way to force a specific base version.
+ * That is the correct safety property — a stale `baseVersionId` in the
+ * Coach's context cannot cause a simulation against the wrong version, and
+ * the eventual apply is where staleness matters (commitFromSimulation's own
+ * baseVersionId check, invariant 6). The field is kept on the input type
+ * because packages/ai's context builder populates it and dropping it there
+ * would be churn without benefit; the adapter's job is to route, not to
+ * validate what the context builder put in.
+ */
+export interface CoachSimulateInput {
+  userId: string;
+  programId: string;
+  baseVersionId: string;
+  /**
+   * Threaded through from the tool's `ctx.conversationId`. Written to the
+   * Simulation row for provenance; the model cannot influence it (it arrives
+   * from the authenticated session context, never from tool input).
+   */
+  conversationId: string;
+  spec: MutationSpec;
+}
+
+export async function simulateAndPersistForCoach(
+  input: CoachSimulateInput,
+): Promise<SimulateAndPersistResult> {
+  return simulateAndPersist(
+    input.userId,
+    input.programId,
+    input.spec,
+    input.conversationId,
+  );
+}
+
+/**
+ * Ownership-checked load of a persisted Simulation, projected to the shape
+ * the Coach's prepare_apply_confirmation tool consumes.
+ *
+ * Ownership is checked via the Simulation's parent Program:
+ *   simulation.programId → Program.userId === caller's userId
+ * A Simulation row has no userId column of its own — its ownership is
+ * derived. `loadOwnedProgramOrThrow` is the existing ownership authority for
+ * Programs; wrapping it here keeps that authority in one place rather than
+ * duplicating the check.
+ *
+ * The `humanSummary` is constructed HERE, server-side, from the persisted
+ * Simulation row — never from anything the model supplied. This is the
+ * safety property documented on SimulationSummary in
+ * packages/ai/src/tools/types.ts: the string that appears on the user's
+ * "Apply this change" button cannot be injected with arbitrary model text.
+ */
+export async function loadOwnedSimulationForCoach(input: {
+  userId: string;
+  simulationId: string;
+}): Promise<{
+  id: string;
+  baseVersionId: string;
+  humanSummary: string;
+} | null> {
+  const simulation = await findSimulationById(input.simulationId);
+  if (!simulation) return null;
+
+  // Ownership check via the parent Program. loadOwnedProgramOrThrow throws
+  // TRPCError NOT_FOUND when the program does not exist or is not owned;
+  // the tool's contract wants a null return, not a thrown error, so we
+  // convert. Using try/catch here rather than adding a non-throwing
+  // ownership loader is a deliberate trade — one extra loader for one call
+  // site is worse than one wrapped throw with a comment.
+  try {
+    await loadOwnedProgramOrThrow(input.userId, simulation.programId);
+  } catch {
+    return null;
+  }
+
+  return {
+    id: simulation.id,
+    baseVersionId: simulation.baseVersionId,
+    humanSummary: buildHumanSummary(simulation),
+  };
+}
+
+/**
+ * Build the human-facing label for a Simulation. Server-built from the
+ * persisted mutation spec; the model cannot influence it.
+ *
+ * The summary names the mutation's operation and nothing else. It does not
+ * paraphrase the mutation in prose — that would require reading and
+ * interpreting the spec's payload, which is a job the deterministic engine
+ * and the UI's existing SimulationResult rendering already do correctly. A
+ * short, factual, engine-derived label is the right scope for a button.
+ */
+function buildHumanSummary(simulation: SimulationRecord): string {
+  const op = readMutationOp(simulation.mutationSpec);
+  return op ? `Apply simulated ${humanizeOp(op)}` : "Apply this change";
+}
+
+/**
+ * Read the `op` field off a persisted MutationSpec. The column is opaque
+ * JSON from Prisma's perspective; this is a defensive read that returns
+ * undefined rather than throwing if the shape is unexpected.
+ */
+function readMutationOp(spec: unknown): string | undefined {
+  if (!spec || typeof spec !== "object") return undefined;
+  const record = spec as Record<string, unknown>;
+  const op = record.op;
+  return typeof op === "string" ? op : undefined;
+}
+
+function humanizeOp(op: string): string {
+  return op.toLowerCase().replace(/_/g, " ");
 }

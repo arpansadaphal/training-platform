@@ -160,6 +160,39 @@ export {
   type GoalRecord,
 } from "./repositories/goal";
 
+export {
+  createConstraint,
+  findConstraintById,
+  listConstraintsForUser,
+  updateConstraint,
+  deleteConstraint,
+  createTemporaryConstraint,
+  findTemporaryConstraintById,
+  listTemporaryConstraintsForConversation,
+} from './repositories/constraint';
+
+export type {
+  ConstraintKind,
+  ConstraintRecord,
+  TemporaryConstraintRecord,
+} from './repositories/constraint';
+
+export {
+  createAIConversation,
+  findAIConversationById,
+  listAIConversationsForUser,
+  findScopedConversation,
+  createAIMessage,
+  listAIMessagesForConversation,
+  touchConversationLastMessageAt,
+} from './repositories/aiConversation';
+
+export type {
+  AIConversationRecord,
+  AIMessageRecord,
+  AIMessageRole,
+} from './repositories/aiConversation';
+
 // ─── Test helpers ─────────────────────────────────────────────────────────
 //
 // NOT for production code. Exposed so packages/api's integration tests can

@@ -23,6 +23,8 @@ import { sessionRouter } from "./routers/session";
 import { performanceRouter } from "./routers/performance";
 import { observationRouter } from "./routers/observation";
 import { reviewRouter } from "./routers/review";
+import { coachRouter } from './routers/coach';
+import { constraintRouter } from './routers/constraint';
 
 export const appRouter = router({
   user: userRouter,
@@ -38,6 +40,8 @@ export const appRouter = router({
   performance: performanceRouter,
   observation: observationRouter,
   review: reviewRouter,
+  coach: coachRouter,
+  constraint: constraintRouter,
 });
 
 export type AppRouter = typeof appRouter;

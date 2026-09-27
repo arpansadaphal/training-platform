@@ -1,0 +1,7 @@
+### ARCH-038 — Simulation "applied" status is derived from `Revision.sourceSimulationId`, never stored as a column
+Date: 2026-09-26 | Status: FROZEN | Reversible: Yes, contained to `packages/db/src/repositories/simulation.ts` + `packages/api/src/services/programVersionService.ts`
+Decision: The `Simulation` Prisma model has no "applied" field — no `appliedAsVersionId`, no `appliedAt`, no boolean. `commitFromSimulation` calls `findAppliedRevisionForSimulation(simulationId)` before opening its transaction: the query returns the `Revision` whose `sourceSimulationId` matches (or `null`). A non-null result raises `SimulationAlreadyAppliedError`; a null result proceeds.
+Rationale: `Revision.sourceSimulationId` records exactly the fact "this revision was produced by that simulation." Adding a second field to `Simulation` would make two sources of truth for one fact. The derivation is a cheap indexed lookup.
+Alternatives considered: (1) Add `Simulation.appliedAsVersionId String? @unique` FK — rejected; two sources of truth. (2) Add `Simulation.appliedAt DateTime?` — rejected; same problem. (3) No check at all, rely on the stale-check — rejected.
+Consequence: `findAppliedRevisionForSimulation` is the query. Under concurrent retries, both calls could pass the check — best-effort semantics; a future phase wanting strict serialization adds a unique constraint on `Revision.sourceSimulationId` or takes a `Program` row lock.
+Source: `04-database-schema.md` (Revision model); Phase 5 kickoff exchange C3.

@@ -10,6 +10,11 @@
 // (never persisted) rendered below with an explicit warning. The two views
 // are never blended.
 //
+// The Coach panel is rendered beside the review body, scoped to a
+// conversation tied to this block's program version. The RSC resolves the
+// conversation id server-side (via coach.openConversationForBlock) so the
+// panel appears on first paint with no flicker.
+//
 // /app/* pages do their own auth check; there is no shared layout.
 
 import Link from "next/link";
@@ -17,6 +22,7 @@ import { notFound, redirect } from "next/navigation";
 import { TRPCError } from "@trpc/server";
 import { appRouter } from "@training/api";
 import { auth } from "@/src/server/auth";
+import { CoachPanel } from "@/src/components/coach/CoachPanel";
 import { ReviewClient, type ClientReviewData } from "./ReviewClient";
 import styles from "./review.module.css";
 
@@ -46,6 +52,12 @@ export default async function ReviewPage({ params }: PageProps) {
     }
     throw err;
   }
+
+  // Get-or-create the Coach conversation scoped to this block's program
+  // version. The panel needs a conversationId before it can render.
+  const coachConversation = await caller.coach.openConversationForBlock({
+    trainingBlockId: blockId,
+  });
 
   // Convert to the client-serializable shape. Dates become ISO strings;
   // Json columns (assessment, fitScore) stay as unknown and are cast inside
@@ -85,7 +97,17 @@ export default async function ReviewPage({ params }: PageProps) {
       <nav className={styles.nav}>
         <Link href="/app">&larr; Dashboard</Link>
       </nav>
-      <ReviewClient data={clientData} />
+      <div className={styles.layout}>
+        <div className={styles.reviewColumn}>
+          <ReviewClient data={clientData} />
+        </div>
+        <aside className={styles.coachColumn}>
+          <CoachPanel
+            conversationId={coachConversation.id}
+            contextLabel="This block's review"
+          />
+        </aside>
+      </div>
     </main>
   );
 }
