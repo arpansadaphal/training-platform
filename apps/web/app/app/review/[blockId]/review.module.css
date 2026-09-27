@@ -3,11 +3,15 @@
  * The Review screen. Reading-first layout: generous vertical rhythm, muted
  * metadata, and one clear visual divider separating the ARCH-015 default
  * view (the commit-time snapshot) from the opt-in recompute section.
+ *
+ * Two-column at wide viewports: the review body at its original reading
+ * width, the Coach panel in a sticky aside. Below 64rem the panel stacks
+ * under the review body.
  */
 
 .page {
   padding: 2rem;
-  max-width: 44rem;
+  max-width: 72rem;
   margin: 0 auto;
 }
 
@@ -259,4 +263,35 @@
   color: #742a2a;
   border-radius: 4px;
   font-size: 0.9rem;
+}
+
+/* ── Two-column layout (review + coach) ─────────────────────────────── */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 44rem) minmax(20rem, 26rem);
+  gap: 2rem;
+  align-items: start;
+}
+
+.reviewColumn {
+  min-width: 0;
+}
+
+.coachColumn {
+  position: sticky;
+  top: 2rem;
+  /* Keep the panel within the viewport so its internal scroll behaves. */
+  max-height: calc(100vh - 4rem);
+}
+
+@media (max-width: 64rem) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .coachColumn {
+    position: static;
+    max-height: none;
+  }
 }

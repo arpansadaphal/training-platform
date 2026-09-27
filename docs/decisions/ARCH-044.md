@@ -1,0 +1,16 @@
+### ARCH-044 — Coach router adds `openConversation` and `openConversationForBlock` beyond the phase file's three procedures
+
+Date: 2026-09-27 | Status: FROZEN | Reversible: Yes, contained to `packages/api/src/routers/coach.ts`, `packages/api/src/services/coachConversationService.ts`, and the panel's conversation-id resolution at `apps/web/src/components/coach/CoachPanel.tsx` and `apps/web/app/app/review/[blockId]/page.tsx`
+
+Decision: Two procedures beyond the phase file's three (`postMessage`, `listConversations`, `getConversation`). `coach.openConversation({ programId, programVersionId })` gets or creates the conversation scoped to a program version; both inputs are nullable, and passing nulls yields a general (unscoped) conversation. `coach.openConversationForBlock({ trainingBlockId })` resolves the block's `programVersionId`, loads the parent program ownership-checked via `loadOwnedProgramOrThrow`, and gets or creates the corresponding scoped conversation. Both are idempotent on their scope: two calls with the same tuple return the same conversation row.
+
+Rationale: The Coach panel needs a stable `conversationId` before it can call `postMessage`. Making `postMessage`'s `conversationId` nullable and creating the conversation on first message would force the streaming path to handle a create-then-stream race and would blur the subscription contract with a persistence side effect — a separate mutation keeps `postMessage` narrow (open a stream for an existing, owned conversation, or fail NOT_FOUND). The block-scoped variant exists because the Review screen is the primary entry point to the panel: its RSC payload carries a `trainingBlockId` but not the program or version ids, and `review.get`'s return shape does not include them. Adding `programId`/`programVersionId` to `review.get` would couple the Review surface to the Coach feature — a worse boundary. A block-scoped get-or-create procedure keeps the resolution on the Coach side.
+
+Alternatives considered: (a) Nullable `conversationId` on `postMessage`; create on first message. Rejected: race between create and stream, and a mutation hidden inside a subscription procedure. (b) Add `programId`/`programVersionId` to `review.get`'s return and have the panel call `openConversation` directly. Rejected: couples Review to the Coach feature; the Review surface does not need to know about Coach's conversation scoping. (c) Fold both procedures into one with a discriminated-union input. Rejected for Phase 8: one entry point, one procedure; the shape matches the two that exist.
+
+Consequence: Two procedures beyond the phase file's list. If a third entry point (e.g. the Builder) needs the same shape, add a third scoped procedure (`openConversationForDraft`, say) rather than widening `openConversation`'s input into a discriminated union. A future change that makes conversations disposable (an explicit "start fresh" action) will need to decide whether the old row is orphaned or deleted; not a Phase 8 concern.
+
+Source: `phases/phase-08-ai-coach.md`; Phase 8 kickoff exchange Q4 (Coach UI placement); `10-ai-coach-architecture.md` ("Request flow").
+
+*Next ID: ARCH-045. Every future phase that makes a genuine new architectural choice (not already covered by the reference docs above) must append an entry here before that phase is considered complete.*
+DECISIONS_EOF

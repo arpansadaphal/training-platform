@@ -1,39 +1,62 @@
-// apps/web/src/lib/trpc.tsx
-//
-// Client-side tRPC wiring. Phase 1's RSC pages used
-// `appRouter.createCaller(...)` directly — no client transport existed. The
-// Builder is the first interactive surface, so this file introduces the
-// client side for the first time.
-//
-// TRPCProvider is a client component. RSC pages that need client-side tRPC
-// hooks render it as a boundary around their interactive child tree; there
-// is no root-layout provider so that pages that don't need client tRPC (all
-// of Phase 1's) continue to ship zero of this JavaScript.
-//
-// The QueryClient is created per TRPCProvider instance (via useState's lazy
-// initializer) rather than module-scoped, so two mounted providers don't
-// share cache state. This is the tRPC v11 recommended pattern.
+'use client';
 
-"use client";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { httpBatchLink, httpSubscriptionLink, splitLink } from '@trpc/client';
+import { createTRPCReact } from '@trpc/react-query';
+import { useState, type ReactNode } from 'react';
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink } from "@trpc/client";
-import { createTRPCReact } from "@trpc/react-query";
-import { useState, type ReactNode } from "react";
-import type { AppRouter } from "@training/api";
+import type { AppRouter } from '@training/api';
 
+/**
+ * The single tRPC client instance for the app.
+ *
+ * The `trpc` export is the react-query integration (queries, mutations,
+ * subscriptions). `TRPCProvider` wraps `trpc.Provider` with a QueryClient so
+ * a route can mount one component and get both.
+ *
+ * Subscriptions route through `httpSubscriptionLink` (SSE over POST), which
+ * is what the Coach's `coach.postMessage` uses. Everything else routes
+ * through the batched HTTP link. `splitLink` evaluates per-call on the
+ * operation's type — `'subscription'` is set by tRPC for subscription
+ * procedures.
+ */
 export const trpc = createTRPCReact<AppRouter>();
 
+function makeQueryClient(): QueryClient {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 30 * 1000,
+      },
+    },
+  });
+}
+
+let browserQueryClient: QueryClient | undefined;
+
+function getQueryClient(): QueryClient {
+  // Server: always a fresh client, to avoid sharing state across requests.
+  if (typeof window === 'undefined') {
+    return makeQueryClient();
+  }
+  // Browser: a module-level singleton, so the client survives RSC re-renders.
+  if (!browserQueryClient) browserQueryClient = makeQueryClient();
+  return browserQueryClient;
+}
+
 export function TRPCProvider({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
+  const queryClient = getQueryClient();
   const [trpcClient] = useState(() =>
     trpc.createClient({
       links: [
-        httpBatchLink({
-          // The Next.js route handler at apps/web/app/api/trpc/[trpc]/route.ts
-          // mounts the same appRouter used by RSC callers. Relative URL so
-          // this works in dev, preview, and production without env config.
-          url: "/api/trpc",
+        splitLink({
+          condition: (op) => op.type === 'subscription',
+          true: httpSubscriptionLink({
+            url: '/api/trpc',
+          }),
+          false: httpBatchLink({
+            url: '/api/trpc',
+          }),
         }),
       ],
     }),
@@ -41,9 +64,13 @@ export function TRPCProvider({ children }: { children: ReactNode }) {
 
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </trpc.Provider>
   );
 }
+
+/**
+ * Alias for consumers that prefer `api.*`. Both point at the same
+ * createTRPCReact instance — do not construct a second one.
+ */
+export const api = trpc;

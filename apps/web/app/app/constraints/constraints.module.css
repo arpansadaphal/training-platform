@@ -1,0 +1,242 @@
+/* apps/web/app/app/constraints/constraints.module.css
+ *
+ * The constraints surface. Reading-first: each constraint is a card with a
+ * kind chip, a note, and a pair of actions. The form is the same shape for
+ * create and edit — no separate "add" screen, no modal.
+ */
+
+.page {
+  padding: 2rem;
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.nav {
+  margin-bottom: 1rem;
+  opacity: 0.7;
+}
+
+.header {
+  margin-bottom: 1.5rem;
+}
+
+.heading {
+  margin: 0 0 0.35rem 0;
+}
+
+.intro {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.introMeta {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.7;
+  line-height: 1.5;
+}
+
+/* ── List ──────────────────────────────────────────────────────────── */
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem 0 0 0;
+}
+
+.item {
+  padding: 1rem;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+}
+
+.itemHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.kindChip {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.5rem;
+  background: #ebf8ff;
+  border: 1px solid #bee3f8;
+  color: #2c5282;
+  border-radius: 999px;
+}
+
+.itemMeta {
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+.note {
+  margin: 0 0 0.75rem 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.itemActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.editButton,
+.deleteButton {
+  padding: 0.35rem 0.75rem;
+  min-height: 32px;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.editButton {
+  background: transparent;
+  border: 1px solid var(--border, #ccc);
+  color: inherit;
+}
+
+.deleteButton {
+  background: transparent;
+  border: 1px solid #feb2b2;
+  color: #742a2a;
+}
+
+.deleteButton:disabled,
+.editButton:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+/* ── Empty + add ───────────────────────────────────────────────────── */
+
+.empty {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: #fafafa;
+  border: 1px dashed var(--border, #ccc);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  opacity: 0.8;
+  line-height: 1.5;
+}
+
+.addButton {
+  padding: 0.5rem 1rem;
+  min-height: 40px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  background: #2b6cb0;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* ── Form ──────────────────────────────────────────────────────────── */
+
+.form {
+  padding: 1rem;
+  border: 1px solid #bee3f8;
+  background: #f7fafc;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+}
+
+.field {
+  margin-bottom: 0.9rem;
+}
+
+.label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.35rem;
+  opacity: 0.75;
+}
+
+.select,
+.textarea {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  background: #fff;
+}
+
+.textarea {
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.hint {
+  margin: 0.35rem 0 0 0;
+  font-size: 0.8rem;
+  opacity: 0.7;
+  line-height: 1.4;
+}
+
+.formError {
+  margin: 0 0 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  background: #fff5f5;
+  border: 1px solid #feb2b2;
+  color: #742a2a;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.formActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.primaryButton {
+  padding: 0.5rem 1rem;
+  min-height: 40px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  background: #2b6cb0;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  padding: 0.5rem 1rem;
+  min-height: 40px;
+  font-size: 0.9rem;
+  background: transparent;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* ── Error banner ──────────────────────────────────────────────────── */
+
+.error {
+  margin: 0 0 1rem 0;
+  padding: 0.65rem 0.85rem;
+  background: #fff5f5;
+  border: 1px solid #feb2b2;
+  color: #742a2a;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}

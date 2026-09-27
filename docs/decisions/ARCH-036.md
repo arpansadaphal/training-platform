@@ -1,0 +1,7 @@
+### ARCH-036 — `SimulationResult` is a discriminated union (`COMPUTED` | `CANNOT_COMPUTE` | `INVALID_MUTATION`), and `CANNOT_COMPUTE` carries both analyses and both assessments
+Date: 2026-09-26 | Status: FROZEN | Reversible: Yes, contained to `packages/domain/src/mutation/types.ts` and its consumers
+Decision: `simulate()` returns a discriminated union keyed on `kind`: `COMPUTED` (with `baseAnalysis`, `baseAssessment`, `mutatedStructure`, `mutatedAnalysis`, `mutatedAssessment`, `gain`, `cost`, `net`, `whatChanged`), `CANNOT_COMPUTE` (with `reason: "ASSESSMENT_UNVALIDATED"` and both analyses + both assessments), or `INVALID_MUTATION` (with a `MutationError`).
+Rationale: (a) `mutatedStructure` on `COMPUTED` — a consumer would otherwise have to re-apply `applyMutation` to render the mutated state, creating a second call site for the mutation function (invariant 2). (b) `CANNOT_COMPUTE` carries analyses — the `Simulation` Prisma table's `resultAnalysis` column is non-null. (c) Discriminated union — same discipline as ARCH-028 and ARCH-030.
+Alternatives considered: (1) Flat object with optional `net` — rejected. (2) `CANNOT_COMPUTE` carrying only assessments — rejected; the schema's non-null columns make the wider shape the honest one. (3) `simulate()` throwing — rejected; the future AI Coach's tool handler needs a returned variant, not a throw.
+Consequence: Every consumer narrows on `kind`. `simulate()` never throws.
+Source: `phases/phase-05-simulation-and-apply.md`; Phase 5 kickoff exchange Q3.

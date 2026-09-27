@@ -1,0 +1,7 @@
+### ARCH-037 — `WhatChangedResult` and `StructureDiffEntry` are two distinct types for two distinct consumers
+Date: 2026-09-26 | Status: FROZEN | Reversible: Yes, contained to `packages/domain/src/mutation/diff-assessments.ts` and `diff-structures.ts`
+Decision: Two separate diff functions, two separate types: `diffAssessments(base, mutated): WhatChangedResult` (assessment-level: `meaningful`, `statusTransitions`, `membershipChanges`, `overallBandShift`, `tradeOffs`) drives the UI's "no meaningful change" message and Phase 8's Coach narration. `diffStructures(base, mutated): StructureDiffEntry[]` (structural: `ADDED_WORKOUT_DAY | REMOVED_WORKOUT_DAY | REORDERED_WORKOUT_DAY | ADDED_PRESCRIPTION | REMOVED_PRESCRIPTION | MODIFIED_PRESCRIPTION`) is computed on demand; never stored on `ProgramVersion`.
+Rationale: The two diffs answer different questions for different consumers. Per `03-domain-model.md`, the structural diff is explicitly "computed on demand by comparing two versions' normalized rows, not stored redundantly."
+Alternatives considered: (1) One `DiffResult` with both fields — rejected. (2) Store `StructureDiffEntry[]` on `ProgramVersion` — rejected. (3) Stringified patch — rejected.
+Consequence: History view reads `diffStructures`. Trade-off messaging reads `diffAssessments`. Phase 7's Review uses both.
+Source: `07-versioning-and-simulation.md`; `03-domain-model.md`; Phase 5 kickoff Q4.
