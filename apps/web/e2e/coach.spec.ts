@@ -1,3 +1,4 @@
+
 // apps/web/e2e/coach.spec.ts
 //
 // The Phase 8 acceptance test: the Apply button does not auto-fire
@@ -7,21 +8,19 @@
 // inline; there is no shared storageState fixture. Same DB-left-dirty policy
 // as the other specs.
 //
-// The primary test requires a live Anthropic API key — the Coach panel
-// cannot produce an apply_confirmation segment without a real model turn.
-// It is gated on ANTHROPIC_API_KEY and skipped in CI, matching guidance Q
-// ("CI must not need ANTHROPIC_API_KEY").
-//
-// Follow-up flagged for the 8h close-out: a network-mocked variant that
-// intercepts the tRPC SSE stream and returns a scripted apply_confirmation
-// segment. That would let the assertion run in CI without a key. The
-// blocker is that tRPC v11's exact SSE frame format is version-specific,
-// and a mock that does not match the real wire shape would produce a
-// vacuous pass.
+// PHASE 9 GATE CHANGE: the primary test was gated on ANTHROPIC_API_KEY
+// (skipped in CI without a real key). It is now gated on MODEL_PROVIDER=mock,
+// which CI sets job-wide. The MockProvider's "coach-regression" scenario
+// (MOCK_SCENARIO=coach-regression) produces the same
+// simulate_program_change → prepare_apply_confirmation sequence the real
+// model produced in Phase 8, so the network-inspection assertion runs
+// identically and now executes in CI. See ARCH-045 and the Phase 9 close-out.
 
 import { test, expect, type Page, type Request } from "@playwright/test";
 
-const HAS_API_KEY = Boolean(process.env.ANTHROPIC_API_KEY);
+// Phase 9: gate on MODEL_PROVIDER=mock. CI sets this; local runs without it
+// skip the gated test (the smoke tests below still run).
+const COACH_RUNNABLE = process.env.MODEL_PROVIDER === "mock";
 
 // ── Setup helpers (mirror training.spec.ts) ────────────────────────────
 
@@ -91,8 +90,7 @@ async function reachReview(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Commit", exact: true }).click();
   await expect(page.getByText(/Committed as version 1\./)).toBeVisible();
 
-  // The /app landing page carries a block strip with the Review link.
-    // The /app landing page carries a block strip with the Review link. The
+  // The /app landing page carries a block strip with the Review link. The
   // accessible name is "Review block" (see BlockStrip in app/app/page.tsx).
   await page.goto("/app");
   const reviewLink = page.getByRole("link", {
@@ -117,7 +115,7 @@ async function reachReview(page: Page): Promise<void> {
 
 // ── Non-gated smoke tests ─────────────────────────────────────────────
 
-test.describe("Coach surfaces (no API key required)", () => {
+test.describe("Coach surfaces (no model required)", () => {
   test("the /app/coach route renders a conversation sidebar", async ({
     page,
   }) => {
@@ -155,16 +153,18 @@ test.describe("Coach surfaces (no API key required)", () => {
 
 // ── Gated: the phase-file's network-inspection acceptance test ────────
 
-test.describe("Coach apply-button boundary (requires ANTHROPIC_API_KEY)", () => {
+test.describe("Coach apply-button boundary (requires MODEL_PROVIDER=mock)", () => {
   test.skip(
-    !HAS_API_KEY,
-    "requires a live model — set ANTHROPIC_API_KEY to run this test",
+    !COACH_RUNNABLE,
+    "requires MODEL_PROVIDER=mock (set in CI). The MockProvider's " +
+      "coach-regression scenario produces the simulate → prepare_apply " +
+      "sequence this test asserts against.",
   );
 
   test("commitFromSimulation fires only on explicit click, never during streaming", async ({
     page,
   }) => {
-    test.setTimeout(300_000);
+    test.setTimeout(180_000);
 
     // Track every HTTP request whose URL names the commit procedure. tRPC's
     // httpBatchLink encodes procedure names in the URL path, so a request
@@ -181,10 +181,9 @@ test.describe("Coach apply-button boundary (requires ANTHROPIC_API_KEY)", () => 
 
     await expect(page.getByRole("heading", { name: "Coach" })).toBeVisible();
 
-    // Send a message that strongly implies "simulate then offer me the
-    // apply button". The model chooses whether to call
-    // prepare_apply_confirmation; the wait below fails clearly if it does
-    // not.
+    // Send a message. Under the coach-regression scenario, the mock produces
+    // a deterministic simulate → prepare_apply sequence regardless of the
+    // text content; a descriptive prompt is still useful for debugging.
     const textarea = page.getByPlaceholder("Ask the Coach…");
     await textarea.fill(
       "Please simulate adding one set to the first exercise, then offer " +
@@ -192,8 +191,9 @@ test.describe("Coach apply-button boundary (requires ANTHROPIC_API_KEY)", () => 
     );
     await page.getByRole("button", { name: /^Send$/ }).click();
 
-    // Wait for the Apply button to appear. Generous timeout — a real model
-    // turn plus tool round-trips can take 20–40s.
+    // Wait for the Apply button to appear. The mock is deterministic and
+    // fast; a generous timeout still guards against a dev-server cold start
+    // mid-test.
     const applyButton = page.getByRole("button", {
       name: /apply this change/i,
     });

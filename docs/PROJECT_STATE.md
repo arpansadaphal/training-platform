@@ -168,5 +168,9 @@ PROJECT_STATE_EOF
 
 - **Signature-optional fields on provider abstractions.** Provider-specific protocol fields (e.g. Gemini's `thoughtSignature`, Anthropic's cache breakpoints) go on the generic `ModelProvider` interface as **optional** fields, not as provider-specific types. `ToolCall.thoughtSignature?: string` and `ModelContentBlock['tool_use'].thoughtSignature?: string` are the correct home — Anthropic and Mock simply ignore them. A future provider with its own protocol quirk follows the same pattern: add the field as optional, thread it through the orchestrator's spread, and let each provider populate or ignore. Do not special-case a provider in the orchestrator.
 
+AssessmentDisplay is a client component. It mounts useProvisionalBanner() (a hook), so any server component importing it goes through a client boundary. All current consumers are client components. If a future phase needs a server-rendered assessment (PDF export, email render, static preview), migrate the hook to a plain isProvisionalBannerEnabled() function reading HYPERTROPHY_CONFIG.validated — a bounded change.
+
+apps/web has no Vitest setup. Playwright-only. Two pure functions in the rate-limiting middleware — classifyRequest and getClientIp — are unit-testable if apps/web ever gains web-layer logic worth testing. Not justified at Phase 9: the load-test script exercises the middleware end-to-end, which is stronger evidence than isolated unit tests.
+
 echo "PROJECT_STATE.md rewritten. Lines:"
 wc -l docs/PROJECT_STATE.md

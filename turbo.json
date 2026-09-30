@@ -15,7 +15,11 @@
     "ANTHROPIC_MODEL",
     "MODEL_PROVIDER",
     "GEMINI_API_KEY",
-    "GEMINI_MODEL"
+    "GEMINI_MODEL",
+    "UPSTASH_REDIS_REST_URL",
+    "UPSTASH_REDIS_REST_TOKEN",
+    "LAUNCH_OVERRIDE_TOKEN",
+    "VERCEL_ENV"
   ],
   "tasks": {
     "build": {

@@ -1,0 +1,46 @@
+
+/* apps/web/components/assessment/ProvisionalBanner.module.css
+ *
+ * Provisional-thresholds banner (ARCH-046).
+ *
+ * A separate module from assessment.module.css so the banner can be
+ * extracted or restyled without touching the assessment layout. The
+ * colour choices here are deliberately loud: a user should not miss this
+ * banner. If it ever becomes visually quiet, that is the failure mode
+ * ARCH-046 exists to prevent.
+ *
+ * CSS custom properties provide an override seam — a future theming pass
+ * can redefine --warning-border / --warning-bg / --warning-fg without
+ * touching this module.
+ */
+
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin: 0 0 1rem 0;
+  border: 1px solid var(--warning-border, #b45309);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: var(--warning-bg, #fef3c7);
+  color: var(--warning-fg, #78350f);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.text {
+  margin: 0;
+}
+
+.text strong {
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .banner {
+    border-color: var(--warning-border, #d97706);
+    background: var(--warning-bg, #451a03);
+    color: var(--warning-fg, #fef3c7);
+  }
+}

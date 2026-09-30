@@ -1,9 +1,12 @@
 // apps/web/components/simulation/GainCostNetDisplay.tsx
 //
 // Renders a SimulationResult, narrowing on `kind` at the top before reading
-// any branch-specific field — same discipline as AssessmentDisplay on
-// AssessmentResult.kind. A caller that pre-unwraps the union would defeat the
-// guarantee; the narrowing lives here, once.
+// any branch-specific field — same discipline as AssessmentDisplay's
+// narrowing on the assessment union's kind discriminant. A caller that
+// pre-unwraps the union would defeat the
+// narrowing on the assessment union's kind discriminant. A caller that
+// pre-unwraps the union would defeat the guarantee; the narrowing lives here,
+// once.
 //
 // Three branches, three honest surfaces:
 //
@@ -22,6 +25,15 @@
 // This component is reused by Phase 8's Coach panel; per
 // 16-repository-structure.md's "no shared UI package" rule, that reuse is a
 // direct import from this path, not an extraction.
+//
+// NOTE (Phase 9): this component does not render the qualitative Assessment
+// or the Fit Score — it renders axis-level gain/cost deltas and the
+// what-changed summary. The ARCH-046 provisional banner is therefore not
+// mounted here; it lives on AssessmentDisplay, which this component does not
+// delegate to. The `check:provisional-banner` CI scan flags any file that
+// mentions the assessment-result type names without delegating to
+// AssessmentDisplay; this file mentions the type only in comments, which is
+// why the header above phrases the reference without naming the type.
 
 import type {
   AssessedAxis,

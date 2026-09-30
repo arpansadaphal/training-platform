@@ -1,3 +1,4 @@
+
 name: CI
 
 on:
@@ -12,7 +13,9 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Raised from 20 to 30 in Phase 9: the E2E step boots Next.js dev and
+    # runs the full Playwright suite, which is the slowest part of the job.
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -38,6 +41,17 @@ jobs:
       DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
       AUTH_SECRET: ci-placeholder-secret-at-least-32-characters-long
       AUTH_URL: http://localhost:3000
+      # CI uses the mock model provider — no API keys are required.
+      # MOCK_SCENARIO activates the MockProvider's scripted Coach scenario,
+      # which the E2E regression and coach specs exercise. See
+      # packages/ai/src/provider/MockProvider.ts.
+      MODEL_PROVIDER: mock
+      MOCK_SCENARIO: coach-regression
+      # Rate limiting fails open when Upstash is not configured, which is
+      # what CI wants — no network calls to Upstash, no false 429s against
+      # the E2E suite.
+      # UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are deliberately
+      # unset.
 
     steps:
       - uses: actions/checkout@v4
@@ -66,8 +80,33 @@ jobs:
       - name: Lint
         run: pnpm turbo run lint
 
-      - name: Test
+      # Sanity check: the launch gate script runs and no-ops outside
+      # production. The load-bearing enforcement happens inside Vercel's
+      # build (`pnpm run build` chains through `launch-gate` — see
+      # apps/web/package.json). This step exists so a broken gate script
+      # fails CI rather than only failing at Vercel deploy time.
+      - name: Launch gate (sanity check, non-production)
+        run: pnpm --filter web run launch-gate
+
+      # Fast, cheap: the banner grep runs before the full unit suite so a
+      # missing banner fails in seconds, not minutes.
+      - name: Provisional banner check
+        run: pnpm --filter web run check:provisional-banner
+
+      - name: Test (unit + integration)
         run: pnpm turbo run test
 
       - name: Build
         run: pnpm turbo run build
+
+      - name: Install Playwright browsers
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      # Phase 9: the E2E suite now runs in CI. Previously these specs ran
+      # only locally, and the coach.spec.ts network-inspection test was
+      # gated on ANTHROPIC_API_KEY and skipped without a real key. Both now
+      # run under MODEL_PROVIDER=mock + MOCK_SCENARIO=coach-regression.
+      # Playwright's webServer config boots `pnpm dev` against the same
+      # CI service-container DB the earlier steps migrated and seeded.
+      - name: E2E (Playwright)
+        run: pnpm --filter web test:e2e

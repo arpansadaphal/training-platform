@@ -13,6 +13,23 @@
 // raw AssessmentResult and FitScoreResult, and this component decides whether
 // the assessment is renderable at all. A caller that pre-unwraps the union
 // would defeat the guarantee.
+//
+// ARCH-046: this component is also the ONLY place the provisional-
+// thresholds banner is mounted. Every assessment surface in the app goes
+// through here, so mounting the banner here means no surface can display
+// an assessment without the disclaimer.
+// scripts/check-provisional-banner.sh enforces the delegation rule
+// structurally — a new component that imports AssessmentResult or
+// FitScoreResult without going through this file fails CI.
+//
+// "use client": added in Phase 9 because the banner's visibility is
+// resolved by `useProvisionalBanner`, a hook. Every existing consumer of
+// this component is already inside a "use client" tree (ReviewClient,
+// CoachPanel, the Builder's draft panel), so this directive makes an
+// already-true fact explicit; it does not change where this component
+// runs.
+
+"use client";
 
 import type {
   AssessedAxis,
@@ -20,7 +37,9 @@ import type {
   FitScoreResult,
 } from "@training/domain";
 import { AxisCard } from "./AxisCard";
+import { ProvisionalBanner } from "./ProvisionalBanner";
 import { UnvalidatedState } from "./UnvalidatedState";
+import { useProvisionalBanner } from "@/src/lib/provisionalBanner";
 import styles from "./assessment.module.css";
 
 interface Props {
@@ -33,19 +52,37 @@ function axisKey(axis: AssessedAxis): string {
 }
 
 export function AssessmentDisplay({ result, fitScore }: Props) {
+  // ARCH-046: the banner is a property of the configuration, not of any
+  // one assessment. `useProvisionalBanner` reads HYPERTROPHY_CONFIG's
+  // `validated` flag and returns true while it is false — which, at MVP,
+  // is always. When a validated config ships, the hook returns false and
+  // the banner disappears from every surface at once.
+  const provisional = useProvisionalBanner();
+
   // Per Q3: an UNVALIDATED assessment carries no classifications — the inner
   // Assessment's strengths/attention/opportunity/actions are empty/null by
   // domain contract (see packages/domain/src/assessment/computeAssessment.ts).
   // Rendering those empty lists would fabricate the appearance of "no
   // problems found." The honest surface is the reason string.
+  //
+  // The banner appears above UnvalidatedState as well: the user is being
+  // told the assessment is unavailable BECAUSE the thresholds are
+  // provisional, and the two facts belong together.
   if (result.kind === "UNVALIDATED") {
-    return <UnvalidatedState reason={result.reason} />;
+    return (
+      <>
+        {provisional ? <ProvisionalBanner /> : null}
+        <UnvalidatedState reason={result.reason} />
+      </>
+    );
   }
 
   const a = result.assessment;
 
   return (
     <article className={styles.wrapper}>
+      {provisional ? <ProvisionalBanner /> : null}
+
       <section className={styles.overall}>
         <h2 className={styles.sectionHeading}>Overall</h2>
         <p className={styles.overallSummary}>{a.overallSummary}</p>

@@ -1,14 +1,39 @@
 # Decision Register
 
 Per-entry decision files. Split from a single `DECISIONS.md` on 2026-09-27
-to prevent the recurring truncation losses that occurred six times across
-Phases 1–7.
+to prevent the recurring truncation losses that had occurred six times
+across Phases 1–7.
 
 ## Format
 
 Each file is one entry, named `ARCH-NNN.md`. **Append-only:** adding a
 decision means creating a new file. Do not edit existing entries; if one
 is wrong, create a new dated entry that explicitly supersedes it.
+
+## Addenda
+
+Entries in this register are append-only (see Format above). When a Phase
+implementation needs to *elaborate* on an existing decision without
+changing its substance — e.g., Phase 9 documenting the concrete
+`LAUNCH_OVERRIDE_TOKEN` mechanism that ARCH-046 named abstractly — the
+elaboration is appended to the original entry under a clearly-marked
+`## Addenda` heading, dated, and prefixed with a one-line note that the
+original text stands unchanged.
+
+An addendum is **not** a supersession. If the substance of a decision
+changes, that is a new `ARCH-NNN` entry that explicitly supersedes the old
+one — it is not an addendum. The distinction:
+
+- **Addendum:** the decision still holds; new detail about its mechanism
+  or consequences is now known. Attach to the original entry.
+- **Supersession:** the decision itself is replaced. Create a new entry,
+  reference the old one, and stop treating the old entry as current.
+
+An auditor reading an entry with an addendum sees the original text plus a
+dated elaboration — never a silent rewrite. This is why the addendum
+mechanism exists separately from the append-only rule: it is the
+sanctioned way to add operational detail to a decision that remains in
+force.
 
 ## Entries
 

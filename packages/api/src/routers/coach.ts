@@ -254,7 +254,7 @@ function buildContextDepsForTurn(userId: string): ContextBuilderDeps {
  */
 function buildToolDepsForTurn(
   userId: string,
-  conversationId: string,
+  _conversationId: string,
 ): CoachToolDeps {
   return {
     lookupExercises: async ({ query }) => {
@@ -344,13 +344,13 @@ export const coachRouter = router({
     .input(openConversationInput)
     .mutation(async ({ ctx, input }) => {
       let programId = input.programId ?? null;
-      let programVersionId = input.programVersionId ?? null;
+      const programVersionId = input.programVersionId ?? null;
 
       if (programId === null && programVersionId === null) {
         programId = await getPrimaryProgramId(ctx.user.id);
       }
 
-            const conversation = await getOrCreateScopedConversation(
+      const conversation = await getOrCreateScopedConversation(
         ctx.user.id,
         { programId, programVersionId },
         { forceNew: input.forceNew === true },

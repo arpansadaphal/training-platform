@@ -6,7 +6,13 @@
   --bg: #fff;
   --muted: #666;
   --border: #ddd;
-  --accent: #0a5;
+  /* --accent was #0a5 (RGB 0,170,85). White text on #0a5 has contrast
+     ≈ 3.02:1 — below WCAG AA's 4.5:1 requirement for normal text, and
+     caught by the Phase 9 axe pass on the Builder screen's "Create draft"
+     button. #047857 gives white text ≈ 5.35:1 (Tailwind's emerald-700
+     shade), preserving the same green family with headroom for a
+     font-size or opacity change without re-tripping the check. */
+  --accent: #047857;
 }
 
 * {
