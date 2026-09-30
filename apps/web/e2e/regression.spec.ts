@@ -33,8 +33,15 @@
 //                     → "Mark complete"  (client mutation, IN_PROGRESS→COMPLETED)
 //
 // "Mark complete" is only rendered once the Session is IN_PROGRESS — the
-// service's state machine rejects IN_PROGRESS → COMPLETED if it is not
-// (sessionService's ALLOWED_TRANSITIONS).
+// service's state machine rejects PLANNED → COMPLETED (sessionService's
+// ALLOWED_TRANSITIONS).
+//
+// TIMEOUT: the per-test ceiling is 300 seconds. This is a single continuous
+// flow through six routes plus a Coach turn; a genuinely stuck step has its
+// own internal timeout, and this outer ceiling exists only to keep a hang
+// from eating the whole CI budget. The webServer prod/dev fix in
+// playwright.config.ts is what actually makes this spec complete quickly in
+// CI; the outer ceiling is a fail-fast guard.
 
 import { test, expect, type Page } from "@playwright/test";
 
@@ -104,7 +111,6 @@ async function buildAndCommitV1(
 async function trainOneSession(page: Page): Promise<void> {
   await page.goto("/app");
 
-  // Landing page primary CTA → /train
   const cta = page
     .getByRole("link", {
       name: /continue session|start (next )?session/i,
@@ -119,10 +125,6 @@ async function trainOneSession(page: Page): Promise<void> {
   await cta.click();
   await expect(page).toHaveURL(/\/train$/, { timeout: 30_000 });
 
-  // ── Step 1: /train program picker → "Start training" ──────────────
-  // Posts to startTrainingAction; the server action calls
-  // session.getOrCreateNext (creating a PLANNED Session) and redirects to
-  // the session detail page.
   const startTrainingButton = page.getByRole("button", {
     name: /^start training$/i,
   });
@@ -133,29 +135,17 @@ async function trainOneSession(page: Page): Promise<void> {
     timeout: 30_000,
   });
 
-  // ── Step 2: PLANNED → IN_PROGRESS via "Start session" ─────────────
-  // The client-side mutation calls session.markStarted and then
-  // router.refresh(). "Start session" disappears once IN_PROGRESS.
   const startSessionButton = page.getByRole("button", {
     name: /^start session$/i,
   });
   await expect(startSessionButton).toBeVisible({ timeout: 15_000 });
   await startSessionButton.click();
 
-  // The "Mark complete" control only renders once the Session is
-  // IN_PROGRESS (sessionService's state machine rejects PLANNED →
-  // COMPLETED). Its appearance is the transition signal.
   const completeButton = page.getByRole("button", {
     name: /^mark complete$/i,
   });
   await expect(completeButton).toBeVisible({ timeout: 15_000 });
 
-  // ── Step 3: log a set with a deliberate deviation ─────────────────
-  // Builder default prescription is 5–8 reps. Logging 3 reps is
-  // deliberately below the low bound so the Review screen's adherence
-  // surface has data to reason about. One deviation is below the
-  // systematic threshold (2), so the spec does not assert a flagged
-  // deviation — it asserts the flow.
   const repsInput = page.getByLabel(/^reps$/i).first();
   await expect(repsInput).toBeVisible({ timeout: 15_000 });
   await repsInput.fill("3");
@@ -164,21 +154,12 @@ async function trainOneSession(page: Page): Promise<void> {
   await expect(logButton).toBeVisible({ timeout: 15_000 });
   await logButton.click();
 
-  // Confirmation: the SessionClient sets this status message in
-  // logSetMutation.onSuccess. Its appearance is the acknowledgement the
-  // log round-tripped.
   await expect(page.getByText(/set logged/i)).toBeVisible({
     timeout: 15_000,
   });
 
-  // ── Step 4: IN_PROGRESS → COMPLETED via "Mark complete" ───────────
   await completeButton.click();
 
-  // The RSC refresh (markCompletedMutation.onSuccess's router.refresh())
-  // re-renders the SessionClient with the COMPLETED status, which
-  // activates the "This session is complete" banner. That banner is the
-  // stable terminal-state assertion — it does not depend on the transient
-  // local status message surviving the refresh.
   await expect(
     page.getByText(/this session is complete/i),
   ).toBeVisible({ timeout: 15_000 });
@@ -202,7 +183,6 @@ async function openReviewAndRecompute(page: Page): Promise<void> {
   await page.goto(reviewHref);
   await expect(page).toHaveURL(/\/app\/review\/[^/]+$/);
 
-  // ── Provisional-thresholds banner (ARCH-046) ───────────────────────
   await expect(
     page.getByRole("note", {
       name: /provisional thresholds disclaimer/i,
@@ -212,12 +192,10 @@ async function openReviewAndRecompute(page: Page): Promise<void> {
     page.getByText(/not yet scientifically validated/i),
   ).toBeVisible();
 
-  // ── COMMIT snapshot is the default view (ARCH-015) ─────────────────
   await expect(
     page.getByRole("heading", { name: /assessment at commit time/i }),
   ).toBeVisible();
 
-  // ── Opt-in recompute ───────────────────────────────────────────────
   const recomputeButton = page.getByRole("button", {
     name: /show recompute/i,
   });
@@ -253,7 +231,9 @@ async function simulateAndApplyViaCoach(page: Page): Promise<void> {
 
 test.describe("Full MVP regression", () => {
   test("walks the complete loop in one run", async ({ page }) => {
-    test.setTimeout(600_000);
+    // 300s ceiling. See the file header. All internal steps have their own
+    // timeouts; this outer one is a hang guard, not a target.
+    test.setTimeout(300_000);
 
     const programName = `Regression ${Date.now()}`;
 
@@ -264,7 +244,6 @@ test.describe("Full MVP regression", () => {
     await openReviewAndRecompute(page);
     await simulateAndApplyViaCoach(page);
 
-    // Confirm v2 is now the active version.
     await page.goto(programHref);
     await expect(page.getByText(/version 2/i).first()).toBeVisible({
       timeout: 30_000,

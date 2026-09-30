@@ -23,6 +23,13 @@
 // is irrelevant to accessibility. The Coach panel is NOT scanned here; it
 // is rendered on the Review screen and its own accessibility pass is a
 // Phase-10 candidate once the Coach UI is more settled.
+//
+// TIMEOUT: the per-test ceiling is 180 seconds. Before the CI webServer
+// prod/dev fix (playwright.config.ts), this spec's original 600s ceiling
+// was what tipped the CI job over its 30-minute budget when combined with
+// Playwright's retries — a genuinely stuck test would burn 10 minutes,
+// retry, and burn 10 more. 180s is plenty for a run that completes; the
+// ceiling is a fail-fast guard, not a target.
 
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
@@ -76,7 +83,7 @@ async function signUp(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 }
 
-async function createProgramAndOpenBuilder(page: Page): Promise<string> {
+async function createProgramAndOpenBuilder(page: Page): Promise<void> {
   const name = `A11y ${Date.now()}`;
   await page.goto("/app/programs");
   await page.getByPlaceholder("e.g. 4-day upper/lower").fill(name);
@@ -92,8 +99,6 @@ async function createProgramAndOpenBuilder(page: Page): Promise<string> {
   await page.goto(href);
   await page.getByRole("link", { name: "Open Builder" }).click();
   await expect(page).toHaveURL(/\/app\/programs\/[^/]+\/build$/);
-
-  return href;
 }
 
 // ── The single continuous a11y walk ────────────────────────────────────
@@ -102,7 +107,9 @@ test.describe("Accessibility pass — Builder, Session logging, Review", () => {
   test("no critical or serious axe violations on the three named screens", async ({
     page,
   }) => {
-    test.setTimeout(600_000);
+    // 180s ceiling. See the file header for the reasoning; the CI
+    // webServer fix makes this a fail-fast guard rather than a target.
+    test.setTimeout(180_000);
 
     await signUp(page);
     await createProgramAndOpenBuilder(page);
