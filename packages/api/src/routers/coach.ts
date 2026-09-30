@@ -252,10 +252,7 @@ function buildContextDepsForTurn(userId: string): ContextBuilderDeps {
  * which user's data a tool touches has no path to do so (asserted by the
  * permission-boundary test in the Phase 8 suite).
  */
-function buildToolDepsForTurn(
-  userId: string,
-  _conversationId: string,
-): CoachToolDeps {
+function buildToolDepsForTurn(userId: string): CoachToolDeps {
   return {
     lookupExercises: async ({ query }) => {
       const all = await listExercises();
@@ -342,7 +339,7 @@ export const coachRouter = router({
    */
   openConversation: protectedProcedure
     .input(openConversationInput)
-    .mutation(async ({ ctx, input }) => {
+       .mutation(async ({ ctx, input }) => {
       let programId = input.programId ?? null;
       const programVersionId = input.programVersionId ?? null;
 
@@ -497,7 +494,7 @@ export const coachRouter = router({
 
       const deps: OrchestratorDeps = {
         provider,
-        toolDeps: buildToolDepsForTurn(userId, input.conversationId),
+        toolDeps: buildToolDepsForTurn(userId),
         contextDeps: buildContextDepsForTurn(userId),
         persistMessage: persistConversationMessage,
         l2Enabled: L2_ENABLED,

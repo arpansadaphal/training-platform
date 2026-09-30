@@ -1,4 +1,3 @@
-
 // apps/web/components/assessment/ProvisionalBanner.tsx
 //
 // The provisional-thresholds banner (ARCH-046).
@@ -6,7 +5,7 @@
 // Mounted inside AssessmentDisplay, so every consumer — Review, Builder,
 // Coach panel, History — gets it without needing to remember to render it.
 // The enforcement is structural: AssessmentDisplay is the only component
-// permitted to render an AssessmentResult directly (see
+// permitted to render an assessment-result payload directly (see
 // scripts/check-provisional-banner.sh), so no new assessment surface can
 // bypass this.
 //
