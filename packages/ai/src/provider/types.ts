@@ -21,7 +21,19 @@ export interface ModelMessage {
 
 export type ModelContentBlock =
   | { type: 'text'; text: string }
-  | { type: 'tool_use'; id: string; name: string; input: unknown }
+  | {
+      type: 'tool_use';
+      id: string;
+      name: string;
+      input: unknown;
+      /**
+       * Provider-specific opaque token that must be echoed back verbatim on
+       * the next turn's functionCall part. Gemini 3.x requires this for
+       * multi-turn tool calling (the `thoughtSignature`); Anthropic has no
+       * equivalent and leaves it undefined. See ARCH-045.
+       */
+      thoughtSignature?: string;
+    }
   | {
       type: 'tool_result';
       toolUseId: string;
@@ -51,6 +63,12 @@ export interface ToolCall {
   id: string;
   name: string;
   input: unknown;
+  /**
+   * Provider-specific opaque token captured from the model response and
+   * echoed back on the matching functionCall part of the next request.
+   * Gemini 3.x: the `thoughtSignature`. Anthropic: never set.
+   */
+  thoughtSignature?: string;
 }
 
 export interface ModelResponse {

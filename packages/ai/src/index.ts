@@ -72,8 +72,18 @@ export type {
 } from './tools';
 
 // --- Provider ---------------------------------------------------------------
-export { AnthropicProvider, MockProvider } from './provider';
-export type { AnthropicProviderConfig } from './provider';
+export {
+  AnthropicProvider,
+  GeminiProvider,
+  MockProvider,
+  createProvider,
+} from './provider';
+export type {
+  AnthropicProviderConfig,
+  CreatedProvider,
+  GeminiProviderConfig,
+  ModelProviderName,
+} from './provider';
 export type {
   ModelContentBlock,
   ModelMessage,

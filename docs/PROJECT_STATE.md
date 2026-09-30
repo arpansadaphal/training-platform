@@ -3,7 +3,9 @@ cd /Users/arpan/Documents/code/training-platform
 cat > docs/PROJECT_STATE.md << 'PROJECT_STATE_EOF'
 ## Current phase
 
-**Phase 9 (Validated thresholds & BLOCK_END snapshots) is next.** Phase 8 (AI Coach L0/L1) is complete. See `docs/phases/phase-09-*.md` and construct the handoff packet with `docs/HANDOFF_TEMPLATE.md`.
+**Phase 9 (Production Hardening & Launch Readiness) is next.** Phase 8 (AI Coach L0/L1) is complete, and the GeminiProvider PR (ARCH-045) plus the Coach auto-scoping fix (ARCH-047) landed as Phase 9 pre-work. See `docs/phases/phase-09-hardening-and-launch.md` and construct the handoff packet with `docs/HANDOFF_TEMPLATE.md`.
+
+**Note on the phase name:** an earlier PROJECT_STATE note named Phase 9 as "Validated thresholds & BLOCK_END snapshots" — that was a Phase 7 forecast written from the "Next phase" summary, not from the phase file. Per ARCH-035's standing rule, the phase file is authoritative. `phases/phase-09-hardening-and-launch.md` is scope-limited to hardening; BLOCK_END snapshot writing remains deferred past Phase 9.
 
 **Note on the Coach panel:** the panel renders beside Review at `/app/review/[blockId]` and on the dedicated `/app/coach` route. Both surfaces consume the same `packages/ai` orchestrator; the panel itself is a single component at `apps/web/src/components/coach/CoachPanel.tsx`. The `coach.openConversationForBlock` procedure resolves the Review page's block id to a scoped conversation server-side, so no flicker on first paint.
 
@@ -20,6 +22,8 @@ Phase 6 additions now in effect: ARCH-039 (commit-triggered `TrainingBlock` life
 Phase 7 additions now in effect: ARCH-041 (BLOCK_END snapshot writing deferred to Phase 9+; Review's default view reads the COMMIT snapshot only). The `commitFromMutation` two-call-site invariant (invariant 2) is unchanged — Phase 7 added zero new write paths. The `packages/ai` boundary (ARCH-011) is unchanged — Phase 7 did not touch that package. `packages/domain` still has zero Prisma/HTTP/UI imports (verified by grep) — Phase 7's only domain-adjacent addition is `diffVersions` in `packages/api`, which reuses the existing pure `diffStructures`. The `errorFormatter` allow-list is unchanged — Phase 7 added no application-level error classes.
 
 Phase 8 additions now in effect: ARCH-042 (grounding failures → bounded regeneration then structured partial with `grounding_warning`); ARCH-043 (`AIMessageSegment` is a discriminated union; the model's output schema is a strict subset); ARCH-044 (two Coach procedures beyond the phase file's list). The `packages/ai` boundary (ARCH-011) holds structurally: the package has no import of `@training/api`, no reference to the `commitFrom` substring in any source file, and `CoachToolDeps` has exactly six methods, none of which can commit. `commitFromMutation`'s two call sites are unchanged — Phase 8 added zero new write paths to program structure. The `errorFormatter` allow-list is unchanged — Phase 8 added no application-level error classes (grounding failures are handled conversationally per ARCH-042, never thrown to the client).
+
+**Phase 9 pre-work (GeminiProvider + Coach auto-scoping):** ARCH-045 (second ModelProvider via `@google/genai`, selected by `MODEL_PROVIDER`, with Gemini 3.x `functionCall.id` and `thoughtSignature` echoes threaded through the generic `ModelProvider` interface as optional fields), ARCH-047 (`coach.openConversation` auto-scopes to the user's primary Program; `forceNew` bypasses get-or-create). The `packages/ai` boundary (ARCH-011) still holds — no new commit-shaped path. `commitFromMutation`'s two call sites are unchanged. The `errorFormatter` allow-list is unchanged. Client-side `coach.module.css` gained a `color: var(--fg, #111)` override on `.conversationItem` to counteract `globals.css`'s `button { color: #fff }` cascade.
 
 ## Project conventions
 
@@ -46,7 +50,7 @@ Phase 8 additions now in effect: ARCH-042 (grounding failures → bounded regene
 `packages/ai` (Phase 8):
 packages/ai/
 src/
-provider/ # ModelProvider interface, AnthropicProvider, MockProvider
+provider/ # ModelProvider interface, AnthropicProvider, GeminiProvider, MockProvider, createProvider factory
 tools/ # six tool definitions + CoachToolDeps
 context-builder.ts # buildCoachContext
 orchestrator.ts # runCoachTurn — the request loop
@@ -70,6 +74,7 @@ text
 apps/web/src/components/coach/ # Phase 8: CoachPanel + CSS module
 apps/web/src/types/coach.ts # Phase 8: ClientAIMessageSegment mirror
 apps/web/app/app/coach/ # Phase 8: dedicated Coach route
+apps/web/app/app/coach/coach.module.css # Phase 8: Coach route styles (conversation sidebar etc.)
 apps/web/app/app/constraints/ # Phase 8: constraints CRUD route
 apps/web/e2e/coach.spec.ts # Phase 8: network-inspection boundary test + panel smoke tests
 
@@ -119,6 +124,11 @@ Phase-1 through Phase-7 items are preserved from the previous state of this file
 - **The `packages/config/package.json` cleanup is outstanding.** The file currently declares a self-dependency (`@training/config` on itself) and three upward deps (`@training/ai`, `@training/db`, `@training/domain`) that are wrong layering. The correct `dependencies` block is `{ "zod": "^3.23.8" }` if `env.ts` uses zod, `{}` otherwise. Not blocking any Phase 8 functionality; worth fixing when next in the file.
 - **No test covers `createdByConversationId` threading on `simulateAndPersist`.** The optional fourth arg distinguishes Coach-originated simulations from UI-originated ones. A one-test addition to `packages/api/src/services/simulation.test.ts` would close the gap.
 
+**Phase 9 pre-work items (deferred candidates, not Phase 9 scope):**
+
+- **Production `GEMINI_MODEL` default when Anthropic billing is enabled.** Currently `gemini-3.8-flash`. When Anthropic billing is turned on and `MODEL_PROVIDER=anthropic` becomes the production default, decide whether Gemini remains a fallback or is retired. Config-only change.
+- **Coach phrasing of CANNOT_COMPUTE.** Model says "temporarily unavailable," which implies a transient failure. The state is structural — unvalidated thresholds. System-prompt refinement only; moot once validated thresholds ship.
+
 ## Test status
 
 - **Vitest** (all passing locally and in CI):
@@ -141,7 +151,7 @@ Phase-1 through Phase-7 items are preserved from the previous state of this file
 
 ## Next phase
 
-Phase 9 — Validated thresholds & BLOCK_END snapshots. See `docs/phases/phase-09-*.md`.
+Phase 9 — Production Hardening & Launch Readiness. See `docs/phases/phase-09-hardening-and-launch.md`. Scope: rate limiting, authorization audit, staging environment (Vercel + Neon), launch gate CI wiring + staging rehearsal, `LAUNCH_OVERRIDE_TOKEN` + banner (ARCH-046), full Playwright regression spec, a11y pass, Sentry alert routing, Neon PITR gap documented, `.env.example` + deployment runbook finalized. **No BLOCK_END snapshot work — deferred past Phase 9.**
 
 **Cross-references for Phase 9:**
 - **BLOCK_END snapshots are the deferred work from ARCH-041.** The schema change (`AssessmentSnapshot.trainingBlockId String?`) and the write at block close are the two pieces. The read side (`findLatestAssessmentSnapshotForVersion`) currently takes one argument; adding a `reason` filter for the BLOCK_END variant is the first thing to change (flagged in Phase 7's conventions).
@@ -151,6 +161,12 @@ Phase 9 — Validated thresholds & BLOCK_END snapshots. See `docs/phases/phase-0
 - **The `packages/config/package.json` cleanup is outstanding** (see Unresolved decisions).
 - **The AST-based boundary test upgrade is deferred** (see Unresolved decisions).
 PROJECT_STATE_EOF
+
+- **Node version resolution in zsh.** `nvm use 20` must be followed by `hash -r` in zsh. zsh caches the resolved path for `pnpm` (and other binaries); after `nvm use 20`, `which pnpm` may still return the v24 path from the hash table. `hash -r` clears it. If pnpm still resolves wrong, reinstall under v20: `"$(dirname "$(which node)")/npm" install -g pnpm@latest`. Symptom: `.nvmrc` says 20, `node -v` says 20, but `which pnpm` shows a v24 path — and Vitest worker crashes follow (learning #2). Discovered Phase 8 → Phase 9 handoff.
+
+- **File-overwrite pattern in AI-generated edits.** When an AI session emits "here is the updated file," verify with `git diff` before committing. Two incidents in Phase 8 (invariant.test.ts replaced with a copy of identityService.ts; coach.ts received a duplicate import block) — both from ambiguous "replace this block" instructions. Prefer "here is the complete file" over patches, and always `git diff` the file after applying.
+
+- **Signature-optional fields on provider abstractions.** Provider-specific protocol fields (e.g. Gemini's `thoughtSignature`, Anthropic's cache breakpoints) go on the generic `ModelProvider` interface as **optional** fields, not as provider-specific types. `ToolCall.thoughtSignature?: string` and `ModelContentBlock['tool_use'].thoughtSignature?: string` are the correct home — Anthropic and Mock simply ignore them. A future provider with its own protocol quirk follows the same pattern: add the field as optional, thread it through the orchestrator's spread, and let each provider populate or ignore. Do not special-case a provider in the orchestrator.
 
 echo "PROJECT_STATE.md rewritten. Lines:"
 wc -l docs/PROJECT_STATE.md

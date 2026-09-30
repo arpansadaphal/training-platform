@@ -12,7 +12,10 @@
     "SENTRY_ORG",
     "SENTRY_PROJECT",
     "ANTHROPIC_API_KEY",
-    "ANTHROPIC_MODEL"
+    "ANTHROPIC_MODEL",
+    "MODEL_PROVIDER",
+    "GEMINI_API_KEY",
+    "GEMINI_MODEL"
   ],
   "tasks": {
     "build": {

@@ -2,7 +2,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import {
-  AnthropicProvider,
+  createProvider,
   runCoachTurn,
   type AIMessageSegment,
   type CoachToolDeps,
@@ -47,6 +47,7 @@ import {
   loadOwnedConversation,
   persistConversationMessage,
 } from '../services/coachConversationService';
+import { getPrimaryProgramId } from '../services/identityService';
 import { loadOwnedProgramOrThrow } from '../services/loadOwnedProgram';
 import {
   loadOwnedSimulationForCoach,
@@ -70,15 +71,20 @@ import { protectedProcedure, router } from '../trpc';
  *
  * The postMessage procedure constructs OrchestratorDeps on each call:
  *
- *   - provider: AnthropicProvider, constructed lazily so a missing API key
- *     fails at subscription time with a clear error, not at module load.
+ *   - provider: selected by createProvider() from MODEL_PROVIDER (ARCH-045).
+ *     Constructed per turn so a missing key fails at subscription time with
+ *     a clear error, not at module load.
+ *   - scoping: openConversation auto-scopes to the user's primary Program
+ *     when the caller supplies no scope (ARCH-047). Every /app/coach
+ *     conversation is therefore program-scoped whenever the user has a
+ *     program; users with no programs keep the general conversation.
  *   - toolDeps: the six CoachToolDeps methods, each wired to a real service.
  *   - contextDeps: the five ContextBuilderDeps methods.
  *   - persistMessage: writes AIMessage rows via coachConversationService.
  *   - l2Enabled: from packages/config's build-time constant, threaded as an
  *     argument — packages/ai never imports the flag itself.
- *   - model: from ANTHROPIC_MODEL env, per ARCH-007 (no model strings in
- *     code).
+ *   - model: resolved by createProvider() from the provider-specific model
+ *     env var, per ARCH-007 (no model strings in code).
  */
 
 // ---------------------------------------------------------------------------
@@ -97,6 +103,13 @@ const getConversationInput = z.object({
 const openConversationInput = z.object({
   programId: z.string().min(1).nullable().optional(),
   programVersionId: z.string().min(1).nullable().optional(),
+  /**
+   * When true, skip the get-or-create lookup and always create a fresh
+   * conversation for the resolved scope. /app/coach's "+ New" button sets
+   * this; the Review path (openConversationForBlock) does not, and neither
+   * does any future "open my program chat" affordance.
+   */
+  forceNew: z.boolean().optional(),
 });
 
 const openConversationForBlockInput = z.object({
@@ -106,23 +119,6 @@ const openConversationForBlockInput = z.object({
 // ---------------------------------------------------------------------------
 // Deps construction
 // ---------------------------------------------------------------------------
-
-function readModelEnv(): { apiKey: string; model: string } {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  const model = process.env.ANTHROPIC_MODEL;
-  if (!apiKey) {
-    throw new Error(
-      'ANTHROPIC_API_KEY is not configured. The Coach cannot run without it.',
-    );
-  }
-  if (!model) {
-    throw new Error(
-      'ANTHROPIC_MODEL is not configured. The Coach cannot run without a ' +
-        'pinned model string (ARCH-007).',
-    );
-  }
-  return { apiKey, model };
-}
 
 /**
  * Build the ContextBuilderDeps for one turn.
@@ -331,19 +327,34 @@ export const coachRouter = router({
    * Get-or-create the conversation scoped to a (programId, programVersionId)
    * tuple.
    *
-   * Extension to the phase file's procedure list: the panel needs a stable
-   * conversation id before it can call postMessage. Creating on first message
-   * would force postMessage's input to accept a nullable conversationId — a
-   * shape the subscription path should not have to think about. A separate
-   * mutation keeps postMessage's contract narrow.
+   * Auto-scope (ARCH-047): when the caller supplies no scope — both arguments
+   * null — the procedure resolves the user's primary Program server-side and
+   * scopes the conversation to it. This is what makes /app/coach's "+ New"
+   * button produce a program-scoped conversation without the client having to
+   * know what "primary program" means. The general (unscoped) conversation
+   * remains available for users with no programs.
+   *
+   * ProgramVersion is deliberately left null on the auto-scope path: the
+   * Coach's context builder resolves the current active version live from the
+   * Program, so a single (programId, null) conversation is reused across
+   * version changes — which is the intent. A version-pinned conversation is
+   * created only by `openConversationForBlock`, which sets both fields.
    */
   openConversation: protectedProcedure
     .input(openConversationInput)
     .mutation(async ({ ctx, input }) => {
-      const conversation = await getOrCreateScopedConversation(ctx.user.id, {
-        programId: input.programId ?? null,
-        programVersionId: input.programVersionId ?? null,
-      });
+      let programId = input.programId ?? null;
+      let programVersionId = input.programVersionId ?? null;
+
+      if (programId === null && programVersionId === null) {
+        programId = await getPrimaryProgramId(ctx.user.id);
+      }
+
+            const conversation = await getOrCreateScopedConversation(
+        ctx.user.id,
+        { programId, programVersionId },
+        { forceNew: input.forceNew === true },
+      );
       return {
         id: conversation.id,
         programId: conversation.programId,
@@ -368,7 +379,7 @@ export const coachRouter = router({
   openConversationForBlock: protectedProcedure
     .input(openConversationForBlockInput)
     .mutation(async ({ ctx, input }) => {
-                 const block = await loadOwnedTrainingBlockOrThrow(
+      const block = await loadOwnedTrainingBlockOrThrow(
         ctx.user.id,
         input.trainingBlockId,
       );
@@ -461,6 +472,13 @@ export const coachRouter = router({
    *
    * No commit-shaped call appears in this procedure, or anywhere in this
    * file. The apply happens client-side via the programVersion router.
+   *
+   * Provider selection (ARCH-045): createProvider() reads MODEL_PROVIDER
+   * from the environment and returns the concrete ModelProvider plus the
+   * resolved model string. Throws with a clear message if the selected
+   * provider's required env is missing — the throw surfaces here, at
+   * subscription time, before any message is persisted or any context is
+   * built.
    */
   postMessage: protectedProcedure
     .input(postMessageInput)
@@ -475,8 +493,7 @@ export const coachRouter = router({
         });
       }
 
-      const { apiKey, model } = readModelEnv();
-      const provider = new AnthropicProvider({ apiKey, model });
+      const { provider, model } = createProvider();
 
       const deps: OrchestratorDeps = {
         provider,

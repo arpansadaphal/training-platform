@@ -270,7 +270,7 @@ export async function* runCoachTurn(
       }
 
       if (stopReason === 'tool_use' && pendingToolCalls.length > 0) {
-        // Record the assistant turn in the model's message history. Text
+               // Record the assistant turn in the model's message history. Text
         // emitted alongside a tool call is scaffolding — it goes into the
         // history the model sees on the next iteration but is NOT emitted
         // to the client.
@@ -284,6 +284,13 @@ export async function* runCoachTurn(
             id: call.id,
             name: call.name,
             input: call.input,
+            // Carry the provider's opaque signature (Gemini 3.x
+            // thoughtSignature) through to the next request. Dropping it here
+            // is what produced the "Function call is missing a
+            // thought_signature" 400 on the second tool-loop iteration.
+            ...(call.thoughtSignature
+              ? { thoughtSignature: call.thoughtSignature }
+              : {}),
           });
         }
         messages.push({ role: 'assistant', content: assistantBlocks });

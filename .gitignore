@@ -26,3 +26,5 @@ pnpm-debug.log*
 *.tsbuildinfo
 
 *.tsbuildinfo
+docs/DECISIONS_FULL.md
+docs/DECISIONS_FULL.md

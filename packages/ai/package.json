@@ -9,12 +9,15 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
+    "@google/genai": "^2.24.0",
     "@training/config": "workspace:*",
     "@training/db": "workspace:*",
     "@training/domain": "workspace:*",

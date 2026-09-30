@@ -159,6 +159,26 @@ export async function getMyIdentitySummary(
   };
 }
 
+/**
+ * The user's primary Program id, or null if the user has no non-archived
+ * Programs. Exposes the same resolution `getMyIdentitySummary` uses
+ * internally (`pickPrimaryProgram`) as a lightweight read for callers that
+ * need only the id — currently `coach.openConversation`'s auto-scope path
+ * (ARCH-047).
+ *
+ * Kept as its own export rather than exporting `pickPrimaryProgram` because
+ * the full ProgramRecord is not a shape the caller should depend on.
+ */
+export async function getPrimaryProgramId(
+  userId: string,
+): Promise<string | null> {
+  const programs = await listProgramsByOwner(userId, {
+    includeArchived: false,
+  });
+  const primary = await pickPrimaryProgram(programs);
+  return primary?.id ?? null;
+}
+
 // ---- Helpers -------------------------------------------------------------
 
 async function pickPrimaryProgram(

@@ -45,6 +45,12 @@ function CoachClientInner({ initialConversations }: Props) {
     initialConversations[0]?.id ?? null,
   );
 
+  // `coach.openConversation` is a get-or-create. After ARCH-047 it auto-scopes
+  // to the user's primary Program, so pressing "+ New" a second time returns
+  // the *same* conversation id. Handle that by selecting the existing entry
+  // rather than appending a duplicate — the list must remain a set of distinct
+  // ids or React will warn and the active-state class will apply to several
+  // cards at once, which reads as "clicking any card shows the same content."
   const openNew = trpc.coach.openConversation.useMutation({
     onSuccess: (created) => {
       const summary: ClientConversationSummary = {
@@ -53,8 +59,18 @@ function CoachClientInner({ initialConversations }: Props) {
         programVersionId: created.programVersionId,
         createdAtISO: created.createdAtISO,
       };
-      // Prepend so the newest is at the top of the sidebar.
-      setConversations((prev) => [summary, ...prev]);
+      setConversations((prev) => {
+        const existingIndex = prev.findIndex((c) => c.id === summary.id);
+        if (existingIndex !== -1) {
+          // Server returned an existing conversation. Replace the entry in
+          // place so any fields that changed (unlikely today, but the shape
+          // allows it) reflect, without adding a duplicate row.
+          const next = [...prev];
+          next[existingIndex] = summary;
+          return next;
+        }
+        return [summary, ...prev];
+      });
       setSelectedId(summary.id);
     },
   });
@@ -68,8 +84,12 @@ function CoachClientInner({ initialConversations }: Props) {
             type="button"
             className={styles.newButton}
             disabled={openNew.isPending}
-            onClick={() =>
-              openNew.mutate({ programId: null, programVersionId: null })
+                        onClick={() =>
+              openNew.mutate({
+                programId: null,
+                programVersionId: null,
+                forceNew: true,
+              })
             }
           >
             {openNew.isPending ? "…" : "+ New"}
@@ -122,7 +142,10 @@ function CoachClientInner({ initialConversations }: Props) {
             </p>
           </div>
         ) : (
-          <CoachPanel conversationId={selectedId} />
+          // key forces a remount when the conversation changes, so CoachPanel's
+          // internal state (newMessages, streamingSegments, submission) does
+          // not bleed from one conversation into the next.
+          <CoachPanel key={selectedId} conversationId={selectedId} />
         )}
       </section>
     </div>

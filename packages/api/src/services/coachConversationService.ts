@@ -48,13 +48,21 @@ export async function getOrCreateScopedConversation(
     programId: string | null;
     programVersionId: string | null;
   },
+  options: { forceNew?: boolean } = {},
 ): Promise<AIConversationRecord> {
-  const existing = await findScopedConversation({
-    userId,
-    programId: scope.programId,
-    programVersionId: scope.programVersionId,
-  });
-  if (existing) return existing;
+  // forceNew: skip the lookup and always create. Used by /app/coach's
+  // "+ New" button, whose label promises a fresh chat. Callers that want
+  // the canonical conversation for a scope (the Review path, and any
+  // future "open my program chat" affordance) leave this unset and get
+  // get-or-create behavior.
+  if (!options.forceNew) {
+    const existing = await findScopedConversation({
+      userId,
+      programId: scope.programId,
+      programVersionId: scope.programVersionId,
+    });
+    if (existing) return existing;
+  }
   return createAIConversation({
     userId,
     programId: scope.programId,

@@ -56,3 +56,6 @@ is wrong, create a new dated entry that explicitly supersedes it.
 - [ARCH-042](./ARCH-042.md) — Grounding failures: bounded regeneration then structured partial
 - [ARCH-043](./ARCH-043.md) — `AIMessageSegment` is a discriminated union; the model's output schema is a strict subset
 - [ARCH-044](./ARCH-044.md) — Coach router adds `openConversation` and `openConversationForBlock`
+- [ARCH-045](./ARCH-045.md) — Google Gemini added as a second ModelProvider, selected by `MODEL_PROVIDER`
+- [ARCH-046](./ARCH-046.md) — MVP launch proceeds with `validated === false`; CI gate bypassed via documented `LAUNCH_OVERRIDE_TOKEN`; provisional-thresholds banner on every Assessment surface
+- [ARCH-047](./ARCH-047.md) — `coach.openConversation` auto-scopes to the user's primary Program; `forceNew` bypasses get-or-create

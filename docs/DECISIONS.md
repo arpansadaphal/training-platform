@@ -1,16 +1,9 @@
-cd /Users/arpan/Documents/code/training-platform
+# Decision Register — moved
 
-# Remove the trailing Next-ID line so the new entries land above it
-python3 - << 'PYEOF'
-import re
-path = 'docs/DECISIONS.md'
-with open(path) as f:
-    content = f.read()
-# Drop the trailing "*Next ID: ARCH-042...*" line
-content = re.sub(r'\n\*Next ID: ARCH-042[^\n]*\n?$', '\n', content)
-with open(path, 'w') as f:
-    f.write(content)
-print("Removed trailing Next-ID line")
-PYEOF
+The decision register was split into per-entry files on 2026-09-27 to prevent
+the recurring truncation losses that had occurred six times across Phases 1–7.
 
-cat >> docs/DECISIONS.md << 'DECISIONS_EOF'
+**See [`decisions/README.md`](./decisions/README.md) for the index.**
+
+New entries go in `docs/decisions/ARCH-NNN.md`. Never edit an existing entry;
+supersede it with a new dated one.
