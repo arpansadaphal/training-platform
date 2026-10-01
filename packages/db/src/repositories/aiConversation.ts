@@ -1,5 +1,5 @@
 import type { AIConversation, AIMessage } from '@prisma/client';
-import { Prisma } from '@prisma/client';
+import { type Prisma } from '@prisma/client';
 
 import { prisma } from '../client';
 

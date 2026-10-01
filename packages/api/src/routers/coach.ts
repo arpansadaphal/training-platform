@@ -25,12 +25,6 @@ import {
   listExercises,
 } from '@training/db';
 
-// ⚠️ RECONCILE THIS IMPORT
-// Swap for whatever Phase 6 exports as its ownership-checked block loader.
-// It must return { programId, programVersionId } for the block, or throw
-// TRPCError NOT_FOUND on non-ownership. Candidate names to grep for:
-//   loadOwnedTrainingBlock, loadOwnedBlock, getOwnedBlock,
-//   loadOwnedExecution, loadOwnedTrainingBlockOrThrow
 import { loadOwnedTrainingBlockOrThrow } from '../services/loadOwnedExecution';
 
 import {
@@ -251,11 +245,15 @@ function buildContextDepsForTurn(userId: string): ContextBuilderDeps {
  * orchestrator populated from the session); a model that tries to influence
  * which user's data a tool touches has no path to do so (asserted by the
  * permission-boundary test in the Phase 8 suite).
+ *
+ * Phase 9: the previous signature took a second `conversationId` parameter
+ * that was never read — each tool method obtains its own conversationId
+ * from its input when it needs one. The parameter was removed rather than
+ * prefixed with `_` because there is no interface contract it is satisfying;
+ * leaving an unused placeholder would invite a future reader to assume it
+ * was load-bearing.
  */
-function buildToolDepsForTurn(
-  userId: string,
-  conversationId: string,
-): CoachToolDeps {
+function buildToolDepsForTurn(userId: string): CoachToolDeps {
   return {
     lookupExercises: async ({ query }) => {
       const all = await listExercises();
@@ -343,14 +341,18 @@ export const coachRouter = router({
   openConversation: protectedProcedure
     .input(openConversationInput)
     .mutation(async ({ ctx, input }) => {
+      // programId is reassigned on the auto-scope path below, so `let`.
+      // programVersionId is not touched after initialisation, so `const`
+      // (ESLint's prefer-const enforces this — CI caught it on the first
+      // E2E-in-CI run).
       let programId = input.programId ?? null;
-      let programVersionId = input.programVersionId ?? null;
+      const programVersionId = input.programVersionId ?? null;
 
       if (programId === null && programVersionId === null) {
         programId = await getPrimaryProgramId(ctx.user.id);
       }
 
-            const conversation = await getOrCreateScopedConversation(
+      const conversation = await getOrCreateScopedConversation(
         ctx.user.id,
         { programId, programVersionId },
         { forceNew: input.forceNew === true },
@@ -497,7 +499,7 @@ export const coachRouter = router({
 
       const deps: OrchestratorDeps = {
         provider,
-        toolDeps: buildToolDepsForTurn(userId, input.conversationId),
+        toolDeps: buildToolDepsForTurn(userId),
         contextDeps: buildContextDepsForTurn(userId),
         persistMessage: persistConversationMessage,
         l2Enabled: L2_ENABLED,

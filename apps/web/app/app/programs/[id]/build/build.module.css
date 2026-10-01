@@ -1,0 +1,312 @@
+/* apps/web/app/app/programs/[id]/build/build.module.css
+ *
+ * Three-column Builder layout: draft rail (fixed), editor (flexible),
+ * assessment (fixed width). Uses existing CSS variables from globals.css.
+ * No new palette entries.
+ */
+
+.layout {
+  display: grid;
+  grid-template-columns: 14rem 1fr 22rem;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+  align-items: flex-start;
+}
+
+@media (max-width: 64rem) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fafafa;
+}
+
+.railHeading {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0;
+}
+
+.draftList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.draftItem,
+.draftItemSelected {
+  width: 100%;
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--fg);
+  border-radius: 3px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.draftItem:hover {
+  background: var(--border);
+  filter: none;
+}
+
+.draftItemSelected {
+  background: var(--bg);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.draftItemSelected:hover {
+  filter: none;
+}
+
+.newDraftBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.newDraftBlock input {
+  width: 100%;
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.editorHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.editorHeading {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.dirtyTag {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.9rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.secondaryButton {
+  background: var(--bg);
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.emptyState {
+  padding: 2rem;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.errorBanner {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #b00020;
+  border-radius: 4px;
+  background: #fff5f6;
+  color: #b00020;
+  margin: 0;
+}
+
+.staleBanner {
+  padding: 0.75rem;
+  border: 1px solid #c80;
+  border-radius: 4px;
+  background: #fff8e6;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.staleBanner p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.dismissButton {
+  align-self: flex-start;
+  background: transparent;
+  color: var(--fg);
+  border-color: var(--border);
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+/* ── Structure editor ─────────────────────────────────────────────────── */
+
+.structureEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dayCard {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dayHeader {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.dayNameInput {
+  flex: 1;
+  font-weight: 600;
+}
+
+.dayControls {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.iconButton {
+  padding: 0.2rem 0.5rem;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+  min-width: 2rem;
+}
+
+.iconButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.prescriptionList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.prescriptionRow {
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+}
+
+.prescriptionMain {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.prescriptionExercise {
+  min-width: 10rem;
+  font-weight: 500;
+}
+
+.inlineField {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+  flex-direction: row;
+}
+
+.inlineField input {
+  width: 3.5rem;
+  padding: 0.2rem 0.35rem;
+  font-size: 0.85rem;
+}
+
+.prescriptionControls {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.fixedWeight {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.addDayButton {
+  align-self: flex-start;
+  background: var(--bg);
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+/* ── Exercise picker ──────────────────────────────────────────────────── */
+
+.picker {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.picker select {
+  flex: 1;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+}
+
+/* ── Analyze panel ────────────────────────────────────────────────────── */
+
+.analyze {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  position: sticky;
+  top: 1rem;
+}
+
+.staleTag {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0;
+  font-style: italic;
+}
+
+.muted {
+  color: var(--muted);
+}

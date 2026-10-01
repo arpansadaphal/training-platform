@@ -3,6 +3,7 @@ import {
   createAIMessage,
   findAIConversationById,
   findScopedConversation,
+  findVersionById,
   listAIConversationsForUser,
   listAIMessagesForConversation,
   touchConversationLastMessageAt,
@@ -10,8 +11,10 @@ import {
   type AIMessageRecord,
   type AIMessageRole,
 } from '@training/db';
+import { TRPCError } from '@trpc/server';
 
 import type { AIMessageForContext } from '@training/ai';
+import { loadOwnedProgramOrThrow } from './loadOwnedProgram';
 
 /**
  * Coach conversation service — orchestration between the coach router (and
@@ -24,6 +27,19 @@ import type { AIMessageForContext } from '@training/ai';
  * OWNERSHIP discipline: every load* function takes `userId` from the caller's
  * session and returns null when the row exists but is not owned. Callers map
  * null to NOT_FOUND (ARCH-040).
+ *
+ * ARCH-049 (Phase 9 hardening fix): getOrCreateScopedConversation now
+ * verifies the caller owns any explicitly-supplied programId /
+ * programVersionId before creating a conversation row. Before the fix, the
+ * openConversation router procedure accepted arbitrary scope inputs without
+ * an ownership check — a caller could create an AIConversation row whose
+ * `programId` pointed at a Program they do not own. The conversation was
+ * only ever readable by its creator (the find path filters on userId), so
+ * this was a data-integrity issue rather than a cross-user leak: the user
+ * would end up with a Coach whose context builder silently returns null
+ * because loadScopedProgramVersion's ownership check rejects the foreign
+ * programId, and they would have no way to diagnose why the Coach seemed to
+ * not know about the program they thought they were chatting about.
  */
 
 export async function listConversationsForUser(
@@ -50,6 +66,41 @@ export async function getOrCreateScopedConversation(
   },
   options: { forceNew?: boolean } = {},
 ): Promise<AIConversationRecord> {
+  // ARCH-049: verify the caller owns the scope. A conversation must never
+  // point at a Program the userId does not own.
+  //
+  // Two shapes of non-null scope are legal in the input schema:
+  //   (programId, programVersionId)  — the Review path via
+  //                                    openConversationForBlock. Caller must
+  //                                    own the program.
+  //   (programId, null)              — the program-scoped Coach path.
+  //                                    Caller must own the program.
+  //   (null, programVersionId)       — theoretically reachable via the
+  //                                    openConversation input schema, but
+  //                                    no current caller produces it. We
+  //                                    resolve the version's parent program
+  //                                    and check ownership on it.
+  //
+  // The scope-less path (null, null) is not checked here — the router's
+  // auto-scope branch resolves it via getPrimaryProgramId, which already
+  // returns an owned program id (or null).
+  //
+  // Placed in the service rather than the router so both call sites
+  // (openConversation and openConversationForBlock) get the check, and so
+  // this file's test suite exercises it.
+  if (scope.programId !== null) {
+    await loadOwnedProgramOrThrow(userId, scope.programId);
+  } else if (scope.programVersionId !== null) {
+    const version = await findVersionById(scope.programVersionId);
+    if (!version) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Program version not found.',
+      });
+    }
+    await loadOwnedProgramOrThrow(userId, version.programId);
+  }
+
   // forceNew: skip the lookup and always create. Used by /app/coach's
   // "+ New" button, whose label promises a fresh chat. Callers that want
   // the canonical conversation for a scope (the Review path, and any

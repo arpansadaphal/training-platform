@@ -1,6 +1,7 @@
+
 import { AnthropicProvider } from './AnthropicProvider';
 import { GeminiProvider } from './GeminiProvider';
-import { MockProvider } from './MockProvider';
+import { MockProvider, type MockScenario } from './MockProvider';
 import type { ModelProvider } from './types';
 
 export type ModelProviderName = 'anthropic' | 'gemini' | 'mock';
@@ -25,12 +26,19 @@ export interface CreatedProvider {
  * through this function, never directly, so swapping providers is an env
  * change rather than a code change.
  *
- * Default: 'anthropic' (preserves existing behaviour for any environment
+ * Default 'anthropic' (preserves existing behaviour for any environment
  * that has ANTHROPIC_API_KEY set and does not set MODEL_PROVIDER).
  *
  * Throws if the selected provider's required env is missing. The throw is
  * deliberate and early — a Coach turn that cannot reach a provider should
  * fail at subscription time with a clear message, not midway through.
+ *
+ * Mock scenario (Phase 9): when MODEL_PROVIDER=mock, MOCK_SCENARIO selects
+ * a scripted scenario for the MockProvider. The only defined scenario is
+ * "coach-regression", used by the E2E regression and coach specs in CI. An
+ * unset or unrecognised MOCK_SCENARIO produces a bare MockProvider with an
+ * empty queue — the pre-Phase-9 behaviour, preserved for any caller that
+ * queues turns explicitly.
  */
 export function createProvider(): CreatedProvider {
   const providerName = (process.env.MODEL_PROVIDER ??
@@ -76,8 +84,15 @@ export function createProvider(): CreatedProvider {
     }
 
     case 'mock': {
+      // Parse MOCK_SCENARIO defensively. Only "coach-regression" is defined
+      // in Phase 9; any other value (including empty string) is treated as
+      // "no scenario" so a typo does not silently activate a script.
+      const rawScenario = process.env.MOCK_SCENARIO;
+      const scenario: MockScenario | undefined =
+        rawScenario === 'coach-regression' ? 'coach-regression' : undefined;
+
       return {
-        provider: new MockProvider(),
+        provider: new MockProvider(scenario ? { scenario } : {}),
         model: 'mock',
         providerName,
       };

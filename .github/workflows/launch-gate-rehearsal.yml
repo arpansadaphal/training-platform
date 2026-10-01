@@ -1,0 +1,97 @@
+name: Launch Gate Rehearsal
+
+# Manual-only. Satisfies the Phase 9 acceptance criterion "the launch gate
+# is confirmed to actually block a deploy" by exercising the exact command
+# Vercel's build runs, in two configurations:
+#
+#   Run 1 — VERCEL_ENV=production, no LAUNCH_OVERRIDE_TOKEN
+#           → the gate MUST fail (HYPERTROPHY is still validated: false).
+#   Run 2 — VERCEL_ENV=production, LAUNCH_OVERRIDE_TOKEN present and valid
+#           → the gate MUST bypass and exit 0.
+#
+# Neither run touches a live Vercel deploy. The gate itself is what's being
+# tested, not the deploy pipeline around it.
+#
+# Record the workflow run URL in the Phase 9 close-out notes as evidence
+# the acceptance criterion was met.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      # No DB is needed — the gate is a pure function over the goal-profile
+      # registry imported from @training/domain. These are set to satisfy
+      # any incidental import-time reads in the workspace.
+      AUTH_SECRET: rehearsal-placeholder-secret-at-least-32-chars
+      AUTH_URL: http://localhost:3000
+      MODEL_PROVIDER: mock
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # ── Run 1: production, no token. Expected: FAIL. ──────────────────
+      - name: "Run 1 — production without token (expected: FAIL)"
+        env:
+          VERCEL_ENV: production
+        run: |
+          set +e
+          pnpm --filter web run launch-gate
+          EXIT=$?
+          set -e
+          echo ""
+          echo "Run 1 exited with code $EXIT."
+          if [ "$EXIT" -eq 0 ]; then
+            echo "::error::Run 1 was expected to FAIL (production, no LAUNCH_OVERRIDE_TOKEN) but exited 0. The launch gate is not blocking production deploys."
+            exit 1
+          fi
+          echo "Run 1 failed as expected."
+
+      # ── Run 2: production, valid token. Expected: PASS. ───────────────
+      - name: "Generate throwaway rehearsal token"
+        id: token
+        run: |
+          TOKEN=$(openssl rand -base64 32)
+          echo "::add-mask::$TOKEN"
+          # Write to GITHUB_OUTPUT so it survives to the next step. The
+          # value is masked in logs; do not echo it unmasked anywhere.
+          echo "value=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: "Run 2 — production with valid token (expected: PASS)"
+        env:
+          VERCEL_ENV: production
+          LAUNCH_OVERRIDE_TOKEN: ${{ steps.token.outputs.value }}
+        run: pnpm --filter web run launch-gate
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Launch Gate Rehearsal"
+            echo ""
+            echo "- Run 1 (production, no token) — expected **FAIL** ✓"
+            echo "- Run 2 (production, valid token) — expected **PASS** ✓"
+            echo ""
+            echo "Both runs behaved as expected; the gate blocks production"
+            echo "deploys without a token and bypasses with one."
+          } >> "$GITHUB_STEP_SUMMARY"

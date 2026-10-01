@@ -225,12 +225,19 @@
   opacity: 0.8;
 }
 
+/* Both recompute buttons opt out of the global button fill by setting
+   background: transparent — which means they must also opt out of the
+   global button's `color: #fff`. Before this rule, white text sat on the
+   #fafafa section background (contrast ≈ 1.04:1, effectively invisible;
+   the border was the only visible affordance). Caught by the Phase 9 axe
+   pass on the Review screen. */
 .recomputeButton {
   padding: 0.55rem 1rem;
   min-height: 40px;
   font-size: 0.95rem;
   border: 1px solid var(--border, #ccc);
   background: transparent;
+  color: var(--fg, #111);
   border-radius: 6px;
   cursor: pointer;
 }
@@ -241,6 +248,7 @@
   font-size: 0.85rem;
   border: 1px solid var(--border, #ccc);
   background: transparent;
+  color: var(--fg, #111);
   border-radius: 6px;
   cursor: pointer;
   margin-bottom: 1rem;

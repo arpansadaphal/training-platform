@@ -13,11 +13,18 @@ import { defineConfig, devices } from "@playwright/test";
  * up. Warm dev servers finish assertions in well under 1s, so the higher
  * ceiling costs nothing on subsequent runs.
  *
- * The long-term fix — for when the E2E suite grows enough that cold-compile
- * latency is more painful than a pre-test build — is to change the
- * webServer.command from `pnpm dev` to `pnpm build && pnpm start`. Noted in
- * PROJECT_STATE.md as a Phase 5+ candidate; not done here because it makes
- * every local test run pay a full production build.
+ * CI WEBSERVER MODE (Phase 9 fix): in CI, the workflow's earlier
+ * `pnpm turbo run build` step produces a `.next/` directory that contains a
+ * production build. Playwright's webServer then runs. If the command were
+ * `pnpm dev`, `next dev` would see the production `.next/`, partially
+ * clobber it, and serve HTML whose client chunks 404 — the page URL updates
+ * but React never hydrates and no client-rendered element ever appears.
+ * That is the exact failure the first E2E-in-CI run hit: every timeout was
+ * "URL correct, placeholder never appeared." In CI the command is therefore
+ * `pnpm start` (`next start`), which serves the build the earlier step
+ * already validated, in the mode it was built for. Locally `process.env.CI`
+ * is unset and the command stays `pnpm dev`, which is the right developer
+ * experience (hot reload, no pre-build).
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -40,7 +47,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm dev",
+    // See the header comment. In CI, serve the production build the
+    // workflow's `Build` step already produced. Locally, run dev.
+    command: process.env.CI ? "pnpm start" : "pnpm dev",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

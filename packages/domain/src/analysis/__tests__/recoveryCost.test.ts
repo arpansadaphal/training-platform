@@ -8,12 +8,12 @@
 import { describe, expect, it } from "vitest";
 import {
   computeRecoveryCostAxis,
-  provisionalRecoveryCostCalculator,
+  // provisionalRecoveryCostCalculator,
 } from "../recoveryCost";
 import { testReferenceData } from "../__fixtures__/exerciseReferenceData";
 import {
   TEST_CONFIG_ALL_NULL,
-  TEST_CONFIG_BOUNDED,
+  // TEST_CONFIG_BOUNDED,
 } from "../__fixtures__/testGoalProfiles";
 import type { ProgramStructure } from "../../types";
 
