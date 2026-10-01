@@ -1,4 +1,3 @@
-
 name: CI
 
 on:
@@ -13,8 +12,6 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-latest
-    # Raised from 20 to 30 in Phase 9: the E2E step boots Next.js dev and
-    # runs the full Playwright suite, which is the slowest part of the job.
     timeout-minutes: 30
 
     services:
@@ -33,25 +30,21 @@ jobs:
           --health-retries=10
 
     env:
-      # CI runs against the Postgres service container, never against a
-      # remote Neon branch. Runtime behavior matches production (Postgres 16);
-      # migration history is exercised the same way `migrate deploy` will
-      # run against production.
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
       DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
       AUTH_SECRET: ci-placeholder-secret-at-least-32-characters-long
       AUTH_URL: http://localhost:3000
-      # CI uses the mock model provider — no API keys are required.
-      # MOCK_SCENARIO activates the MockProvider's scripted Coach scenario,
-      # which the E2E regression and coach specs exercise. See
-      # packages/ai/src/provider/MockProvider.ts.
+      # Auth.js v5 in production mode (next start) refuses requests whose
+      # host header isn't trusted unless trustHost is explicitly enabled.
+      # Auth.js enables trust automatically in dev mode; the moment CI
+      # moved from `pnpm dev` to `pnpm start` (Phase 9's webServer fix),
+      # that automatic trust went away — signup POSTs began failing with
+      # `UntrustedHost: Host must be trusted`. AUTH_URL is used for URL
+      # construction; it does NOT imply host trust. AUTH_TRUST_HOST=true
+      # is the explicit opt-in.
+      AUTH_TRUST_HOST: "true"
       MODEL_PROVIDER: mock
       MOCK_SCENARIO: coach-regression
-      # Rate limiting fails open when Upstash is not configured, which is
-      # what CI wants — no network calls to Upstash, no false 429s against
-      # the E2E suite.
-      # UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are deliberately
-      # unset.
 
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +61,36 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # Write apps/web/.env.local so Next.js loads the same env vars at
+      # both build time and runtime that the job-level env: block
+      # provides at shell level.
+      #
+      # Why this is required: the job-level env vars ARE visible to the
+      # shell — `prisma migrate deploy` and `prisma db seed` both read
+      # DATABASE_URL successfully. But `next build` and `next start` load
+      # their env from files first. Without a file, the production
+      # Next.js server started by Playwright's webServer did not see
+      # DATABASE_URL, so every Prisma call from a Server Component failed
+      # with "Environment variable not found: DATABASE_URL" — the signup
+      # route rendered <html id="__next_error__"> instead of the app,
+      # and every E2E spec that signs up timed out on the post-signup
+      # redirect.
+      #
+      # AUTH_TRUST_HOST must be here too: it is read by Auth.js at
+      # request time, from the Next.js process env — not from the shell
+      # that started the process.
+      - name: Write apps/web/.env.local for Next.js
+        run: |
+          cat > apps/web/.env.local << EOF
+          DATABASE_URL=${DATABASE_URL}
+          DIRECT_URL=${DIRECT_URL}
+          AUTH_SECRET=${AUTH_SECRET}
+          AUTH_URL=${AUTH_URL}
+          AUTH_TRUST_HOST=${AUTH_TRUST_HOST}
+          MODEL_PROVIDER=${MODEL_PROVIDER}
+          MOCK_SCENARIO=${MOCK_SCENARIO}
+          EOF
+
       - name: Apply migrations
         run: pnpm --filter @training/db exec prisma migrate deploy
 
@@ -80,16 +103,9 @@ jobs:
       - name: Lint
         run: pnpm turbo run lint
 
-      # Sanity check: the launch gate script runs and no-ops outside
-      # production. The load-bearing enforcement happens inside Vercel's
-      # build (`pnpm run build` chains through `launch-gate` — see
-      # apps/web/package.json). This step exists so a broken gate script
-      # fails CI rather than only failing at Vercel deploy time.
       - name: Launch gate (sanity check, non-production)
         run: pnpm --filter web run launch-gate
 
-      # Fast, cheap: the banner grep runs before the full unit suite so a
-      # missing banner fails in seconds, not minutes.
       - name: Provisional banner check
         run: pnpm --filter web run check:provisional-banner
 
@@ -102,11 +118,10 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter web exec playwright install --with-deps chromium
 
-      # Phase 9: the E2E suite now runs in CI. Previously these specs ran
-      # only locally, and the coach.spec.ts network-inspection test was
-      # gated on ANTHROPIC_API_KEY and skipped without a real key. Both now
-      # run under MODEL_PROVIDER=mock + MOCK_SCENARIO=coach-regression.
-      # Playwright's webServer config boots `pnpm dev` against the same
-      # CI service-container DB the earlier steps migrated and seeded.
+      - name: Rebuild web for E2E (fresh .next/)
+        run: |
+          rm -rf apps/web/.next
+          pnpm --filter web run build
+
       - name: E2E (Playwright)
         run: pnpm --filter web test:e2e
