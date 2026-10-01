@@ -30,6 +30,10 @@ jobs:
           --health-retries=10
 
     env:
+      # CI runs against the Postgres service container, never against a
+      # remote Neon branch. Runtime behavior matches production (Postgres 16);
+      # migration history is exercised the same way `migrate deploy` will
+      # run against production.
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
       DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
       AUTH_SECRET: ci-placeholder-secret-at-least-32-characters-long
@@ -43,8 +47,17 @@ jobs:
       # construction; it does NOT imply host trust. AUTH_TRUST_HOST=true
       # is the explicit opt-in.
       AUTH_TRUST_HOST: "true"
+      # CI uses the mock model provider — no API keys are required.
+      # MOCK_SCENARIO activates the MockProvider's scripted Coach scenario,
+      # which the E2E regression and coach specs exercise. See
+      # packages/ai/src/provider/MockProvider.ts.
       MODEL_PROVIDER: mock
       MOCK_SCENARIO: coach-regression
+      # Rate limiting fails open when Upstash is not configured, which is
+      # what CI wants — no network calls to Upstash, no false 429s against
+      # the E2E suite.
+      # UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are deliberately
+      # unset.
 
     steps:
       - uses: actions/checkout@v4
@@ -79,6 +92,10 @@ jobs:
       # AUTH_TRUST_HOST must be here too: it is read by Auth.js at
       # request time, from the Next.js process env — not from the shell
       # that started the process.
+      #
+      # Sentry vars are written empty so `next build` inlines an empty
+      # string rather than leaving the NEXT_PUBLIC_SENTRY_DSN reference
+      # undefined in the client bundle.
       - name: Write apps/web/.env.local for Next.js
         run: |
           cat > apps/web/.env.local << EOF
@@ -89,6 +106,10 @@ jobs:
           AUTH_TRUST_HOST=${AUTH_TRUST_HOST}
           MODEL_PROVIDER=${MODEL_PROVIDER}
           MOCK_SCENARIO=${MOCK_SCENARIO}
+          NEXT_PUBLIC_SENTRY_DSN=
+          SENTRY_AUTH_TOKEN=
+          SENTRY_ORG=
+          SENTRY_PROJECT=
           EOF
 
       - name: Apply migrations
@@ -103,9 +124,16 @@ jobs:
       - name: Lint
         run: pnpm turbo run lint
 
+      # Sanity check: the launch gate script runs and no-ops outside
+      # production. The load-bearing enforcement happens inside Vercel's
+      # build (`pnpm run build` chains through `launch-gate` — see
+      # apps/web/package.json). This step exists so a broken gate script
+      # fails CI rather than only failing at Vercel deploy time.
       - name: Launch gate (sanity check, non-production)
         run: pnpm --filter web run launch-gate
 
+      # Fast, cheap: the banner grep runs before the full unit suite so a
+      # missing banner fails in seconds, not minutes.
       - name: Provisional banner check
         run: pnpm --filter web run check:provisional-banner
 
@@ -118,10 +146,69 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter web exec playwright install --with-deps chromium
 
+      # Force a fresh apps/web/.next/ immediately before E2E so the
+      # production build Playwright's webServer serves was produced under
+      # exactly the env this job runs with (including the .env.local
+      # written above).
       - name: Rebuild web for E2E (fresh .next/)
         run: |
           rm -rf apps/web/.next
           pnpm --filter web run build
 
+      # Fail fast if next build's output is missing a route the E2E
+      # suite depends on. A missing route only surfaces as an opaque
+      # 180s Playwright timeout 10 minutes later; this catches it in
+      # one second with a message that names the route.
+      #
+      # Motivated by the Phase 9 Builder-route gitignore bug: the six
+      # files under apps/web/app/app/programs/[id]/build/ were excluded
+      # by a bare 'build/' pattern in .gitignore, so every CI build
+      # silently omitted the route. The build log's route table showed
+      # it, but nothing asserted on it.
+      - name: Verify expected routes are in the build output
+        run: |
+          MISSING=""
+          for route in \
+            "apps/web/.next/server/app/app/programs" \
+            "apps/web/.next/server/app/app/review" \
+            "apps/web/.next/server/app/train"; do
+            if [ ! -d "$route" ]; then
+              MISSING="$MISSING $route"
+            fi
+          done
+          if ! find apps/web/.next/server/app/app/programs -type d -name build 2>/dev/null | grep -q .; then
+            MISSING="$MISSING apps/web/.next/server/app/app/programs/[id]/build"
+          fi
+          if [ -n "$MISSING" ]; then
+            echo "::error::next build output is missing:$MISSING"
+            echo "---- apps/web/.next/server/app tree ----"
+            find apps/web/.next/server/app -maxdepth 5 -type d | sort | head -80
+            echo "----------------------------------------"
+            exit 1
+          fi
+          echo "All expected routes present in build output"
+
+      # E2E with the mock provider. Playwright's webServer runs
+      # `pnpm start` in CI (see apps/web/playwright.config.ts) — serving
+      # the fresh production build from the steps above, with .env.local
+      # providing DATABASE_URL, AUTH_TRUST_HOST, and the rest of the
+      # runtime env.
+      #
+      # The coach.spec.ts network-inspection test runs under
+      # MODEL_PROVIDER=mock + MOCK_SCENARIO=coach-regression; its gate is
+      # `MODEL_PROVIDER === "mock"` (Phase 9 change), so it executes in
+      # CI instead of skipping on a missing ANTHROPIC_API_KEY.
       - name: E2E (Playwright)
         run: pnpm --filter web test:e2e
+
+      # Keep test-results/ available as a run artifact so a future
+      # failure can be diagnosed from the page snapshot
+      # (error-context.md) without a 30-minute re-run. `if: always()`
+      # means it uploads even when the E2E step fails.
+      - name: Upload Playwright results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: apps/web/test-results/
+          retention-days: 7
