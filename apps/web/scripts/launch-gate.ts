@@ -1,4 +1,3 @@
-
 // apps/web/scripts/launch-gate.ts
 //
 // The launch gate, run in two contexts:
@@ -24,10 +23,14 @@
 //     validated profile ships.
 //
 // Structural validation of LAUNCH_OVERRIDE_TOKEN (per the Phase 9 ruling):
-//   - Present (not undefined, not empty string)
+//   - Present (not undefined, not empty string after trimming)
 //   - Matches the base64 alphabet with optional trailing padding
-//   - Base64-decodes without error
-//   - Decoded length >= 32 bytes
+//   - Base64-decodes to ≥32 bytes
+//
+// The value is TRIMMED before validation. Vercel's env-var UI routinely
+// captures a trailing newline when a value is pasted from a terminal; the
+// trim makes the check robust against that. A warning is logged when the
+// trim removes characters, so the operator knows to fix the paste.
 //
 // This is a BUILD-TIME check — there is no incoming request, so there is
 // nothing to compare the token against. "Presence is the override." If a
@@ -78,13 +81,21 @@ function logWarnInvalidToken(reason: string): void {
   );
 }
 
+function logWarnTrimmed(n: number): void {
+  console.warn(
+    `${MARKER} LAUNCH_OVERRIDE_TOKEN had ${n} char(s) of surrounding whitespace; trimmed before validation. Fix the paste in Vercel when convenient.`,
+  );
+}
+
 function logFail(message: string): void {
   console.error(`${MARKER} FAIL ${message}`);
 }
 
 /**
- * Structural validation of the token value. Returns { ok: true } when the
- * token is present, base64-shaped, base64-decodable, and ≥32 bytes decoded.
+ * Structural validation of the token value.
+ *
+ * Returns { ok: true, value } where `value` is the trimmed token, or
+ * { ok: false, reason } describing the first structural problem found.
  *
  * These checks are not a security boundary (there is no adversary — a
  * Vercel Production env var is already trusted). They are a
@@ -93,24 +104,42 @@ function logFail(message: string): void {
  * than silently bypassing the gate.
  */
 function validateToken(
-  token: string | undefined,
-): { ok: true } | { ok: false; reason: string } {
-  if (token === undefined) return { ok: false, reason: "not set" };
-  if (token.length === 0) return { ok: false, reason: "empty" };
+  rawToken: string | undefined,
+): { ok: true; value: string } | { ok: false; reason: string } {
+  if (rawToken === undefined) return { ok: false, reason: "not set" };
 
-  // Base64 alphabet with optional trailing padding. Matches `openssl rand
-  // -base64 32`'s output shape (44 chars, +/= alphabet, ends with `=`).
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(token)) {
-    return { ok: false, reason: "not base64-shaped" };
+  // Vercel's env-var UI (and terminal copies) routinely carry a trailing
+  // newline or a stray space. Base64 has no meaningful leading/trailing
+  // whitespace, so trimming is safe and prevents a misconfiguration guard
+  // from being defeated by invisible characters.
+  const token = rawToken.trim();
+  if (token.length === 0) return { ok: false, reason: "empty after trim" };
+
+  // Standard and URL-safe base64 alphabets, with optional trailing padding.
+  // `openssl rand -base64 32` produces standard base64 (+, /, =); the
+  // URL-safe variant (-, _) is accepted for callers who generated the
+  // token with a base64url tool.
+  if (!/^[A-Za-z0-9+/_-]+={0,2}$/.test(token)) {
+    // Diagnose: length + the first character outside the base64 alphabet,
+    // rendered as a hex code point. Without this, a mismatch is silent
+    // beyond "not base64-shaped" and requires a redeploy cycle to debug.
+    const badIdx = [...token].findIndex((c) => !/[A-Za-z0-9+/_=-]/.test(c));
+    const badChar = badIdx >= 0 ? token[badIdx] : undefined;
+    const badCode =
+      badChar !== undefined
+        ? `U+${badChar.codePointAt(0)?.toString(16).toUpperCase().padStart(4, "0") ?? "?"}`
+        : "?";
+    return {
+      ok: false,
+      reason: `not base64-shaped (length ${token.length}, first out-of-alphabet char at index ${badIdx}: ${badCode})`,
+    };
   }
 
-  let decoded: Buffer;
-  try {
-    decoded = Buffer.from(token, "base64");
-  } catch {
-    return { ok: false, reason: "base64 decode failed" };
-  }
-
+  // Base64-decoded length must be ≥32 bytes. Buffer.from with 'base64'
+  // does not throw on invalid input; it produces a best-effort decode and
+  // truncates at the first invalid sequence. The alphabet check above
+  // already filtered structural garbage; this is the length guard.
+  const decoded = Buffer.from(token, "base64");
   if (decoded.length < 32) {
     return {
       ok: false,
@@ -118,7 +147,7 @@ function validateToken(
     };
   }
 
-  return { ok: true };
+  return { ok: true, value: token };
 }
 
 function main(): void {
@@ -129,10 +158,15 @@ function main(): void {
     return;
   }
 
-  const token = process.env.LAUNCH_OVERRIDE_TOKEN;
-  const validation = validateToken(token);
+  const rawToken = process.env.LAUNCH_OVERRIDE_TOKEN;
+  const validation = validateToken(rawToken);
 
   if (validation.ok) {
+    // Warn if the trim removed characters — the operator should fix the
+    // paste, but the value passed and the deploy proceeds.
+    if (rawToken !== undefined && rawToken.length !== validation.value.length) {
+      logWarnTrimmed(rawToken.length - validation.value.length);
+    }
     logBypass();
     return;
   }
@@ -140,7 +174,7 @@ function main(): void {
   // A token is present but structurally invalid. Log the reason at warn
   // level (not a hard fail — falling through to the assert produces the
   // correct outcome anyway), then continue to the assertion.
-  if (token !== undefined) {
+  if (rawToken !== undefined) {
     logWarnInvalidToken(validation.reason);
   }
 
