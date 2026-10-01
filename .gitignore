@@ -2,7 +2,7 @@ node_modules/
 .next/
 dist/
 out/
-build/
+/build/
 .turbo/
 coverage/
 playwright-report/
