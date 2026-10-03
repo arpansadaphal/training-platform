@@ -110,6 +110,8 @@ import {
   loadOwnedTrainingBlockOrThrow,
 } from "./loadOwnedExecution";
 
+import { getBlockReport } from "./blockReportService";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Fixture
 // ─────────────────────────────────────────────────────────────────────────────
@@ -543,6 +545,16 @@ describe("Authorization audit — cross-user access must return NOT_FOUND", () =
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
     });
   });
+
+  // ── blockReport router (Phase 10b) ─────────────────────────────────────
+
+describe("blockReport", () => {
+  it("blockReport.get → NOT_FOUND for a non-owner of the block", async () => {
+    await expect(
+      getBlockReport(f.userB.id, f.blockId),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
 
   // ── constraint router ──────────────────────────────────────────────────
 

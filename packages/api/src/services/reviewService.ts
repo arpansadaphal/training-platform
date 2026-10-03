@@ -277,7 +277,7 @@ interface AdherenceInput {
   now: Date;
 }
 
-function computeAdherence(input: AdherenceInput): ReviewAdherence {
+export function computeAdherence(input: AdherenceInput): ReviewAdherence {
   const { block, structure, sessions, recordsBySession, nameById, now } =
     input;
 

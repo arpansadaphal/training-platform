@@ -303,3 +303,13 @@
     max-height: none;
   }
 }
+
+.reportLinkRow {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border, #e5e7eb);
+}
+
+.reportLink {
+  font-weight: 500;
+}
