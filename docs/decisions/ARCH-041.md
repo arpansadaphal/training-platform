@@ -6,4 +6,19 @@ Alternatives considered: (1) Write BLOCK_END snapshots anyway — rejected; `Tra
 Consequence: **Phase 9** is the trigger to revisit. Phase 9 should: (a) add `AssessmentSnapshot.trainingBlockId String?` with a nullable FK; (b) extend the three lifecycle transaction sites to write a BLOCK_END snapshot inside the same transaction that closes the block (per ARCH-039); (c) update `findLatestAssessmentSnapshotForVersion` to accept an optional `reason` filter. Until then, Review's defensive reason check surfaces schema drift loudly.
 Source: Phase 7 kickoff exchange Q4b; Phase 7 phase file; ARCH-015; ARCH-016; ARCH-032; `packages/db/prisma/schema.prisma`.
 
+## Addenda
+
+### 2026-10-02 — Phase 10 scope does not include BLOCK_END writing
+
+*The original decision above stands unchanged. This addendum records new operational detail.*
+
+Phase 9 (Production Hardening & Launch Readiness) did not fire the "Phase 9+" trigger for BLOCK_END snapshot writing. Phase 9 was hardening, not the BLOCK_END phase an earlier `PROJECT_STATE.md` note had predicted. The deferral recorded in the original entry therefore remains in force, with a new target: **a future phase that actually requires BLOCK_END snapshots** — not Phase 10's chosen scope (10b + 10c: no schema change, no new write path, no new AssessmentSnapshot rows).
+
+Consequences still in force:
+- `reviewService.getReview` continues to read the COMMIT snapshot only (ARCH-015).
+- `findLatestAssessmentSnapshotForVersion` continues to take one argument — no `reason` filter has been added, because nothing writes a non-COMMIT snapshot yet.
+- The Block Report (Phase 10b) reads the COMMIT snapshot only, with the same defensive `reason === "COMMIT"` post-filter as `reviewService.getReview`.
+
+The ARCH-017 addendum recording 10a's deferral will be attached separately, after this one.
+
 *Next ID: ARCH-042. Every future phase that makes a genuine new architectural choice (not already covered by the reference docs above) must append an entry here before that phase is considered complete.*

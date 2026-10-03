@@ -16,6 +16,12 @@
 // kickoff exchange: sessionsCompleted, totalSetsLogged, versionsCommitted.
 // No streak, no "current week" — the phase file warns against
 // streak-as-hero-stat.
+//
+// Phase 10c addition: currentBlock carries an anticipationCue — a purely
+// informational, forward-looking line about where the user is in the block.
+// Derived from block.plannedLengthWeeks, the active version's workoutDay
+// count, and the count of COMPLETED Sessions in the block. No streaks, no
+// login counts, no loss-aversion framing.
 
 import {
   listProgramsByOwner,
@@ -25,10 +31,15 @@ import {
   countCompletedSessionsForProgram,
   countPerformanceRecordsForProgram,
   findActiveSessionForBlock,
+  countCompletedSessionsInBlock,
   type TrainingBlockRecord,
   type ProgramRecord,
 } from "@training/db";
 import type { ProgramStructure } from "@training/domain";
+import {
+  buildAnticipationCue,
+  type AnticipationCue,
+} from "./anticipationCue";
 
 export interface IdentitySummaryActiveVersion {
   id: string;
@@ -41,6 +52,8 @@ export interface IdentitySummaryCurrentBlock {
   status: "ACTIVE" | "COMPLETED" | "ABANDONED";
   startedAt: Date;
   plannedLengthWeeks: number | null;
+  /** Phase 10c. */
+  anticipationCue: AnticipationCue;
 }
 
 export interface IdentitySummaryCurrentSession {
@@ -107,15 +120,30 @@ export async function getMyIdentitySummary(
   }
 
   // --- Current block -------------------------------------------------------
+  // The anticipation cue (Phase 10c) is derived from three inputs already in
+  // scope: the block's plannedLengthWeeks, the active version's workoutDay
+  // count (sessionsPerWeek), and the count of COMPLETED Sessions in the
+  // block. The session count uses the same COMPLETED-only semantics as the
+  // block-lifecycle resolution rule — SKIPPED and IN_PROGRESS do not count.
   const block = await findActiveTrainingBlockForProgram(primary.id);
-  const currentBlock: IdentitySummaryCurrentBlock | null = block
-    ? {
-        id: block.id,
-        status: block.status,
-        startedAt: block.startedAt,
+
+  let currentBlock: IdentitySummaryCurrentBlock | null = null;
+  if (block) {
+    const sessionsCompletedInBlock = await countCompletedSessionsInBlock(
+      block.id,
+    );
+    currentBlock = {
+      id: block.id,
+      status: block.status,
+      startedAt: block.startedAt,
+      plannedLengthWeeks: block.plannedLengthWeeks,
+      anticipationCue: buildAnticipationCue({
         plannedLengthWeeks: block.plannedLengthWeeks,
-      }
-    : null;
+        sessionsPerWeek: activeVersionStructure?.workoutDays.length ?? 0,
+        sessionsCompletedInBlock,
+      }),
+    };
+  }
 
   // --- Current session (READ-ONLY — never creates) -------------------------
   // session.getOrCreateNext is the MUTATING path and is called only from
