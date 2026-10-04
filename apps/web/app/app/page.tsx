@@ -85,14 +85,13 @@ export default async function DashboardPage() {
             />
 
             {primaryProgram.currentBlock ? (
-              <BlockStrip
-                blockId={primaryProgram.currentBlock.id}
-                status={primaryProgram.currentBlock.status}
-                startedAt={primaryProgram.currentBlock.startedAt}
-                plannedLengthWeeks={
-                  primaryProgram.currentBlock.plannedLengthWeeks
-                }
-              />
+            <BlockStrip
+  blockId={primaryProgram.currentBlock.id}
+  status={primaryProgram.currentBlock.status}
+  startedAt={primaryProgram.currentBlock.startedAt}
+  plannedLengthWeeks={primaryProgram.currentBlock.plannedLengthWeeks}
+  anticipationCueText={primaryProgram.currentBlock.anticipationCue.text}
+/>
             ) : null}
 
             <p className={styles.footerLink}>
@@ -243,6 +242,7 @@ interface BlockStripProps {
   status: "ACTIVE" | "COMPLETED" | "ABANDONED";
   startedAt: Date;
   plannedLengthWeeks: number | null;
+  anticipationCueText: string;   // ← add
 }
 
 function BlockStrip({
@@ -250,6 +250,7 @@ function BlockStrip({
   status,
   startedAt,
   plannedLengthWeeks,
+  anticipationCueText,
 }: BlockStripProps) {
   const daysIn = Math.max(
     0,
@@ -270,6 +271,7 @@ function BlockStrip({
           {status === "ACTIVE" ? "In progress" : status.toLowerCase()} ·{" "}
           {durationText}
         </p>
+        <p className={styles.muted}>{anticipationCueText}</p>
       </div>
       <Link
         href={`/app/review/${blockId}`}

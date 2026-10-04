@@ -1,13 +1,22 @@
-cd /Users/arpan/Documents/code/training-platform
+# PROJECT_STATE.md
 
-cat > docs/PROJECT_STATE.md << 'PROJECT_STATE_EOF'
+**This file must be updated at the end of every phase, by the AI session that implemented that phase, before that session ends.** A new AI conversation should be able to understand the current implementation state entirely from this file plus `DECISIONS.md` and the relevant `phases/phase-NN-*.md` file — without reading any previous conversation.
+
+---
+
 ## Current phase
 
-**Phase 10 (Optional Extensions) is the next actionable item, and is explicitly NOT launch-blocking.** Phases 0–9 are complete. Phase 10 is the Final Freeze's "SHOULD SHIP IF CHEAP" bucket, defined by `docs/phases/phase-10-optional-extensions.md`: single-recipient sharing (10a), Block Report (10b), anticipation cues (10c). A team may implement none, one, or all three — the sub-phases are independent. The MVP is launch-ready per Phase 9; Phase 10 is optional scope.
+**Phase 10 is complete.** 10b (Block Report) and 10c (anticipation cues) shipped; 10a (single-recipient sharing) was explicitly deferred as not cheap. The MVP was launch-ready per Phase 9; Phase 10 added two SHOULD-SHIP-IF-CHEAP extensions and nothing load-bearing.
 
-**Note on the phase name:** an earlier PROJECT_STATE note named Phase 9 as "Validated thresholds & BLOCK_END snapshots" — that was a Phase 7 forecast written from the "Next phase" summary, not from the phase file. Per ARCH-035, the phase file is authoritative. `phases/phase-09-hardening-and-launch.md` was scope-limited to hardening; BLOCK_END snapshot writing remains deferred past Phase 9 (see ARCH-041 addendum).
+**There is no Phase 11.** Per `17-roadmap-overview.md`, further work (AI L2, a second Goal profile, public sharing, a second sport, trainer tooling) unlocks on evidence — North-star metric, retained users completing ≥1 TrainingBlock, unprompted share-initiation — not on a calendar. This roadmap deliberately stops here.
 
-**Note on the Coach panel:** the panel renders beside Review at `/app/review/[blockId]` and on the dedicated `/app/coach` route. Both surfaces consume the same `packages/ai` orchestrator; the panel itself is a single component at `apps/web/src/components/coach/CoachPanel.tsx`. The `coach.openConversationForBlock` procedure resolves the Review page's block id to a scoped conversation server-side, so no flicker on first paint.
+**Cross-references for whatever comes next:**
+- **ARCH-041 addendum** attached (BLOCK_END still deferred; new target is a future phase that actually requires it).
+- **ARCH-017 addendum** attached (10a deferred; `ProgramShare` unbuilt).
+- **Invariant 11 stands unqualified** — Phase 10 did not widen any read path.
+- **`commitFromMutation`'s two call sites** (`commitFromDraft`, `commitFromSimulation`) are still the complete write-path surface. Phase 10 added no third.
+- **The `packages/ai` boundary test** continues to enforce ARCH-011.
+- **Register:** 50 entries, next free ID is **ARCH-051**. Phase 10 added no new entry.
 
 ## Completed phases
 
@@ -21,156 +30,225 @@ cat > docs/PROJECT_STATE.md << 'PROJECT_STATE_EOF'
 - **Phase 7 — Review, Revision Loop & History.** Read-only aggregation over Phase 6 execution data plus the persisted COMMIT-time AssessmentSnapshot (ARCH-015). `reviewService.getReview()` (default view — COMMIT snapshot) and `recomputeAssessment()` (opt-in, persists nothing). `identityService.getMyIdentitySummary()` — the `/app` landing's single aggregation read. `programVersion.diff()` — structural diff via `diffStructures` (ARCH-037). New tRPC procedures: `review.{get, recomputeAssessment}`, `program.getIdentitySummary`, `session.getCurrentSession`, `programVersion.diff`. **Bug fix:** `sessionService.getSessionContext` resolves exercise display names via `listExercises` instead of leaking cuids; regression test in `sessionService.test.ts`. UI: `/app` redesigned as Identity/Progress surface; `/app/review/[blockId]` with `AssessmentDisplay` reused for both the COMMIT snapshot and the opt-in recompute; `/app/programs/[id]/history` version history with on-demand diffs. **BLOCK_END snapshots deferred past Phase 9 per ARCH-041.** No migration.
 - **Phase 8 — AI Coach L0/L1.** `packages/ai` ships in full: `ModelProvider` interface + `AnthropicProvider` + `MockProvider`; six tools (`lookup_exercises`, `simulate_program_change`, `prepare_apply_confirmation`, `note_constraint`, `note_temporary_constraint`, `query_training_history` — the last gated behind `L2_ENABLED = false`); bounded `buildCoachContext`; `runCoachTurn` with structured-output validation, grounding check, and a shared one-retry budget (ARCH-042); a system prompt with embedded JSON Schema; `AIMessageSegment` as a six-variant discriminated union (ARCH-043). `packages/api` adds `routers/coach.ts` (`postMessage` subscription + four other procedures including `openConversation`, `openConversationForBlock` per ARCH-044), `routers/constraint.ts`, `services/coachConversationService.ts`, `services/constraintService.ts`. `packages/db` adds `repositories/aiConversation.ts` and `repositories/constraint.ts`. UI: `CoachPanel.tsx` (six-segment renderer; Apply button fires `commitFromSimulation` on click only), `/app/coach` (conversation sidebar), `/app/constraints` (CRUD), embedded Coach on Review. `trpc.tsx` adds `httpSubscriptionLink`. **Confirmation boundary holds structurally:** no `packages/ai` import of `@training/api`; `CoachToolDeps` has exactly six methods, none commit-shaped; the network-inspection Playwright spec asserts zero `commitFromSimulation` calls before the Apply click.
 - **Phase 9 — Production Hardening & Launch Readiness.** See `PROJECT_STATE.md`'s "Phase 9 close-out" and `docs/LAUNCH_CHECKLIST.md`. Ships: edge rate limiting via Upstash Redis (ARCH-048) with route-aware policy (coach 10/min, other tRPC 120/min, `/api/auth/*` 20/min; fail-open when unconfigured); authorization audit across every owner-scoped procedure (ARCH-049 — found and fixed one gap in `coach.openConversation`); launch gate `apps/web/scripts/launch-gate.ts` chained into `apps/web`'s build script **and** a standalone CI step, with `LAUNCH_OVERRIDE_TOKEN` bypass (constant-time compare, structural validation, whitespace-trimmed) and a manual rehearsal workflow (`.github/workflows/launch-gate-rehearsal.yml`); `ProvisionalBanner.tsx` mounted inside `AssessmentDisplay.tsx` (ARCH-046) plus a CI grep (`check-provisional-banner.sh`) allow-listing the two component files; full Playwright regression suite (`apps/web/e2e/regression.spec.ts` — continuous signup→commit→train→review→simulate→apply flow) running in CI with `MODEL_PROVIDER=mock` (ARCH-050); a11y pass via `@axe-core/playwright` on Builder / Session / Review (two contrast violations fixed); `docs/LAUNCH_CHECKLIST.md` (Vercel/Neon/Upstash/Sentry setup, token rotation, launch rehearsal, rate-limit verification, backups, a11y manual checklist, pre-launch product decisions). Also delivered as **Phase 9 pre-work:** GeminiProvider (ARCH-045) — second `ModelProvider` via `@google/genai`, selected by `MODEL_PROVIDER`; `thoughtSignature` threaded as an optional field on the generic interface; Coach auto-scoping fix (ARCH-047 — `coach.openConversation` auto-scopes to primary Program; `forceNew` bypasses get-or-create). **Bugs fixed during Phase 9:** `.gitignore` bare `build/` had silently excluded `apps/web/app/app/programs/[id]/build/` from every commit since Phase 4 (fixed to `/build/`); Playwright cold-compile contention fixed by `webServer.command: "pnpm build && pnpm start"`; `LAUNCH_OVERRIDE_TOKEN` trailing-whitespace bug fixed by trimming before validation. **No new product surface. No migration.** `docs/DECISIONS_FULL.md` deleted (was a duplicate register).
+- **Phase 10 — Optional Extensions (10b + 10c).** Two of the three SHOULD-SHIP-IF-CHEAP sub-phases shipped; 10a (single-recipient sharing) deferred. **10b — Block Report:** `packages/api/src/services/blockReportService.ts` (read-only synthesis over COMMIT AssessmentSnapshot + PerformanceRecord + Observation; `BlockReportResult` discriminated union `ACTIVE | REPORT`; `buildNarrative` templated, no AI); `routers/blockReport.ts` (`get`, owner-scoped, `NOT_FOUND` for non-owners per ARCH-040); route `/app/blocks/[blockId]/report` (RSC + `BlockReportClient` + CSS module + in-progress fallback page); "See the Block Report" link from Review, gated on `!isPartial`. **10c — anticipation cues:** `packages/api/src/services/anticipationCue.ts` (`buildAnticipationCue`; null `plannedLengthWeeks` → fact-only, non-null → projection, ≤0 remaining → "last session"; no streaks, login counts, or loss-aversion framing); `IdentitySummaryCurrentBlock.anticipationCue` threaded through `identityService`; rendered on `/app`'s `BlockStrip` and on the `/train` card for the Program with the ACTIVE block. **No migration. No new schema. No new write path.** One word added to `reviewService.ts` (`export` on `computeAdherence`). No new `packages/ai` import. No new `commitFromMutation` call site.
+
 ## Current architecture
 
 Phase 6 additions now in effect: ARCH-039 (commit-triggered `TrainingBlock` lifecycle; all three lifecycle triggers — `activateVersion`, `commitFromMutation`, `archiveMyProgram` — apply the same `COMPLETED` / `ABANDONED` resolution rule, and every trigger runs its reads inside the transaction that performs its writes); ARCH-040 (Phase 6 error-code semantics — ownership/existence failures are `NOT_FOUND`; state failures on authorized, present entities are `PRECONDITION_FAILED`).
 
-Phase 7 additions now in effect: ARCH-041 (BLOCK_END snapshot writing deferred to Phase 9+; Review's default view reads the COMMIT snapshot only). The `commitFromMutation` two-call-site invariant (invariant 2) is unchanged — Phase 7 added zero new write paths. The `packages/ai` boundary (ARCH-011) is unchanged — Phase 7 did not touch that package. `packages/domain` still has zero Prisma/HTTP/UI imports (verified by grep) — Phase 7's only domain-adjacent addition is `diffVersions` in `packages/api`, which reuses the existing pure `diffStructures`. The `errorFormatter` allow-list is unchanged — Phase 7 added no application-level error classes.
+Phase 7 additions now in effect: ARCH-041 (BLOCK_END snapshot writing deferred past Phase 9; Review's default view reads the COMMIT snapshot only). The `commitFromMutation` two-call-site invariant (invariant 2) is unchanged — Phase 7 added zero new write paths. The `packages/ai` boundary (ARCH-011) is unchanged — Phase 7 did not touch that package. `packages/domain` still has zero Prisma/HTTP/UI imports (verified by grep) — Phase 7's only domain-adjacent addition is `diffVersions` in `packages/api`, which reuses the existing pure `diffStructures`. The `errorFormatter` allow-list is unchanged — Phase 7 added no application-level error classes.
 
 Phase 8 additions now in effect: ARCH-042 (grounding failures → bounded regeneration then structured partial with `grounding_warning`); ARCH-043 (`AIMessageSegment` is a discriminated union; the model's output schema is a strict subset); ARCH-044 (two Coach procedures beyond the phase file's list). The `packages/ai` boundary (ARCH-011) holds structurally: the package has no import of `@training/api`, no reference to the `commitFrom` substring in any source file, and `CoachToolDeps` has exactly six methods, none of which can commit. `commitFromMutation`'s two call sites are unchanged — Phase 8 added zero new write paths to program structure. The `errorFormatter` allow-list is unchanged — Phase 8 added no application-level error classes (grounding failures are handled conversationally per ARCH-042, never thrown to the client).
 
-**Phase 9 pre-work (GeminiProvider + Coach auto-scoping):** ARCH-045 (second ModelProvider via `@google/genai`, selected by `MODEL_PROVIDER`, with Gemini 3.x `functionCall.id` and `thoughtSignature` echoes threaded through the generic `ModelProvider` interface as optional fields), ARCH-047 (`coach.openConversation` auto-scopes to the user's primary Program; `forceNew` bypasses get-or-create). The `packages/ai` boundary (ARCH-011) still holds — no new commit-shaped path. `commitFromMutation`'s two call sites are unchanged. The `errorFormatter` allow-list is unchanged. Client-side `coach.module.css` gained a `color: var(--fg, #111)` override on `.conversationItem` to counteract `globals.css`'s `button { color: #fff }` cascade.
+Phase 9 additions now in effect: ARCH-045 (GeminiProvider as a second `ModelProvider` via `@google/genai`, selected by `MODEL_PROVIDER`; `thoughtSignature` as an optional field on the generic interface); ARCH-046 (launch override + provisional banner); ARCH-047 (Coach auto-scoping); ARCH-048 (Upstash rate limiting); ARCH-049 (authorization audit); ARCH-050 (E2E in CI). Client-side `coach.module.css` gained a `color: var(--fg, #111)` override on `.conversationItem` to counteract `globals.css`'s `button { color: #fff }` cascade. `apps/web/middleware.ts` runs the rate limiter.
+
+Phase 10 additions now in effect: the Block Report reads the COMMIT snapshot only, with the same defensive `reason === "COMMIT"` post-filter as `reviewService.getReview` — no `reason` argument was added to `findLatestAssessmentSnapshotForVersion` (that is a repository-layer change for whatever phase actually wires BLOCK_END). The prior-block comparison unwraps the `AssessmentResult` discriminated union and treats any non-`VALIDATED` branch as "could not be compared" — at MVP every snapshot is `UNVALIDATED` (ARCH-032), so that branch is always taken today; it becomes meaningful only when validated thresholds ship. `computeAdherence` is now exported from `reviewService` (one word) so the Block Report shares the exact systematic-deviation analysis as Review — two divergent implementations of the same aggregation would be a drift bug. `IdentitySummaryCurrentBlock` carries a new `anticipationCue` field, derived in `identityService` from `TrainingBlock.plannedLengthWeeks`, the active version's `workoutDays.length`, and `countCompletedSessionsInBlock`. `commitFromMutation`'s two call sites are unchanged; `packages/ai`'s import surface is unchanged; the `errorFormatter` allow-list is unchanged. No migration. No new schema.
 
 ## Project conventions
 
 - **Review's default view reads the COMMIT snapshot, never a live recompute** (ARCH-015). `reviewService.getReview` filters defensively on `snapshot.reason === "COMMIT"`; if a future phase writes a non-COMMIT snapshot that becomes the latest for a version, the service throws `PRECONDITION_FAILED` with a clear message rather than silently rendering the wrong snapshot. Fix the read (add a `reason` argument to `findLatestAssessmentSnapshotForVersion`) before changing the default.
-- **`findLatestAssessmentSnapshotForVersion` takes one argument today** (no `reason` filter). Its docstring says a future variant can take one. When Phase 9 wires BLOCK_END snapshots, that argument is the first thing to add.
+- **`findLatestAssessmentSnapshotForVersion` takes one argument today** (no `reason` filter). Its docstring says a future variant can take one. When a future phase wires BLOCK_END snapshots, that argument is the first thing to add.
 - **`session.getCurrentSession` is read-only; `session.getOrCreateNext` is the mutating path.** The landing screen calls the former via `getIdentitySummary`; `/train`'s server action calls the latter. Do not conflate the names in a new call site.
 - **`program.getIdentitySummary` is a single aggregation read** so the landing page renders in one round trip. It is a thin forwarder on `programService`; the logic lives in `identityService.ts`. If a future phase needs additional landing-screen data, extend `identityService`, not a new fan-out of procedures.
 - **`programVersion.diff` is computed on demand; never stored.** It reuses `diffStructures` from `packages/domain`. Same-Program check → `BAD_REQUEST`; ownership → `NOT_FOUND` per ARCH-040.
-- **Playwright `webServer` config is unchanged.** The two Phase 7 E2E specs (`landing-dashboard.spec.ts`, `review.spec.ts`) follow `training.spec.ts`'s pattern.
 - **Client-side types for review data**: the RSC converts all `Date` fields to ISO strings and passes JSON-typed `unknown` for `AssessmentResult` / `FitScoreResult` (which are cast inside `ReviewClient` for `AssessmentDisplay`). Same `Client*` discipline as `ClientDraft` / `ClientSessionContext`.
 - **The Coach's apply path is client-only.** `packages/ai` has no import path to the program-commit function; the router wires `simulateAndPersistForCoach` (a thin adapter in `simulationService.ts`) into `CoachToolDeps`, and the apply is a client-side call to `programVersion.commitFromSimulation` fired by a click on the Apply button in `CoachPanel.tsx`. Any future PR that gives `packages/ai` a new import toward a mutating function requires explicit documented justification and a new `docs/decisions/` entry — not a routine code review approval.
 - **`CoachToolDeps` has exactly six methods and the coach-boundary test asserts the list.** Adding a seventh is a deliberate change that must update `packages/ai/src/__tests__/confirmation-boundary.test.ts`'s key-set assertion. If a seventh method can mutate program structure, that is the ARCH-011 violation the assertion exists to catch.
-- **The `boundary.test.ts` substring scan is coarse on purpose.** It matches `commitFrom` in any source file under `packages/ai/src/**`, including comments. A comment that names the forbidden substring must be rephrased — never weaken the scan. An AST-based replacement is deferred (flagged at close-out); the substring check has caught every real violation so far.
+- **The `boundary.test.ts` substring scan is coarse on purpose.** It matches `commitFrom` in any source file under `packages/ai/src/**`, including comments. A comment that names the forbidden substring must be rephrased — never weaken the scan. An AST-based replacement is deferred; the substring check has caught every real violation so far.
 - **`L2_ENABLED` is a build-time constant in `packages/config`, threaded as an argument into `packages/ai`.** Never import it from `packages/ai` directly. Flipping it requires a code change and a fresh deploy — that friction is deliberate.
 - **The Coach panel wraps itself in `TRPCProvider`.** Two providers per page (`ReviewClient`'s and `CoachPanel`'s) share the module-level `browserQueryClient` singleton in `trpc.tsx`, so the react-query cache is not duplicated. Each has its own tRPC client link chain. `splitLink` routes `op.type === 'subscription'` through `httpSubscriptionLink` and everything else through `httpBatchLink`.
 - **`coach.postMessage` is a subscription; the orchestrator emits `segment` chunks then exactly one terminal `final` or `error` chunk.** No `delta` chunks — the final turn's text is JSON, and streaming it token-by-token has no client-side use. The `delta` variant of `CoachStreamChunk` is reserved for a future where the final turn can be meaningfully streamed.
-- **`ClientCoachMessage` / `ClientAIMessageSegment` are hand-mirrored in `apps/web/src/types/coach.ts`.** Do not import from `@training/ai` in a client component — it pulls `@anthropic-ai/sdk`, `@training/db`, and zod into the client bundle graph. The mirror is the `Client*` convention (learning 18); drift surfaces at build time in the exhaustive `SegmentRenderer`.
-- **Temporary constraints are conversation-scoped and read-only in the panel.** The `CoachPanel` renders a strip above the input from `coach.getConversation`'s `temporaryConstraints`; there is no edit or delete UI in Phase 8. The escape hatch is starting a new conversation.
+- **`ClientCoachMessage` / `ClientAIMessageSegment` are hand-mirrored in `apps/web/src/types/coach.ts`.** Do not import from `@training/ai` in a client component — it pulls `@anthropic-ai/sdk`, `@training/db`, and zod into the client bundle graph. The mirror is the `Client*` convention; drift surfaces at build time in the exhaustive `SegmentRenderer`.
+- **Temporary constraints are conversation-scoped and read-only in the panel.** The `CoachPanel` renders a strip above the input from `coach.getConversation`'s `temporaryConstraints`; there is no edit or delete UI. The escape hatch is starting a new conversation.
+- **Node version resolution in zsh.** `nvm use 20` must be followed by `hash -r` in zsh. zsh caches the resolved path for `pnpm` (and other binaries); after `nvm use 20`, `which pnpm` may still return the v24 path from the hash table. `hash -r` clears it. If pnpm still resolves wrong, reinstall under v20: `"$(dirname "$(which node)")/npm" install -g pnpm@latest`. Symptom: `.nvmrc` says 20, `node -v` says 20, but `which pnpm` shows a v24 path — and Vitest worker crashes follow. Discovered Phase 8 → Phase 9 handoff.
+- **File-overwrite pattern in AI-generated edits.** When an AI session emits "here is the updated file," verify with `git diff` before committing. Two incidents in Phase 8 (invariant.test.ts replaced with a copy of identityService.ts; coach.ts received a duplicate import block) — both from ambiguous "replace this block" instructions. Prefer "here is the complete file" over patches, and always `git diff` the file after applying.
+- **Signature-optional fields on provider abstractions.** Provider-specific protocol fields (e.g. Gemini's `thoughtSignature`, Anthropic's cache breakpoints) go on the generic `ModelProvider` interface as **optional** fields, not as provider-specific types. `ToolCall.thoughtSignature?: string` and `ModelContentBlock['tool_use'].thoughtSignature?: string` are the correct home — Anthropic and Mock simply ignore them. A future provider with its own protocol quirk follows the same pattern: add the field as optional, thread it through the orchestrator's spread, and let each provider populate or ignore. Do not special-case a provider in the orchestrator.
+- **`AssessmentDisplay` is a client component.** It mounts `useProvisionalBanner()` (a hook), so any server component importing it goes through a client boundary. All current consumers are client components. If a future phase needs a server-rendered assessment (PDF export, email render, static preview), migrate the hook to a plain `isProvisionalBannerEnabled()` function reading `HYPERTROPHY_CONFIG.validated` — a bounded change.
+- **`apps/web` has no Vitest setup.** Playwright-only. Two pure functions in the rate-limiting middleware — `classifyRequest` and `getClientIp` — are unit-testable if `apps/web` ever gains web-layer logic worth testing. Not justified at Phase 9: the load-test script exercises the middleware end-to-end, which is stronger evidence than isolated unit tests.
+- **The Block Report's prior-block comparison currently prints developer-shaped identifiers** (`VOLUME:chest`, `<axisType>:<scopeKey>`). This is acceptable at MVP because the comparison branch never executes while every snapshot is `UNVALIDATED` (ARCH-032). A future phase that ships `VALIDATED` snapshots should add a friendly display-name lookup — likely in `goal-profiles` or a small table in `blockReportService` — before the comparison becomes visible to users.
+- **`computeAdherence` is exported from `reviewService` for the Block Report's use.** Do not fork it. If the adherence aggregation changes, both Review and Block Report change together; that is the point.
+- **`countCompletedSessionsInBlock(blockId)` is the canonical COMPLETED-only session count.** Same semantics as the TrainingBlock lifecycle resolution rule (SKIPPED and IN_PROGRESS do not count). `countCompletedSessionsForProgram(programId)` is the lifetime-scope equivalent.
+- **No `blockReport` describe in `authorization.test.ts` should be added without also adding it to `blockReport.test.ts`.** Both exist; the local one exercises the closed-block path, the shared one exercises the cross-user case.
 
 ## Repository structure
 
-`packages/api` contains: `context.ts`, `trpc.ts`, `errors.ts` (four error classes, unchanged through Phase 8), `router.ts` (extended with `coach` and `constraint`), `index.ts`, `routers/` (`user.ts`, `program.ts`, `draft.ts`, `analysis.ts`, `programVersion.ts`, `exercise.ts`, `muscleGroup.ts`, `simulation.ts`, `training.ts`, `session.ts`, `performance.ts`, `observation.ts`, `review.ts`, `coach.ts` (Phase 8), `constraint.ts` (Phase 8), plus `tests/`), `schemas/` (`programStructure.ts`, `mutation.ts`), `services/` (`programService.ts`, `draftService.ts`, `programVersionService.ts`, `simulationService.ts` — extended Phase 8 with `simulateAndPersistForCoach` and `loadOwnedSimulationForCoach`, `referenceDataService.ts`, `loadOwnedProgram.ts`, `loadOwnedExecution.ts`, `trainingService.ts`, `sessionService.ts`, `performanceService.ts`, `observationService.ts`, `reviewService.ts`, `identityService.ts`, `coachConversationService.ts` (Phase 8), `constraintService.ts` (Phase 8), plus test files).
+`packages/api` contains: `context.ts`, `trpc.ts`, `errors.ts` (four error classes, unchanged through Phase 10), `router.ts` (extended with `coach`, `constraint`, `blockReport`), `index.ts`, `routers/` (`user.ts`, `program.ts`, `draft.ts`, `analysis.ts`, `programVersion.ts`, `exercise.ts`, `muscleGroup.ts`, `simulation.ts`, `training.ts`, `session.ts`, `performance.ts`, `observation.ts`, `review.ts`, `coach.ts`, `constraint.ts`, `blockReport.ts` (Phase 10), plus `tests/`), `schemas/` (`programStructure.ts`, `mutation.ts`), `services/` (`programService.ts`, `draftService.ts`, `programVersionService.ts`, `simulationService.ts`, `referenceDataService.ts`, `loadOwnedProgram.ts`, `loadOwnedExecution.ts`, `trainingService.ts`, `sessionService.ts`, `performanceService.ts`, `observationService.ts`, `reviewService.ts` (with `export` on `computeAdherence`), `identityService.ts` (with `anticipationCue`), `coachConversationService.ts`, `constraintService.ts`, `blockReportService.ts` (Phase 10), `anticipationCue.ts` (Phase 10), plus test files).
 
 `packages/ai` (Phase 8):
+```text
 packages/ai/
-src/
-provider/ # ModelProvider interface, AnthropicProvider, GeminiProvider, MockProvider, createProvider factory
-tools/ # six tool definitions + CoachToolDeps
-context-builder.ts # buildCoachContext
-orchestrator.ts # runCoachTurn — the request loop
-schema.ts # modelOutputSchema (subset), aiMessageSegmentSchema, MODEL_OUTPUT_SCHEMA_JSON, parseModelOutput
-grounding.ts # checkGrounding, dropOffendingAndAddWarning
-system-prompt.ts # buildSystemPrompt
-types.ts # AIMessageSegment, CoachStreamChunk, isWellFormedSegment
-tests/ # boundary + 7 Phase-8 test files
-index.ts # public barrel
+  src/
+    provider/       # ModelProvider interface, AnthropicProvider, GeminiProvider, MockProvider, createProvider factory
+    tools/          # six tool definitions + CoachToolDeps
+    context-builder.ts
+    orchestrator.ts
+    schema.ts
+    grounding.ts
+    system-prompt.ts
+    types.ts
+    __tests__/      # boundary + 7 test files
+    index.ts
+packages/db (Phase 8 additions):
 
 text
-
-`packages/db` (Phase 8 additions):
 packages/db/src/repositories/
-aiConversation.ts # Phase 8: AIConversation + AIMessage persistence
-constraint.ts # Phase 8: Constraint + TemporaryConstraint persistence
+  aiConversation.ts
+  constraint.ts
+apps/web (Phase 8 additions):
 
 text
-
-`apps/web` (Phase 8 additions, on top of Phase 7):
-apps/web/src/components/coach/ # Phase 8: CoachPanel + CSS module
-apps/web/src/types/coach.ts # Phase 8: ClientAIMessageSegment mirror
-apps/web/app/app/coach/ # Phase 8: dedicated Coach route
-apps/web/app/app/coach/coach.module.css # Phase 8: Coach route styles (conversation sidebar etc.)
-apps/web/app/app/constraints/ # Phase 8: constraints CRUD route
-apps/web/e2e/coach.spec.ts # Phase 8: network-inspection boundary test + panel smoke tests
+apps/web/src/components/coach/          # Phase 8: CoachPanel + CSS module
+apps/web/src/types/coach.ts             # Phase 8: ClientAIMessageSegment mirror
+apps/web/app/app/coach/                 # Phase 8: dedicated Coach route
+apps/web/app/app/constraints/           # Phase 8: constraints CRUD route
+apps/web/e2e/coach.spec.ts              # Phase 8: network-inspection boundary test
+packages/api Phase 10 additions:
 
 text
+packages/api/src/
+  services/blockReportService.ts
+  services/anticipationCue.ts
+  routers/blockReport.ts
+  services/blockReport.test.ts
+  services/anticipationCue.test.ts
+apps/web Phase 10 additions:
 
-`apps/web/src/lib/trpc.tsx` now includes `splitLink` + `httpSubscriptionLink` for the Coach subscription.
-
+text
+apps/web/app/app/blocks/[blockId]/report/
+  page.tsx
+  BlockReportClient.tsx
+  blockReport.module.css
 ## API version
+tRPC 11, mounted at /api/trpc/[trpc] via fetchRequestHandler. Routers and procedures:
 
-tRPC 11, mounted at `/api/trpc/[trpc]` via `fetchRequestHandler`. Routers and procedures:
+user.getSelf
 
-- `user.getSelf`
-- `program.{create, listMine, get, rename, archive, getIdentitySummary}`
-- `draft.{create, get, listForProgram, updateStructure, discard}`
-- `analysis.previewAnalyze`
-- `programVersion.{commitFromDraft, commitFromSimulation, get, listForProgram, diff}`
-- `exercise.listAll`
-- `muscleGroup.listAll`
-- `simulation.simulate`
-- `training.{activateVersion, getCurrentBlock}`
-- `session.{getOrCreateNext, getContext, getCurrentSession, markStarted, markCompleted, markSkipped}`
-- `performance.{logSet, logBatch, listForSession}`
-- `observation.{create, listForBlock, listForSession}`
-- `review.{get, recomputeAssessment}`
-- `constraint.{list, get, create, update, delete}` — added Phase 8
-- `coach.{postMessage, listConversations, getConversation, openConversation, openConversationForBlock}` — added Phase 8 (`postMessage` is a subscription; the other four are query/mutation)
+program.{create, listMine, get, rename, archive, getIdentitySummary}
+
+draft.{create, get, listForProgram, updateStructure, discard}
+
+analysis.previewAnalyze
+
+programVersion.{commitFromDraft, commitFromSimulation, get, listForProgram, diff}
+
+exercise.listAll
+
+muscleGroup.listAll
+
+simulation.simulate
+
+training.{activateVersion, getCurrentBlock}
+
+session.{getOrCreateNext, getContext, getCurrentSession, markStarted, markCompleted, markSkipped}
+
+performance.{logSet, logBatch, listForSession}
+
+observation.{create, listForBlock, listForSession}
+
+review.{get, recomputeAssessment}
+
+constraint.{list, get, create, update, delete}
+
+coach.{postMessage, listConversations, getConversation, openConversation, openConversationForBlock}
+
+blockReport.get — Phase 10b
 
 ## Implemented product capabilities
+Program CRUD, Builder with live Analyze, immutable versioning, deterministic Analysis + Assessment, Simulation, Training execution & logging, Review + version history + Identity/Progress landing, AI Coach L0/L1 with structural confirmation boundary, Block Report (Phase 10b), anticipation cues (Phase 10c).
 
-**Phase 7 — Review, History & Landing:** `/app` is now the Identity/Progress surface — the user's primary program (the non-archived one with an ACTIVE TrainingBlock, else the most recently created non-archived one) with its active version, a primary CTA (Continue/Start session → Start next session → Open Builder → Commit a version, in that priority order), three lifetime stats, and a block strip with a Review link. `/app/review/[blockId]` renders the persisted COMMIT-time AssessmentSnapshot via `AssessmentDisplay` (the assessment the user actually saw), the adherence summary (planned vs. completed, systematic deviations grouped by (exercise, kind) and formatted server-side), observations in chronological order, and — below an explicit visual divider — an opt-in "recompute with current thresholds" section that runs a live engine pass on click, never on mount, and warns visibly that it is not what the user trained against. `/app/programs/[id]/history` lists every committed version newest-first with its trigger (Manual commit / AI-applied) and an expandable structural diff from the previous version, computed on demand via `programVersion.diff`. No AI narrative appears on any Phase 7 surface (Final Freeze §19).
-
-**Phase 8 — AI Coach L0/L1:** the Coach is live on two surfaces — beside the Review screen at `/app/review/[blockId]` (two-column layout at ≥64rem, stacked below) and on the dedicated `/app/coach` route (conversation sidebar + panel). The Coach explains the current analysis/assessment in plain language (L0) and proposes mutations via simulation (L1), showing Gain/Cost/Net or narrating `CANNOT_COMPUTE` honestly under the shipped unvalidated config. Every claim carries an evidence tag (`PLANNED` / `EXECUTED` / `OBSERVED` / `INTERPRETED`), rendered as a chip. The panel's Apply button is the only path from the Coach UI to a program commit; it fires `programVersion.commitFromSimulation` on click and only on click. `prepare_apply_confirmation` returns a render payload and cannot mutate. `note_constraint` and `note_temporary_constraint` writes are visible — persistent constraints on `/app/constraints` (full CRUD), temporary constraints as a read-only strip above the Coach input. `query_training_history` is implemented but excluded from the model's tool array while `L2_ENABLED = false`. No medical diagnosis (redirects to a professional), no outcome-guarantee language, no cross-user data access.
-
-**Not implemented:** L2 (Historian) — the tool is implemented but gated. L3 (Correlator) — reserved interface name only, no code. `/app/constraints` has no TemporaryConstraint CRUD (conversation-scoped; delete by starting a new conversation).
+Not implemented: single-recipient sharing (10a) — deferred. ProgramShare table, sharing router, and shared-scoped authorization all remain unbuilt. Invariant 11 stands unqualified. AI L2 (Historian) — query_training_history is implemented but gated behind L2_ENABLED = false. AI L3 — reserved interface name only.
 
 ## Unresolved decisions
+Carried from docs/00-product-freeze-reference.md — not to be resolved by any implementation phase, only by explicit product/sports-science input:
 
-Phase-1 through Phase-7 items are preserved from the previous state of this file. **Phase-8-specific items:**
+Numeric thresholds for Volume/Frequency/Recovery Cost bands, per goal profile.
 
-- **The `packages/ai` boundary test is substring-based.** `packages/ai/src/__tests__/boundary.test.ts` scans for the literal string `commitFrom`, which is coarse — comments describing the boundary trip it. The correct long-term fix is an AST-based scan using the TypeScript compiler API that inspects actual import statements and call expressions. Deferred; the substring check has caught every real violation so far and errs toward over-blocking.
-- **`simulate_program_change`'s mutation shape is validated only by the engine.** The Zod schema declares `mutation: z.unknown()` — deliberate, so the deterministic engine remains the sole authority on `MutationSpec` validity (invariant 1). If `INVALID_MUTATION` proves common in practice, tighten the schema in a bounded change.
-- **The E2E network-inspection test is gated on `ANTHROPIC_API_KEY`.** It cannot run in CI without a real key. A network-mocked variant that intercepts the tRPC SSE stream would make it CI-runnable; the blocker is that tRPC v11's exact SSE frame format is version-specific, and a mock that does not match the wire shape would produce a vacuous pass. Not built in Phase 8.
-- **The `stripComments` helper in `packages/api/src/services/coach-boundary.test.ts` is intentionally simple.** It handles line and block comments but not template literals containing `//` or regex literals containing `/*`. The scan target (`routers/coach.ts`) contains neither today. If a future router does, upgrade to a proper tokenizer or an AST scan.
-- **`loadScopedProgramVersion` reads the COMMIT snapshot's `assessment` and `fitScore`, but recomputes nothing.** The snapshot persists the assessment, not the analysis — the `metrics` column carries the analysis that was current at commit time. GOAL-DRIFT: if the Program's `currentGoalId` has changed since the block was opened, the snapshot's assessment reflects the *old* goal while `activeGoal` in the returned context reflects the current one. Correct per ARCH-015 (the Coach explains what was shown), but a future change to goal switching should consider whether the Coach needs to narrate the difference.
-- **`coach.listConversations` returns only `{ id, programId, programVersionId, createdAtISO }`.** No title — the schema has no `title` column on AIConversation. The `/app/coach` sidebar labels conversations by creation timestamp. If a later phase adds titles or derives them from the first user message, replace `formatConversationLabel` in `CoachClient.tsx`.
-- **`rawToolCalls` on AIMessage is defined in the schema and written by `createAIMessage` only when the caller supplies it.** The orchestrator does not supply it in Phase 8. If the column has no DB default and a future write omits the field, that is a runtime null-constraint error; use `Prisma.JsonNull` rather than the omit-key pattern in that case.
-- **The `packages/config/package.json` cleanup is outstanding.** The file currently declares a self-dependency (`@training/config` on itself) and three upward deps (`@training/ai`, `@training/db`, `@training/domain`) that are wrong layering. The correct `dependencies` block is `{ "zod": "^3.23.8" }` if `env.ts` uses zod, `{}` otherwise. Not blocking any Phase 8 functionality; worth fixing when next in the file.
-- **No test covers `createdByConversationId` threading on `simulateAndPersist`.** The optional fourth arg distinguishes Coach-originated simulations from UI-originated ones. A one-test addition to `packages/api/src/services/simulation.test.ts` would close the gap.
+Goal weights per axis, per goal profile (all null in HYPERTROPHY_CONFIG.axisWeights today).
 
-**Phase 9 pre-work items (deferred candidates, not Phase 9 scope):**
+North-star metric measurement window.
 
-- **Production `GEMINI_MODEL` default when Anthropic billing is enabled.** Currently `gemini-3.8-flash`. When Anthropic billing is turned on and `MODEL_PROVIDER=anthropic` becomes the production default, decide whether Gemini remains a fallback or is retired. Config-only change.
-- **Coach phrasing of CANNOT_COMPUTE.** Model says "temporarily unavailable," which implies a transient failure. The state is structural — unvalidated thresholds. System-prompt refinement only; moot once validated thresholds ship.
+Whether Fit Score has previously-named bands to preserve.
+
+Recovery Cost's underlying formula.
+
+Whether Review should default to showing the Commit-time snapshot vs. a live recompute (ARCH-015, pending product sign-off).
+
+Phase-10-specific items:
+
+Block Report's prior-block comparison uses raw ${axisType}:${scopeKey} identifiers. Latent, not user-visible at MVP.
+
+readSnapshotAssessment tolerates an older payload shape this codebase has never written. Deliberately permissive, not a contract.
+
+/app and /train anticipation cues share identity.primaryProgram.currentBlock.anticipationCue. The /train page fetches getIdentitySummary even when it only needs the program list, purely for the cue. Consider moving to a dedicated read if /train grows.
+
+BlockStrip's plannedLengthWeeks prop and the cue both express block length. Keep them consistent in tone.
+
+The seed does not set plannedLengthWeeks on commit, so NO_PLANNED_LENGTH is the default branch in every fixture. REMAINING and LAST_SESSION are exercised only by unit tests.
+
+Phase-9 operational items (user-executed, no code):
+
+Sentry alert rules (docs/LAUNCH_CHECKLIST.md §5).
+
+Upstash Redis provisioning (§4).
+
+Vercel staging env + Neon staging branch (§2b/§3a).
+
+Launch-gate rehearsal (manual workflow dispatch).
+
+Rate-limit load test.
+
+Neon PITR decision (§10).
+
+Evidence-table fills.
 
 ## Test status
+Vitest (all passing):
 
-- **Vitest** (all passing locally and in CI):
-  - `packages/config` — 1 file, 3 tests
-  - `packages/ai` — **8 files, 61 tests** (Phase 8 created the package's real suite: `boundary.test.ts` — 2, `confirmation-boundary.test.ts` — 5, `failure-degradation.test.ts` — 5, `grounding.test.ts` — 14, `simulation-consistency.test.ts` — 5, `structured-output.test.ts` — 20, `tool-authorization.test.ts` — 9, plus the pre-existing `index.test.ts` — 1)
-  - `packages/db` — 4 files, 9 tests (unchanged by Phase 8; the two new repositories are exercised indirectly)
-  - `packages/api` — **12 files, 67 tests** (Phase 8 added `services/coach-boundary.test.ts` — 3 tests)
-  - `packages/domain` — 24 files, 179 tests (unchanged)
-  - **Total Vitest**: **49 files, 319 tests**
-- **Playwright** (all passing where runnable):
-  - `e2e/landing.spec.ts` — Phase 0
-  - `e2e/builder.spec.ts` — Phase 4
-  - `e2e/builder-simulate.spec.ts` — Phase 5
-  - `e2e/training.spec.ts` — Phase 6
-  - `e2e/landing-dashboard.spec.ts` — Phase 7
-  - `e2e/review.spec.ts` — Phase 7
-  - **`e2e/coach.spec.ts` — Phase 8** (two smoke tests, both passing; one network-inspection test gated on `ANTHROPIC_API_KEY`, skipped in CI without a key)
-- `pnpm turbo run lint typecheck` → clean
-- `pnpm turbo run test` → all packages pass
+packages/config — 1 file, 3 tests
+
+packages/ai — 8 files, 61 tests
+
+packages/db — 4 files, 9 tests
+
+packages/api — 15 files, 120 tests
+
+packages/domain — 24 files, 179 tests
+
+Total Vitest: 52 files, 372 tests
+
+Playwright (7 specs):
+
+e2e/landing.spec.ts, builder.spec.ts, builder-simulate.spec.ts, training.spec.ts, landing-dashboard.spec.ts, review.spec.ts, coach.spec.ts (network-inspection test gated on ANTHROPIC_API_KEY)
+
+pnpm turbo run typecheck lint test build → 20/20 successful
+
+## Deployment status
+Deployed to Vercel.
+
+Production URL: https://training-platform-web-alpha.vercel.app
+
+Production branch: main (auto-deploys)
+
+Preview: automatic per PR (Vercel) with isolated Neon branch per PR
+
+Database (production): Neon primary branch — 0002_domain_model applied; no migrations since
+
+Database (dev): local Postgres; remote vercel-dev Neon branch in packages/db/.env.neon-dev (gitignored)
+
+CI database: ephemeral postgres:16 container on GitHub Actions runner
+
+Sentry: receiving events; source maps uploaded on build
+
+Rate limiting: Upstash Redis (edge middleware)
 
 ## Next phase
+There is no Phase 11. Phase 10 was the last phase in the roadmap. Per 17-roadmap-overview.md, anything beyond it — a second Goal profile, AI L2, public sharing, a second sport, trainer tooling — unlocks on evidence from real usage, not on a calendar: the North-star metric, retained users completing ≥1 TrainingBlock, unprompted share-initiation.
 
-**Phase 10 — Optional Extensions** (per `docs/phases/phase-10-optional-extensions.md`). Scope is the SHOULD-SHIP-IF-CHEAP bucket: 10a single-recipient sharing (`ProgramShare` table + migration `0003_program_share` + `sharing` router + authorization changes across owner-scoped routers), 10b Block Report (`blockReportService.ts`, read-only over existing data), 10c anticipation cues (informational forward-looking text on `/app` or Train view). Any subset of the three may ship; the phase file permits none. **NOT launch-blocking.**
+When that evidence exists, the next phase is proposed fresh, not picked from a backlog. The HANDOFF_TEMPLATE.md structure applies: a new phase file is written against the current PROJECT_STATE.md, and its scope is justified by the evidence, not by prior roadmap intent.
 
-**What comes after Phase 10 is deliberately undecided.** Per `17-roadmap-overview.md`, further work (AI L2, a second Goal profile beyond Phase 3's placeholder, public sharing, a second sport) unlocks on evidence — North-star metric, retained users completing ≥1 TrainingBlock, unprompted share-initiation — not on a calendar. There is no Phase 11 in the roadmap.
+Register: 50 entries; next free ID is ARCH-051.
 
-**Cross-references for Phase 10:**
-- **ARCH-041 addendum needed.** BLOCK_END AssessmentSnapshot writing was deferred past Phase 9 (Phase 9 turned out to be hardening, not the BLOCK_END phase that PROJECT_STATE had predicted). New target: Phase 10+ — or further if Phase 10's chosen scope doesn't include it. Add under an `## Addenda` heading in `docs/decisions/ARCH-041.md`.
-- **ARCH-017 addendum needed once 10a's fate is known.** If 10a ships: confirm the target met. If 10a is skipped: further defer. Attach under `## Addenda` in `docs/decisions/ARCH-017.md`.
-- **Invariant 11 is the load-bearing one.** Cross-user data access is unbuilt; `ProgramShare` (10a) is the first authorized exception, gated by an explicit grant row. Every shared read flows through an explicit `ProgramShare` check — no widened read paths.
-- **`commitFromMutation`'s two call sites** (`commitFromDraft`, `commitFromSimulation`) remain the complete write-path surface. Phase 10 must not add a third.
-- **The `packages/ai` boundary test** at `packages/ai/src/__tests__/boundary.test.ts` continues to enforce ARCH-011. Phase 10 should not weaken it.
-- **The `.gitignore` `/build/` fix from Phase 9** is now the pattern. Never revert to a bare `build/` — the diagnostic is "route 404s in production but shows in `next build`'s route table."
-- **The Phase 9 operational items** (Sentry alert rules, Upstash provisioning verification, Vercel staging env + Neon staging branch, launch-gate rehearsal, rate-limit load test, Neon PITR decision, evidence-table fills in `docs/LAUNCH_CHECKLIST.md`) are user-executed and do not block Phase 10.
-- **Register:** 50 entries, next free ID is **ARCH-051**.
+## Prohibited scope (standing, not phase-specific)
+Do not build, in any phase, without an explicit new phase spec authorizing it: social feed, clans, likes, rankings, trainer marketplace, native steps tracking, native nutrition database, a second sport, population-level AI (L3), AI L2 before Phase 8's L2_ENABLED flag is deliberately flipped, ProgramShare/sharing logic until the deferral in ARCH-017 is lifted, any numeric scientific threshold presented as validated without a cited source, any Jev/DecisionProvider wiring into packages/ai's live orchestration path before Phase 11's trigger condition is met per 19-jev-integration-review.md — see ARCH-019.
 
-
-echo "PROJECT_STATE.md rewritten. Lines:"
-wc -l docs/PROJECT_STATE.md
+Template note for the implementing AI: when you finish a phase, replace the relevant sections above with the real, current state — don't just append. This file describes "now," not a changelog; DECISIONS.md is where the history/rationale lives.

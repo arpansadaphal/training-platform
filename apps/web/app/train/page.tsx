@@ -15,6 +15,18 @@
 // then appRouter.createCaller(...) for the read. Per the Phase 6 layout
 // finding, /train does its own auth check — there is no shared layout under
 // app/app/ to inherit from.
+//
+// Phase 10c addition: an anticipation cue — a purely informational,
+// forward-looking line about where the user is in the current TrainingBlock
+// ("N sessions remaining in this block, then your Review"). Rendered on the
+// card for whichever Program has the ACTIVE block. At MVP only one Program
+// per user can have an ACTIVE TrainingBlock, so this is a single-card
+// decoration, not a per-row fetch.
+//
+// The cue deliberately avoids streaks, login counts, and loss-aversion
+// framing — Final Freeze §26's explicit exclusion list. When the block has
+// no declared plannedLengthWeeks, the cue degrades to a fact ("N sessions
+// completed in this block") rather than inventing a block length.
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -34,10 +46,30 @@ export default async function TrainPage() {
   const caller = appRouter.createCaller({
     user: { id: session.user.id, email: session.user.email },
   });
-  const programs = await caller.program.listMine({ includeArchived: false });
+
+  // The program list and the identity summary are independent reads; fetch
+  // them in parallel. The identity summary carries the current block's
+  // anticipation cue (Phase 10c), which is derived server-side from the
+  // block's plannedLengthWeeks, the active version's workoutDay count, and
+  // the count of COMPLETED Sessions in the block.
+  const [programs, identity] = await Promise.all([
+    caller.program.listMine({ includeArchived: false }),
+    caller.program.getIdentitySummary(),
+  ]);
 
   const ready = programs.filter((p) => p.activeVersionId !== null);
   const notReady = programs.filter((p) => p.activeVersionId === null);
+
+  // The anticipation cue belongs to whichever Program has an ACTIVE
+  // TrainingBlock — which is what identity.primaryProgram.currentBlock
+  // resolves to (findActiveTrainingBlockForProgram returns ACTIVE only).
+  // At MVP only one Program can have an ACTIVE block per user, so this is a
+  // single-card decoration, not a per-row fetch.
+  const cueProgramId = identity.primaryProgram?.currentBlock
+    ? identity.primaryProgram.id
+    : null;
+  const cueText =
+    identity.primaryProgram?.currentBlock?.anticipationCue.text ?? null;
 
   return (
     <main className={styles.page}>
@@ -64,6 +96,9 @@ export default async function TrainPage() {
             {ready.map((p) => (
               <li key={p.id} className={styles.programCard}>
                 <div className={styles.programName}>{p.name}</div>
+                {p.id === cueProgramId && cueText ? (
+                  <p className={styles.muted}>{cueText}</p>
+                ) : null}
                 <form action={startTrainingAction}>
                   <input type="hidden" name="programId" value={p.id} />
                   <button type="submit" className={styles.primaryButton}>
