@@ -85,7 +85,7 @@ export default async function DashboardPage() {
             />
 
             {primaryProgram.currentBlock ? (
-             <BlockStrip
+            <BlockStrip
   blockId={primaryProgram.currentBlock.id}
   status={primaryProgram.currentBlock.status}
   startedAt={primaryProgram.currentBlock.startedAt}

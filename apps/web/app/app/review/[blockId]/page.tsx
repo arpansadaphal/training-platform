@@ -98,19 +98,18 @@ export default async function ReviewPage({ params }: PageProps) {
         <Link href="/app">&larr; Dashboard</Link>
       </nav>
       <div className={styles.layout}>
-        <div className={styles.reviewColumn}>
+               <div className={styles.reviewColumn}>
           <ReviewClient data={clientData} />
-          // after <ReviewClient data={clientData} />
-{!review.isPartial && (
-  <div className={styles.reportLinkRow}>
-    <Link
-      href={`/app/blocks/${blockId}/report`}
-      className={styles.reportLink}
-    >
-      See the Block Report
-    </Link>
-  </div>
-)}
+          {!review.isPartial && (
+            <div className={styles.reportLinkRow}>
+              <Link
+                href={`/app/blocks/${blockId}/report`}
+                className={styles.reportLink}
+              >
+                See the Block Report
+              </Link>
+            </div>
+          )}
         </div>
         <aside className={styles.coachColumn}>
           <CoachPanel

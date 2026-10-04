@@ -121,7 +121,11 @@ test("Landing dashboard: primary program surfaces as the identity/progress conte
   await expect(
     page.getByRole("region", { name: "Lifetime stats" }),
   ).toBeVisible();
-  await expect(page.getByText("Sessions completed")).toBeVisible();
+  await expect(
+  page
+    .getByRole("region", { name: "Lifetime stats" })
+    .getByText("Sessions completed", { exact: true }),
+).toBeVisible();
 
   // A primary CTA is present, and it points at the training surface.
   // (Before any session exists, the CTA is "Start next session" — the
