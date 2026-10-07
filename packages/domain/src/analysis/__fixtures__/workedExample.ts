@@ -132,6 +132,11 @@ export const workedExampleConfig: GoalProfileConfig = {
   severityMap: WORKED_EXAMPLE_SEVERITY_MAP,
   severityWeightTable: WORKED_EXAMPLE_SEVERITY_WEIGHT_TABLE,
   materialitySeverityThreshold: "MODERATE",
+   strengthEligibleAxes: [
+    "VOLUME",
+    "EXERCISE_SELECTION_BALANCE",
+    "PROGRESSION_SOUNDNESS",
+  ],
   fitScoreProjection: {
     leverageOrdinal: ["NONE", "LOW", "MODERATE", "HIGH"],
     worstLeverageToBand: {

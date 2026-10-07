@@ -132,6 +132,15 @@ export const workedExampleConfig: GoalProfileConfig = {
   severityMap: WORKED_EXAMPLE_SEVERITY_MAP,
   severityWeightTable: WORKED_EXAMPLE_SEVERITY_WEIGHT_TABLE,
   materialitySeverityThreshold: "MODERATE",
+  // Phase 10.2 / E2. Back (VOLUME, severity NONE) must appear as a Strength,
+  // so VOLUME is eligible. The worked example does not exercise FREQUENCY or
+  // RECOVERY_COST as NONE-severity, so their eligibility is not asserted
+  // here — this list mirrors the shipped config's for consistency.
+  strengthEligibleAxes: [
+    "VOLUME",
+    "EXERCISE_SELECTION_BALANCE",
+    "PROGRESSION_SOUNDNESS",
+  ],
   fitScoreProjection: {
     leverageOrdinal: ["NONE", "LOW", "MODERATE", "HIGH"],
     worstLeverageToBand: {

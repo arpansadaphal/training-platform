@@ -203,6 +203,14 @@ export const HYPERTROPHY_CONFIG: GoalProfileConfig = {
   severityWeightTable: SEVERITY_WEIGHT_TABLE,
   // PROVISIONAL — not scientifically validated.
   materialitySeverityThreshold: "MODERATE",
+  // Phase 10.2 / E2: only these axes can be Strengths when severity is NONE.
+  // FREQUENCY ("once weekly is fine") and RECOVERY_COST ("low recovery cost")
+  // are excluded — neither is an achievement for a hypertrophy goal.
+  strengthEligibleAxes: [
+    "VOLUME",
+    "EXERCISE_SELECTION_BALANCE",
+    "PROGRESSION_SOUNDNESS",
+  ],
   fitScoreProjection: HYPERTROPHY_FIT_SCORE_PROJECTION,
   validated: false,
   sourceNote:

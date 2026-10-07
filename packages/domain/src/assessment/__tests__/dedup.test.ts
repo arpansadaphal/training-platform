@@ -53,6 +53,11 @@ const dedupConfig: GoalProfileConfig = {
     MAJOR: { LOW: "MODERATE", MEDIUM: "HIGH", HIGH: "HIGH" },
   },
   materialitySeverityThreshold: "MODERATE",
+   strengthEligibleAxes: [
+    "VOLUME",
+    "EXERCISE_SELECTION_BALANCE",
+    "PROGRESSION_SOUNDNESS",
+  ],
   fitScoreProjection: {
     leverageOrdinal: ["NONE", "LOW", "MODERATE", "HIGH"],
     worstLeverageToBand: {

@@ -113,6 +113,11 @@ export const TEST_CONFIG_ALL_NULL: GoalProfileConfig = {
   severityMap: TEST_SEVERITY_MAP,
   severityWeightTable: TEST_SEVERITY_WEIGHT_TABLE,
   materialitySeverityThreshold: "MODERATE",
+   strengthEligibleAxes: [
+    "VOLUME",
+    "EXERCISE_SELECTION_BALANCE",
+    "PROGRESSION_SOUNDNESS",
+  ],
   fitScoreProjection: TEST_FIT_SCORE_PROJECTION,
   validated: false,
   sourceNote: "TEST FIXTURE ONLY — all bounds deliberately null.",
@@ -155,6 +160,11 @@ export const TEST_CONFIG_BOUNDED: GoalProfileConfig = {
   severityMap: TEST_SEVERITY_MAP,
   severityWeightTable: TEST_SEVERITY_WEIGHT_TABLE,
   materialitySeverityThreshold: "MODERATE",
+   strengthEligibleAxes: [
+    "VOLUME",
+    "EXERCISE_SELECTION_BALANCE",
+    "PROGRESSION_SOUNDNESS",
+  ],
   fitScoreProjection: TEST_FIT_SCORE_PROJECTION,
   validated: false,
   sourceNote:
