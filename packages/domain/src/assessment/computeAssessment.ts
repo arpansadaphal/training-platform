@@ -13,8 +13,10 @@
 //      assessment on an unvalidated profile still carries the "provisional"
 //      signal via the union kind.
 //   3. Otherwise, classify:
-//        Strengths        = axes whose severity is NONE (in good status).
-//        BiggestOpportunity = argmax(leverage) among axes NOT in good status.
+//        Strengths        = axes whose severity is NONE AND whose axis type
+//                           is listed in `config.strengthEligibleAxes`.
+//        BiggestOpportunity = argmax(leverage) among axes NOT in good status,
+//                           EXCLUDING axes whose leverage is NONE (see E1).
 //        AttentionAreas   = other axes whose severity clears the profile's
 //                           materiality threshold, excluding the Biggest
 //                           Opportunity.
@@ -27,8 +29,25 @@
 //
 // No numeric thresholds. No weighted sums. Ordinal comparisons against
 // config-supplied enums only.
+//
+// Phase 10.2 fixes:
+//   E1 — Biggest Opportunity no longer selects an axis whose leverage is
+//        NONE. Previously the running rank started at -1, so the first
+//        not-good axis won even when its leverage was NONE (e.g. a MINOR
+//        severity on a LOW weight axis). Now such axes are excluded; if no
+//        not-good axis reaches LOW leverage, biggestOpportunity is null.
+//   E2 — Strengths no longer list every NONE-severity axis. FREQUENCY and
+//        RECOVERY_COST can be NONE ("once weekly is fine", "recovery cost
+//        is low") without being achievements for a hypertrophy goal. The
+//        config now supplies `strengthEligibleAxes`.
 
-import type { Analysis, GoalProfileConfig, Leverage, Severity } from "../analysis/types";
+import type {
+  Analysis,
+  AxisType,
+  GoalProfileConfig,
+  Leverage,
+  Severity,
+} from "../analysis/types";
 import { actionTemplateFor } from "./actionTemplates";
 import { rollUpLeverage } from "./rollup";
 import type {
@@ -88,22 +107,34 @@ function classifyAxes(
   assessedAxes: readonly AssessedAxis[],
   config: GoalProfileConfig,
 ): ClassifiedAxes {
-  // Strengths: axes in good status. "Good status" is `severity === NONE` —
-  // the axis is in-band and needs nothing. 06-assessment-engine.md also
-  // mentions "high-weight" axes here, but the worked-example fixture's Back
-  // axis is `severity NONE, weight LOW` and is a Strength, so the operative
-  // qualifier is status, not weight. Documented as a deliberate reading.
+  // Strengths (E2 fix): a NONE-severity axis is a Strength only if its axis
+  // type is listed in `strengthEligibleAxes`. FREQUENCY and RECOVERY_COST
+  // are deliberately excluded — "once-weekly frequency" and "low recovery
+  // cost" are not accomplishments for hypertrophy. Axes that are NONE but
+  // not eligible are dropped from both lists: not a Strength, not a
+  // problem. They remain visible in `allAssessedAxes` for the Fit Score.
+  const eligible = new Set<AxisType>(config.strengthEligibleAxes);
   const strengths: AssessedAxis[] = [];
   const notGood: AssessedAxis[] = [];
   for (const axis of assessedAxes) {
-    if (axis.severity === "NONE") strengths.push(axis);
-    else notGood.push(axis);
+    if (axis.severity === "NONE") {
+      if (eligible.has(axis.axisType)) strengths.push(axis);
+      // else: silently dropped — not a Strength, not a problem.
+    } else {
+      notGood.push(axis);
+    }
   }
 
-  // Biggest Opportunity: argmax(leverage) among axes NOT in good status.
-  // First-wins on ties, in the original axis order — deterministic.
+  // Biggest Opportunity (E1 fix): argmax(leverage) among axes NOT in good
+  // status, EXCLUDING axes whose leverage is NONE. Previously the running
+  // rank started at -1, so an axis whose leverage was NONE could win — a
+  // MINOR severity on a LOW weight axis maps to NONE in the leverage table,
+  // and that axis was being surfaced as the headline opportunity even
+  // though it carries no leverage. Now such axes cannot win; if no not-good
+  // axis reaches LOW leverage or higher, biggestOpportunity stays null.
+  // First-wins on ties, in original axis order — deterministic.
   let biggestOpportunity: AssessedAxis | null = null;
-  let biggestRank = -1;
+  let biggestRank = LEVERAGE_RANK["NONE"]; // 0 — excludes NONE-leverage axes
   for (const axis of notGood) {
     const r = LEVERAGE_RANK[axis.leverage];
     if (r > biggestRank) {
@@ -114,8 +145,7 @@ function classifyAxes(
 
   // Attention areas: remaining not-good axes whose severity clears the
   // profile's materiality threshold. The Biggest Opportunity is excluded —
-  // it is already surfaced under its own field (06 step 4 vs. step 6 in the
-  // worked example: Chest is Biggest Opportunity, Recovery is Attention).
+  // it is already surfaced under its own field.
   const materialityRank = SEVERITY_RANK[config.materialitySeverityThreshold];
   const attentionAreas = notGood.filter((axis) => {
     if (axis === biggestOpportunity) return false;

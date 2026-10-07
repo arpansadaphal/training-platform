@@ -237,6 +237,19 @@ export interface GoalProfileConfig {
    */
   materialitySeverityThreshold: Severity;
   /** Rule-based ordinal projection for Fit Score. See `FitScoreProjection`. */
+    /**
+   * Axes eligible to be listed as Strengths when their severity is NONE.
+   *
+   * Phase 10.2 / E2. Previously Strengths were every NONE-severity axis,
+   * which surfaced FREQUENCY and RECOVERY_COST as "strengths" (e.g. "once
+   * weekly is fine", "low recovery cost") — not accomplishments for a
+   * hypertrophy goal. This list makes the eligibility explicit and data-
+   * driven, mirroring the config-driven posture of the rest of the file.
+   *
+   * Deliverable from the Phase 10.2 audit (Claude's Section 22 E2).
+   * Existing tests that assumed all-NONE → all-Strengths must be updated.
+   */
+  readonly strengthEligibleAxes: readonly AxisType[];
   fitScoreProjection: FitScoreProjection;
   validated: boolean;
   sourceNote: string;
