@@ -36,7 +36,8 @@ const MUSCLE_GROUPS = [
 // ───────────────────── Exercises ─────────────────────
 //
 // Each entry: { name, movementPattern, equipment?, involvements: { muscle: factor } }
-// Involvement factors are 0..1, provisional, and not validated.
+// Involvement factors: 1.0 (primary mover), 0.5 (synergist), omitted = 0.
+// Content data, provisional, not validated — do not treat as scientific thresholds.
 
 interface SeedExercise {
   name: string;
@@ -47,280 +48,108 @@ interface SeedExercise {
 
 const EXERCISES: SeedExercise[] = [
   // SQUAT
-  {
-    name: "Back Squat",
-    movementPattern: "SQUAT",
-    equipment: "barbell",
-    involvements: { quads: 0.7, glutes: 0.6, hamstrings: 0.4, "lower back": 0.3, abs: 0.2, adductors: 0.2 } as Record<string, number>,
-  },
-  {
-    name: "Front Squat",
-    movementPattern: "SQUAT",
-    equipment: "barbell",
-    involvements: { quads: 0.8, glutes: 0.5, "lower back": 0.3, abs: 0.3 },
-  },
-  {
-    name: "Hack Squat",
-    movementPattern: "SQUAT",
-    equipment: "machine",
-    involvements: { quads: 0.8, glutes: 0.4, hamstrings: 0.3 },
-  },
-  {
-    name: "Leg Press",
-    movementPattern: "SQUAT",
-    equipment: "machine",
-    involvements: { quads: 0.7, glutes: 0.5, hamstrings: 0.3 },
-  },
+  { name: "Back Squat", movementPattern: "SQUAT", equipment: "barbell",
+    involvements: { quads: 1.0, glutes: 0.5 } },
+  { name: "Front Squat", movementPattern: "SQUAT", equipment: "barbell",
+    involvements: { quads: 1.0, glutes: 0.5 } },
+  { name: "Hack Squat", movementPattern: "SQUAT", equipment: "machine",
+    involvements: { quads: 1.0, glutes: 0.5 } },
+  { name: "Leg Press", movementPattern: "SQUAT", equipment: "machine",
+    involvements: { quads: 1.0, glutes: 0.5 } },
 
   // HINGE
-  {
-    name: "Conventional Deadlift",
-    movementPattern: "HINGE",
-    equipment: "barbell",
-    involvements: { hamstrings: 0.7, glutes: 0.7, "lower back": 0.6, traps: 0.4, lats: 0.3, forearms: 0.3, abs: 0.3 },
-  },
-  {
-    name: "Romanian Deadlift",
-    movementPattern: "HINGE",
-    equipment: "barbell",
-    involvements: { hamstrings: 0.8, glutes: 0.6, "lower back": 0.4, forearms: 0.3 },
-  },
-  {
-    name: "Sumo Deadlift",
-    movementPattern: "HINGE",
-    equipment: "barbell",
-    involvements: { glutes: 0.7, hamstrings: 0.5, quads: 0.5, "lower back": 0.4, traps: 0.3 },
-  },
-  {
-    name: "Hip Thrust",
-    movementPattern: "HINGE",
-    equipment: "barbell",
-    involvements: { glutes: 0.9, hamstrings: 0.4 },
-  },
-  {
-    name: "Good Morning",
-    movementPattern: "HINGE",
-    equipment: "barbell",
-    involvements: { hamstrings: 0.6, glutes: 0.5, "lower back": 0.5 },
-  },
+  { name: "Conventional Deadlift", movementPattern: "HINGE", equipment: "barbell",
+    involvements: { glutes: 1.0, hamstrings: 0.5 } },
+  { name: "Romanian Deadlift", movementPattern: "HINGE", equipment: "barbell",
+    involvements: { hamstrings: 1.0, glutes: 0.5 } },
+  { name: "Sumo Deadlift", movementPattern: "HINGE", equipment: "barbell",
+    involvements: { glutes: 1.0, hamstrings: 0.5, quads: 0.5 } },
+  { name: "Hip Thrust", movementPattern: "HINGE", equipment: "barbell",
+    involvements: { glutes: 1.0, hamstrings: 0.5 } },
+  { name: "Good Morning", movementPattern: "HINGE", equipment: "barbell",
+    involvements: { hamstrings: 1.0, glutes: 0.5 } },
 
   // HORIZONTAL_PUSH
-  {
-    name: "Barbell Bench Press",
-    movementPattern: "HORIZONTAL_PUSH",
-    equipment: "barbell",
-    involvements: { chest: 0.7, "front delts": 0.4, triceps: 0.4 },
-  },
-  {
-    name: "Dumbbell Bench Press",
-    movementPattern: "HORIZONTAL_PUSH",
-    equipment: "dumbbell",
-    involvements: { chest: 0.7, "front delts": 0.4, triceps: 0.4 },
-  },
-  {
-    name: "Incline Barbell Bench Press",
-    movementPattern: "HORIZONTAL_PUSH",
-    equipment: "barbell",
-    involvements: { chest: 0.6, "front delts": 0.6, triceps: 0.4 },
-  },
-  {
-    name: "Push-Up",
-    movementPattern: "HORIZONTAL_PUSH",
-    equipment: "bodyweight",
-    involvements: { chest: 0.6, "front delts": 0.3, triceps: 0.3, abs: 0.2 },
-  },
-  {
-    name: "Cable Chest Fly",
-    movementPattern: "HORIZONTAL_PUSH",
-    equipment: "cable",
-    involvements: { chest: 0.8, "front delts": 0.2 },
-  },
+  { name: "Barbell Bench Press", movementPattern: "HORIZONTAL_PUSH", equipment: "barbell",
+    involvements: { chest: 1.0, "front delts": 0.5, triceps: 0.5 } },
+  { name: "Dumbbell Bench Press", movementPattern: "HORIZONTAL_PUSH", equipment: "dumbbell",
+    involvements: { chest: 1.0, "front delts": 0.5, triceps: 0.5 } },
+  { name: "Incline Barbell Bench Press", movementPattern: "HORIZONTAL_PUSH", equipment: "barbell",
+    involvements: { chest: 1.0, "front delts": 0.5, triceps: 0.5 } },
+  { name: "Push-Up", movementPattern: "HORIZONTAL_PUSH", equipment: "bodyweight",
+    involvements: { chest: 1.0, "front delts": 0.5, triceps: 0.5 } },
+  { name: "Cable Chest Fly", movementPattern: "HORIZONTAL_PUSH", equipment: "cable",
+    involvements: { chest: 1.0 } },
 
   // VERTICAL_PUSH
-  {
-    name: "Overhead Press",
-    movementPattern: "VERTICAL_PUSH",
-    equipment: "barbell",
-    involvements: { "front delts": 0.7, "side delts": 0.4, triceps: 0.4, abs: 0.2 },
-  },
-  {
-    name: "Dumbbell Shoulder Press",
-    movementPattern: "VERTICAL_PUSH",
-    equipment: "dumbbell",
-    involvements: { "front delts": 0.7, "side delts": 0.4, triceps: 0.4 },
-  },
-  {
-    name: "Arnold Press",
-    movementPattern: "VERTICAL_PUSH",
-    equipment: "dumbbell",
-    involvements: { "front delts": 0.7, "side delts": 0.5, triceps: 0.3 },
-  },
-  {
-    name: "Machine Shoulder Press",
-    movementPattern: "VERTICAL_PUSH",
-    equipment: "machine",
-    involvements: { "front delts": 0.7, "side delts": 0.3, triceps: 0.4 },
-  },
+  { name: "Overhead Press", movementPattern: "VERTICAL_PUSH", equipment: "barbell",
+    involvements: { "front delts": 1.0, "side delts": 0.5, triceps: 0.5 } },
+  { name: "Dumbbell Shoulder Press", movementPattern: "VERTICAL_PUSH", equipment: "dumbbell",
+    involvements: { "front delts": 1.0, "side delts": 0.5, triceps: 0.5 } },
+  { name: "Arnold Press", movementPattern: "VERTICAL_PUSH", equipment: "dumbbell",
+    involvements: { "front delts": 1.0, "side delts": 0.5, triceps: 0.5 } },
+  { name: "Machine Shoulder Press", movementPattern: "VERTICAL_PUSH", equipment: "machine",
+    involvements: { "front delts": 1.0, "side delts": 0.5, triceps: 0.5 } },
 
   // HORIZONTAL_PULL
-  {
-    name: "Barbell Row",
-    movementPattern: "HORIZONTAL_PULL",
-    equipment: "barbell",
-    involvements: { lats: 0.6, "upper back": 0.6, biceps: 0.4, "rear delts": 0.4, "lower back": 0.3 },
-  },
-  {
-    name: "Dumbbell Row",
-    movementPattern: "HORIZONTAL_PULL",
-    equipment: "dumbbell",
-    involvements: { lats: 0.6, "upper back": 0.5, biceps: 0.4, "rear delts": 0.3 },
-  },
-  {
-    name: "Seated Cable Row",
-    movementPattern: "HORIZONTAL_PULL",
-    equipment: "cable",
-    involvements: { lats: 0.6, "upper back": 0.6, biceps: 0.3, "rear delts": 0.3 },
-  },
-  {
-    name: "Chest-Supported Row",
-    movementPattern: "HORIZONTAL_PULL",
-    equipment: "machine",
-    involvements: { lats: 0.6, "upper back": 0.6, biceps: 0.3, "rear delts": 0.3 },
-  },
-  {
-    name: "T-Bar Row",
-    movementPattern: "HORIZONTAL_PULL",
-    equipment: "barbell",
-    involvements: { lats: 0.6, "upper back": 0.6, biceps: 0.4, "rear delts": 0.3 },
-  },
+  { name: "Barbell Row", movementPattern: "HORIZONTAL_PULL", equipment: "barbell",
+    involvements: { lats: 1.0, "upper back": 0.5, biceps: 0.5, "rear delts": 0.5 } },
+  { name: "Dumbbell Row", movementPattern: "HORIZONTAL_PULL", equipment: "dumbbell",
+    involvements: { lats: 1.0, "upper back": 0.5, biceps: 0.5, "rear delts": 0.5 } },
+  { name: "Seated Cable Row", movementPattern: "HORIZONTAL_PULL", equipment: "cable",
+    involvements: { lats: 1.0, "upper back": 0.5, biceps: 0.5, "rear delts": 0.5 } },
+  { name: "Chest-Supported Row", movementPattern: "HORIZONTAL_PULL", equipment: "machine",
+    involvements: { lats: 1.0, "upper back": 0.5, biceps: 0.5, "rear delts": 0.5 } },
+  { name: "T-Bar Row", movementPattern: "HORIZONTAL_PULL", equipment: "barbell",
+    involvements: { lats: 1.0, "upper back": 0.5, biceps: 0.5, "rear delts": 0.5 } },
 
   // VERTICAL_PULL
-  {
-    name: "Pull-Up",
-    movementPattern: "VERTICAL_PULL",
-    equipment: "bodyweight",
-    involvements: { lats: 0.8, "upper back": 0.5, biceps: 0.4, forearms: 0.3, abs: 0.2 },
-  },
-  {
-    name: "Chin-Up",
-    movementPattern: "VERTICAL_PULL",
-    equipment: "bodyweight",
-    involvements: { lats: 0.7, biceps: 0.6, "upper back": 0.4, forearms: 0.3 },
-  },
-  {
-    name: "Lat Pulldown",
-    movementPattern: "VERTICAL_PULL",
-    equipment: "cable",
-    involvements: { lats: 0.7, "upper back": 0.4, biceps: 0.4 },
-  },
-  {
-    name: "Straight-Arm Pulldown",
-    movementPattern: "VERTICAL_PULL",
-    equipment: "cable",
-    involvements: { lats: 0.8, "upper back": 0.3 },
-  },
+  { name: "Pull-Up", movementPattern: "VERTICAL_PULL", equipment: "bodyweight",
+    involvements: { lats: 1.0, "upper back": 0.5, biceps: 0.5 } },
+  { name: "Chin-Up", movementPattern: "VERTICAL_PULL", equipment: "bodyweight",
+    involvements: { lats: 1.0, biceps: 0.5, "upper back": 0.5 } },
+  { name: "Lat Pulldown", movementPattern: "VERTICAL_PULL", equipment: "cable",
+    involvements: { lats: 1.0, "upper back": 0.5, biceps: 0.5 } },
+  { name: "Straight-Arm Pulldown", movementPattern: "VERTICAL_PULL", equipment: "cable",
+    involvements: { lats: 1.0 } },
 
   // CARRY
-  {
-    name: "Farmer's Carry",
-    movementPattern: "CARRY",
-    equipment: "dumbbell",
-    involvements: { forearms: 0.7, traps: 0.5, abs: 0.5, obliques: 0.4 },
-  },
-  {
-    name: "Suitcase Carry",
-    movementPattern: "CARRY",
-    equipment: "dumbbell",
-    involvements: { forearms: 0.6, obliques: 0.6, abs: 0.4 },
-  },
-  {
-    name: "Overhead Carry",
-    movementPattern: "CARRY",
-    equipment: "dumbbell",
-    involvements: { "front delts": 0.5, "side delts": 0.5, abs: 0.5, triceps: 0.3 },
-  },
+  { name: "Farmer's Carry", movementPattern: "CARRY", equipment: "dumbbell",
+    involvements: { forearms: 1.0, traps: 0.5 } },
+  { name: "Suitcase Carry", movementPattern: "CARRY", equipment: "dumbbell",
+    involvements: { forearms: 1.0, obliques: 1.0 } },
+  { name: "Overhead Carry", movementPattern: "CARRY", equipment: "dumbbell",
+    involvements: {} },
 
   // ISOLATION
-  {
-    name: "Barbell Curl",
-    movementPattern: "ISOLATION",
-    equipment: "barbell",
-    involvements: { biceps: 0.9, forearms: 0.4 },
-  },
-  {
-    name: "Hammer Curl",
-    movementPattern: "ISOLATION",
-    equipment: "dumbbell",
-    involvements: { biceps: 0.8, forearms: 0.6 },
-  },
-  {
-    name: "Tricep Pushdown",
-    movementPattern: "ISOLATION",
-    equipment: "cable",
-    involvements: { triceps: 0.9 },
-  },
-  {
-    name: "Overhead Tricep Extension",
-    movementPattern: "ISOLATION",
-    equipment: "cable",
-    involvements: { triceps: 0.9 },
-  },
-  {
-    name: "Lateral Raise",
-    movementPattern: "ISOLATION",
-    equipment: "dumbbell",
-    involvements: { "side delts": 0.9 },
-  },
-  {
-    name: "Rear Delt Fly",
-    movementPattern: "ISOLATION",
-    equipment: "dumbbell",
-    involvements: { "rear delts": 0.8, "upper back": 0.3 },
-  },
-  {
-    name: "Leg Curl",
-    movementPattern: "ISOLATION",
-    equipment: "machine",
-    involvements: { hamstrings: 0.9 },
-  },
-  {
-    name: "Leg Extension",
-    movementPattern: "ISOLATION",
-    equipment: "machine",
-    involvements: { quads: 0.9 },
-  },
-  {
-    name: "Standing Calf Raise",
-    movementPattern: "ISOLATION",
-    equipment: "machine",
-    involvements: { calves: 0.9 },
-  },
-  {
-    name: "Cable Crunch",
-    movementPattern: "ISOLATION",
-    equipment: "cable",
-    involvements: { abs: 0.8, obliques: 0.3 },
-  },
-  {
-    name: "Plank",
-    movementPattern: "ISOLATION",
-    equipment: "bodyweight",
-    involvements: { abs: 0.7, obliques: 0.5, "lower back": 0.2 },
-  },
+  { name: "Barbell Curl", movementPattern: "ISOLATION", equipment: "barbell",
+    involvements: { biceps: 1.0 } },
+  { name: "Hammer Curl", movementPattern: "ISOLATION", equipment: "dumbbell",
+    involvements: { biceps: 1.0, forearms: 0.5 } },
+  { name: "Tricep Pushdown", movementPattern: "ISOLATION", equipment: "cable",
+    involvements: { triceps: 1.0 } },
+  { name: "Overhead Tricep Extension", movementPattern: "ISOLATION", equipment: "cable",
+    involvements: { triceps: 1.0 } },
+  { name: "Lateral Raise", movementPattern: "ISOLATION", equipment: "dumbbell",
+    involvements: { "side delts": 1.0 } },
+  { name: "Rear Delt Fly", movementPattern: "ISOLATION", equipment: "dumbbell",
+    involvements: { "rear delts": 1.0, "upper back": 0.5 } },
+  { name: "Leg Curl", movementPattern: "ISOLATION", equipment: "machine",
+    involvements: { hamstrings: 1.0 } },
+  { name: "Leg Extension", movementPattern: "ISOLATION", equipment: "machine",
+    involvements: { quads: 1.0 } },
+  { name: "Standing Calf Raise", movementPattern: "ISOLATION", equipment: "machine",
+    involvements: { calves: 1.0 } },
+  { name: "Cable Crunch", movementPattern: "ISOLATION", equipment: "cable",
+    involvements: { abs: 1.0 } },
+  { name: "Plank", movementPattern: "ISOLATION", equipment: "bodyweight",
+    involvements: { abs: 1.0, obliques: 0.5 } },
 
-  // OTHER — a couple for coverage
-  {
-    name: "Face Pull",
-    movementPattern: "OTHER",
-    equipment: "cable",
-    involvements: { "rear delts": 0.7, "upper back": 0.5, traps: 0.3 },
-  },
-  {
-    name: "Shrug",
-    movementPattern: "OTHER",
-    equipment: "dumbbell",
-    involvements: { traps: 0.9, forearms: 0.3 },
-  },
+  // OTHER
+  { name: "Face Pull", movementPattern: "OTHER", equipment: "cable",
+    involvements: { "rear delts": 1.0, "upper back": 0.5 } },
+  { name: "Shrug", movementPattern: "OTHER", equipment: "dumbbell",
+    involvements: { traps: 1.0 } },
 ];
 
 // ───────────────────── Main ─────────────────────
@@ -358,6 +187,13 @@ async function main() {
     }
 
     // Involvements — upsert by composite id
+       // Involvements — upsert the new list, then delete anything no longer listed.
+    //
+    // The deleteMany pass is load-bearing. Without it, an exercise whose
+    // involvement list shrinks (e.g. Back Squat losing its hamstrings/lower
+    // back/abs/adductors credits) keeps the old rows forever — upsert cannot
+    // remove them, only update or insert.
+    const newMuscleIds: string[] = [];
     for (const [muscleName, factor] of Object.entries(ex.involvements)) {
       const muscleId = muscleByName.get(muscleName);
       if (!muscleId) {
@@ -366,6 +202,8 @@ async function main() {
           `Seed exercise "${ex.name}" references unknown muscle group "${muscleName}"`,
         );
       }
+      newMuscleIds.push(muscleId);
+
       await prisma.exerciseMuscleInvolvement.upsert({
         where: {
           exerciseId_muscleGroupId: {
@@ -381,6 +219,15 @@ async function main() {
         },
       });
     }
+
+    // Delete involvements no longer in the new mapping. For Overhead Carry
+    // (empty involvements), notIn: [] deletes every prior row — intended.
+    await prisma.exerciseMuscleInvolvement.deleteMany({
+      where: {
+        exerciseId: existing.id,
+        muscleGroupId: { notIn: newMuscleIds },
+      },
+    });
   }
   console.log(`  ✓ ${EXERCISES.length} exercises (${exerciseCount} newly created)`);
 

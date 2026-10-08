@@ -33,6 +33,7 @@ export type { SimulateOptions } from "./mutation/simulate";
 export { diffAssessments } from "./mutation/diff-assessments";
 export type { AssessmentDiff } from "./mutation/diff-assessments";
 export { diffStructures } from "./mutation/diff-structures";
+export { scopeReferenceDataToGoal } from "./reference/scopeReferenceData";
 
 // ── Base domain types ───────────────────────────────────────────────────────
 

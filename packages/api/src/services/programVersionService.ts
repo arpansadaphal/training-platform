@@ -225,9 +225,7 @@ export async function commitFromMutation(
     throw err;
   }
 
-  // ── Load reference data + goal profile config ──────────────────────────
-  const referenceData = await loadExerciseReferenceData();
-
+    // ── Load goal profile config (needed to scope reference data) ──────────
   if (!program.currentGoalId) {
     throw new Error(
       `Program ${programId} has no currentGoalId — createMyProgram should have set one`,
@@ -247,6 +245,11 @@ export async function commitFromMutation(
   }
   const profileDefinition = goalProfileRegistry.get(profileRow.key);
   const config = profileDefinition.loadConfig();
+
+  // ── Load reference data, scoped to the goal ────────────────────────────
+  const referenceData = await loadExerciseReferenceData({
+    goalProfileKey: config.goalProfileKey,
+  });
 
   // ── Deterministic engine ───────────────────────────────────────────────
   const analysis = computeAnalysis(nextStructure, referenceData, config);

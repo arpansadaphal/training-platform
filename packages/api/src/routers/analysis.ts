@@ -70,7 +70,9 @@ export const analysisRouter = router({
       }
       const config = goalProfileRegistry.get(profileRow.key).loadConfig();
 
-      const referenceData = await loadExerciseReferenceData();
+      const referenceData = await loadExerciseReferenceData({
+  goalProfileKey: config.goalProfileKey,
+});
       const structure = draft.structure as ProgramStructure;
 
       const analysis = computeAnalysis(structure, referenceData, config);

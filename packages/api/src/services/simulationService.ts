@@ -154,7 +154,9 @@ export async function simulateAndPersist(
   const profileDefinition = goalProfileRegistry.get(profileRow.key);
   const config = profileDefinition.loadConfig();
 
-  const referenceData = await loadExerciseReferenceData();
+  const referenceData = await loadExerciseReferenceData({
+  goalProfileKey: config.goalProfileKey,
+});
   const baseStructure = baseVersion.structureSnapshot as ProgramStructure;
 
   const result = simulate(baseStructure, mutation, config, referenceData, {
