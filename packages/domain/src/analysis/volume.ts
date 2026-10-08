@@ -11,6 +11,15 @@
 // week (a microcycle). The source documents do not describe multi-week
 // structures; if that ever changes, this assumption — and only this
 // assumption — is what to revisit.
+//
+// Phase 10.2 / E14 (partially resolved): `scopeKey` on the axis result is
+// the muscle-group NAME, not its id. Names are @unique and stable across
+// environments; cuids are not, and they leaked into every user-facing
+// surface (strengths cards, action descriptions, root cause keys, the
+// overall summary). The internal involvement lookup still keys on
+// muscleGroup.id — only the outward-facing scopeKey uses the name. This
+// also makes the scoped-weight key format (`VOLUME:chest`) match what a
+// config author would naturally write.
 
 import type { ProgramStructure } from "../types";
 import type {
@@ -55,7 +64,7 @@ export function computeVolumeAxis(
 
     results.push({
       axisType: "VOLUME",
-      scopeKey: muscleGroup.id,
+      scopeKey: muscleGroup.name,
       metricValue: totalWeeklySets,
       status: resolveBand(totalWeeklySets, bands),
     });

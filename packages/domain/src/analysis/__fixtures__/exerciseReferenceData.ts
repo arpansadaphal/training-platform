@@ -8,12 +8,12 @@
 import type { ExerciseReferenceData } from "../types";
 
 export const testReferenceData: ExerciseReferenceData = {
-  muscleGroups: [
-    { id: "chest", name: "Chest" },
-    { id: "back", name: "Back" },
-    { id: "quads", name: "Quads" },
-    { id: "hamstrings", name: "Hamstrings" },
-    { id: "shoulders", name: "Shoulders" },
+   muscleGroups: [
+    { id: "chest",     name: "chest" },
+    { id: "back",      name: "back" },
+    { id: "hamstrings", name: "hamstrings" },
+    { id: "quads",     name: "quads" },
+    { id: "shoulders", name: "shoulders" },
   ],
   exercises: [
     { id: "bench", name: "Bench Press", movementPattern: "HORIZONTAL_PUSH", equipment: "barbell" },

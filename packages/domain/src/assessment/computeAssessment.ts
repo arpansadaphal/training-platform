@@ -143,14 +143,41 @@ function classifyAxes(
     }
   }
 
-  // Attention areas: remaining not-good axes whose severity clears the
+    // Attention areas: remaining not-good axes whose severity clears the
   // profile's materiality threshold. The Biggest Opportunity is excluded —
   // it is already surfaced under its own field.
+  //
+  // Phase 10.2 dedup: two axes that map to the same action root cause
+  // (e.g. VOLUME:chest and FREQUENCY:chest both → volume:add-chest) are
+  // ONE problem, not two. A muscle at zero weekly sets is also at zero
+  // weekly sessions, and surfacing it twice inflates the attention list
+  // without adding information. This applies the same root-cause dedup
+  // that the actions list below already uses.
+  //
+  // The seen set is seeded with the biggest opportunity's root cause so a
+  // duplicate FREQUENCY finding for the biggest-opportunity muscle does not
+  // appear alongside the VOLUME finding that is the headline.
   const materialityRank = SEVERITY_RANK[config.materialitySeverityThreshold];
-  const attentionAreas = notGood.filter((axis) => {
+  const attentionCandidates = notGood.filter((axis) => {
     if (axis === biggestOpportunity) return false;
     return SEVERITY_RANK[axis.severity] >= materialityRank;
   });
+
+  const seenRootCauses = new Set<string>();
+  if (biggestOpportunity) {
+    const t = actionTemplateFor(biggestOpportunity, config.goalProfileKey);
+    if (t) seenRootCauses.add(t.rootCauseKey);
+  }
+
+  const attentionAreas: AssessedAxis[] = [];
+  for (const axis of attentionCandidates) {
+    const template = actionTemplateFor(axis, config.goalProfileKey);
+    const key =
+      template?.rootCauseKey ?? `${axis.axisType}:${axis.scopeKey ?? ""}`;
+    if (seenRootCauses.has(key)) continue;
+    seenRootCauses.add(key);
+    attentionAreas.push(axis);
+  }
 
   // Actions: one per surfaced axis (biggest opportunity first, then
   // attention areas), deduplicated by rootCauseKey. Ordering the biggest

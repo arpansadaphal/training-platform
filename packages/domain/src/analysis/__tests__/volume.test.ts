@@ -18,9 +18,9 @@ describe("computeVolumeAxis", () => {
       testReferenceData,
       TEST_CONFIG_BOUNDED,
     );
-    expect(results.map((r) => r.scopeKey).sort()).toEqual(
-      testReferenceData.muscleGroups.map((m) => m.id).sort(),
-    );
+ expect(results.map((r) => r.scopeKey).sort()).toEqual(
+  testReferenceData.muscleGroups.map((m) => m.name).sort(),
+);
     for (const r of results) expect(r.axisType).toBe("VOLUME");
   });
 
