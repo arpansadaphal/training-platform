@@ -249,10 +249,10 @@ export async function recomputeAssessment(
   // "what would the current config say about this same design + goal" — not
   // "what would it say about a possibly-different goal". The Program's
   // currentGoalId is deliberately not consulted.
-  const [referenceData, config] = await Promise.all([
-    loadExerciseReferenceData(),
-    loadGoalProfileConfigForGoal(snapshot.goalId),
-  ]);
+    const config = await loadGoalProfileConfigForGoal(snapshot.goalId);
+  const referenceData = await loadExerciseReferenceData({
+    goalProfileKey: config.goalProfileKey,
+  });
 
   const structure = version.structureSnapshot as ProgramStructure;
 

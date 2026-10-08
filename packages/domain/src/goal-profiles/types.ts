@@ -21,3 +21,24 @@ export interface GoalProfileRegistry {
   get(key: string): GoalProfileDefinition;
   list(): readonly GoalProfileDefinition[];
 }
+
+export interface GoalProfileDefinition {
+  key: string;
+  relevantAxes: readonly AxisType[];
+  /**
+   * Muscle-group names (matching MuscleGroup.name) that this goal treats as
+   * in-scope. The reference-data loader filters
+   * ExerciseReferenceData.muscleGroups to exactly these names before the
+   * Analysis engine sees it — see scopeReferenceDataToGoal.
+   *
+   * Names, not ids: MuscleGroup.id is a cuid, unstable across environments;
+   * name is @unique and stable.
+   *
+   * Phase 10.2 / E3. Non-goal muscle groups read Low under the current
+   * volume rules and drive a bogus NEEDS_WORK. Interim fix: scope them out.
+   * Long-term fix: scoped N/A bands keep the metric visible without
+   * judging it.
+   */
+  relevantMuscleGroups: readonly string[];
+  loadConfig(): GoalProfileConfig;
+}

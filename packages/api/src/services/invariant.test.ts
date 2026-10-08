@@ -60,6 +60,7 @@ import {
 } from "./programVersionService";
 import { simulateAndPersist } from "./simulationService";
 import { loadExerciseReferenceData } from "./referenceDataService";
+import { config } from "zod/v4/mini";
 
 afterEach(cleanupTrackedUsers);
 
@@ -162,7 +163,9 @@ describe("Phase 5 invariant — simulate and commit share applyMutation", () => 
       "reloaded version",
     );
     const reloadedStructure = reloaded.structureSnapshot as ProgramStructure;
-    const refData = await loadExerciseReferenceData();
+      const refData = await loadExerciseReferenceData({
+      goalProfileKey: HYPERTROPHY_CONFIG.goalProfileKey,
+    });
     const recomputedAnalysis = computeAnalysis(
       reloadedStructure,
       refData,

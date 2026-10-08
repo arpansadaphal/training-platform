@@ -1,20 +1,24 @@
 // packages/domain/src/mutation/__tests__/cannot-compute.test.ts
 //
-// The Phase-5 equivalent of Phase 4's ARCH-032: the shipped HYPERTROPHY_CONFIG
-// has all-null thresholds and null axis weights (ARCH-029 / ARCH-031), so
-// both base and mutated assessments come back UNVALIDATED and Gain/Cost/Net
-// is genuinely not computable.
+// Phase 10.2 update: the shipped HYPERTROPHY_CONFIG now has populated band
+// bounds and populated axis weights (candidate values, all Tier 2-4). The
+// classification gate is no longer "weights are null" — it's
+// `validated: false`.
 //
-// The phase file's acceptance criterion — "Gain/Cost/Net are correct" — cannot
-// be met against the shipped config without inventing numeric thresholds,
-// which the Final Freeze §36 forbids. Rewriting the criterion to assert the
-// honest CANNOT_COMPUTE state is the same move Phase 4 made for its E2E test:
-// assert what the product actually does today, not what it will do once the
-// thresholds are signed off. Logged as ARCH-036 at Phase 5 close-out.
+// `computeAssessment` returns UNVALIDATED and `simulate` returns
+// CANNOT_COMPUTE with reason "ASSESSMENT_UNVALIDATED" whenever the profile's
+// `validated` flag is false, regardless of whether the bands and weights are
+// populated. This is the correct behaviour: a fully-populated but
+// not-yet-signed-off config must not produce a Gain/Cost/Net payload.
 //
-// Any future phase that ships a validated HYPERTROPHY_CONFIG must EXTEND this
-// file — keeping the CANNOT_COMPUTE assertions for any goal profile that is
-// not validated — not delete it.
+// This suite's contract is now:
+//   profile is unvalidated → engine refuses to produce Gain/Cost/Net →
+//   the discriminated union's CANNOT_COMPUTE branch is exhaustive and safe.
+//
+// Any future phase that ships a validated HYPERTROPHY_CONFIG must EXTEND
+// this file — adding VALIDATED-path tests alongside — not delete it. The
+// CANNOT_COMPUTE assertions must remain for any goal profile that is not
+// validated.
 
 import { describe, it, expect } from "vitest";
 import {
@@ -71,9 +75,15 @@ describe("CANNOT_COMPUTE — the shipped HYPERTROPHY_CONFIG is unvalidated", () 
     expect(HYPERTROPHY_CONFIG.validated).toBe(false);
   });
 
-  it("every axis weight in HYPERTROPHY_CONFIG is null", () => {
+  it("every axis weight is populated (candidate values, not null)", () => {
+    // Phase 10.2: the candidate config landed with all axis weights set.
+    // This test now guards against accidentally reverting to the pre-Phase-10.2
+    // shape — if any weight is null, the roll-up would block on null-weight
+    // grounds rather than on the `validated: false` gate. Both paths return
+    // CANNOT_COMPUTE, so the existing assertion below would still pass; this
+    // test pins which path is taken.
     for (const [key, value] of Object.entries(HYPERTROPHY_CONFIG.axisWeights)) {
-      expect(value.weight, `axisWeights["${key}"].weight`).toBeNull();
+      expect(value.weight, `axisWeights["${key}"].weight`).not.toBeNull();
     }
   });
 
@@ -180,6 +190,5 @@ describe("CANNOT_COMPUTE — the union exposes no fabricated quantitative payloa
     expect(result).not.toHaveProperty("net");
     expect(result).not.toHaveProperty("whatChanged");
     expect(result).not.toHaveProperty("mutatedStructure");
-    
   });
 });

@@ -17,4 +17,4 @@
  * REQUIRED] per 00-product-freeze-reference.md). 1.0.0 lands when a validated
  * GoalProfileDefinition ships.
  */
-export const ASSESSMENT_ENGINE_VERSION = "0.1.0" as const;
+export const ASSESSMENT_ENGINE_VERSION = "0.2.0" as const;

@@ -1,19 +1,27 @@
 // packages/domain/src/goal-profiles/hypertrophy.ts
 //
-// HYPERTROPHY goal profile — Phase 3.
+// HYPERTROPHY goal profile — CANDIDATE configuration. validated: false.
 //
-// *** ALL CELL CONTENTS BELOW ARE PROVISIONAL ***
+// EVIDENCE TIERS used in the comments below
+//   Tier 1  direct research (RCTs / meta-analyses / consensus statements)
+//   Tier 2  research-informed synthesis (an engine boundary derived from several findings)
+//   Tier 3  expert / coaching heuristic
+//   Tier 4  engine-derived model parameter (a product decision, NOT a scientific measurement)
+// Every cutpoint below is an ENGINE BOUNDARY, never a biological threshold.
 //
-// The *shapes* of `axisWeights`, `severityMap`, `severityWeightTable`, and
-// `fitScoreProjection` are finalized here. Their *contents* are illustrative
-// placeholders chosen so the Final Freeze's worked example
-// (phases/phase-03-assessment-engine.md) passes end-to-end, pending
-// sports-science sign-off. No cell below should be read as a scientifically
-// validated value.
+// PRECONDITIONS — these numbers are only meaningful when ALL of the following hold:
+//   (E13) packages/db seed: ExerciseMuscleInvolvement.involvementFactor uses the evidence
+//         convention 1.0 = primary force generator, 0.5 = synergist, 0 = none
+//         (Pelland et al., Sports Med 2026).
+//   (E3)  The muscle groups passed to computeAnalysis are limited to goal-relevant groups
+//         via scopeReferenceDataToGoal.
+//   (E14) Scoped keys such as "VOLUME:<muscleGroupId>" cannot be added until muscle groups
+//         have a stable key: MuscleGroup.id is a cuid (environment-specific); only .name is
+//         stable.
+//   (E15) Decide whether runtime reads this file or the GoalProfileDefinition DB row.
 //
-// This file must NOT be edited to contain validated numbers without explicit
-// sports-science sign-off and a DECISIONS.md entry. See ARCH-029 and
-// 06-assessment-engine.md.
+// This file must NOT be edited to set validated: true without explicit sports-science
+// sign-off and a DECISIONS.md entry. Bump ASSESSMENT_ENGINE_VERSION when this lands.
 
 import type {
   AxisBandDefinition,
@@ -26,100 +34,90 @@ import type {
 import type { GoalProfileDefinition } from "./types";
 
 // ---------------------------------------------------------------------------
-// Status bands — unchanged from Phase 2. Every bound is null.
+// Status bands — half-open [lowerBound, upperBound); null = unbounded.
 // ---------------------------------------------------------------------------
 
-// Every band has `lowerBound: null, upperBound: null`, which `resolveBand`
-// treats as a placeholder and returns UNVALIDATED for. Preserved from Phase 2
-// unchanged: the band *names* are load-bearing for the severity map below.
+// VOLUME. Unit: fractional hard sets per muscle per week (sum of targetSets x involvementFactor).
+// Assumes direct = 1.0 / synergist = 0.5 seeding (E13).
 const VOLUME_BANDS: AxisBandDefinition[] = [
-  { status: "Low", lowerBound: null, upperBound: null },
-  { status: "Adequate", lowerBound: null, upperBound: null },
-  { status: "High", lowerBound: null, upperBound: null },
-  { status: "Excessive", lowerBound: null, upperBound: null },
+  // Tier 2. Below 6: under the range where growth is reliable for a trained lifter.
+  { status: "Low", lowerBound: null, upperBound: 6 },
+  // Tier 2. Adequate = 6 up to 20. Target band 10-16 is action-copy only, not encoded here.
+  { status: "Adequate", lowerBound: 6, upperBound: 20 },
+  // Tier 2. 20-30: diminishing returns but stay positive. Information, not a defect.
+  { status: "High", lowerBound: 20, upperBound: 30 },
+  // Tier 3. >=30: edge of the well-characterised range. NOT a harm threshold.
+  { status: "Excessive", lowerBound: 30, upperBound: null },
+  // Placeholder — real N/A scoping arrives with E3's scoped bands.
   { status: "N/A", lowerBound: null, upperBound: null },
 ];
 
+// FREQUENCY. Unit: distinct training days per week with ANY involvementFactor > 0.
 const FREQUENCY_BANDS: AxisBandDefinition[] = [
-  { status: "Low", lowerBound: null, upperBound: null },
-  { status: "Adequate", lowerBound: null, upperBound: null },
-  { status: "High", lowerBound: null, upperBound: null },
+  // Tier 4. Low = 0 days. One session per week is Adequate.
+  { status: "Low", lowerBound: null, upperBound: 1 },
+  { status: "Adequate", lowerBound: 1, upperBound: 6 },
+  // Tier 4. Informational only.
+  { status: "High", lowerBound: 6, upperBound: null },
   { status: "N/A", lowerBound: null, upperBound: null },
 ];
 
+// EXERCISE_SELECTION_BALANCE. Unit: fraction of the 8 hard-coded movement patterns present.
 const ESB_BANDS: AxisBandDefinition[] = [
-  { status: "Balanced", lowerBound: null, upperBound: null },
-  { status: "Gaps present", lowerBound: null, upperBound: null },
+  { status: "Gaps present", lowerBound: null, upperBound: 0.75 },
+  { status: "Balanced", lowerBound: 0.75, upperBound: null },
 ];
 
+// PROGRESSION_SOUNDNESS. Unit: issue count from the current single rule.
 const PS_BANDS: AxisBandDefinition[] = [
-  { status: "Sound", lowerBound: null, upperBound: null },
-  { status: "Issue found", lowerBound: null, upperBound: null },
+  { status: "Sound", lowerBound: null, upperBound: 1 },
+  { status: "Issue found", lowerBound: 1, upperBound: null },
 ];
 
+// RECOVERY_COST. Unit: sum of targetSets x intensityWeight (a MODEL index).
 const RC_BANDS: AxisBandDefinition[] = [
-  { status: "Low", lowerBound: null, upperBound: null },
-  { status: "Moderate", lowerBound: null, upperBound: null },
-  { status: "High", lowerBound: null, upperBound: null },
-  { status: "Excessive", lowerBound: null, upperBound: null },
+  { status: "Low", lowerBound: null, upperBound: 40 },
+  { status: "Moderate", lowerBound: 40, upperBound: 90 },
+  { status: "High", lowerBound: 90, upperBound: 130 },
+  { status: "Excessive", lowerBound: 130, upperBound: null },
 ];
 
 // ---------------------------------------------------------------------------
-// Severity map — PROVISIONAL illustrative values. See ARCH-029.
+// Severity map — band name -> Severity. All Tier 4 unless noted.
 // ---------------------------------------------------------------------------
-
-// PROVISIONAL — not scientifically validated. See ARCH-029 and
-// 06-assessment-engine.md. Replaced when SCIENTIFIC INPUT lands.
-//
-// Shape: per-axis, per-band-name → Severity. Two dimensions only — weight
-// does NOT enter here; it enters at the leverage lookup (see ARCH-029).
-// A band name not present for an axis is treated by the engine as
-// "no severity defined" and forces the enclosing assessment to be
-// UNVALIDATED, rather than defaulting.
 const SEVERITY_MAP: SeverityMap = {
   VOLUME: {
     Low: "MAJOR",
     Adequate: "NONE",
-    High: "MINOR",
+    High: "NONE",
     Excessive: "MODERATE",
     "N/A": "NONE",
   },
   FREQUENCY: {
-    Low: "MAJOR",
+    Low: "MODERATE",
     Adequate: "NONE",
-    High: "MINOR",
+    High: "NONE",
     "N/A": "NONE",
   },
   EXERCISE_SELECTION_BALANCE: {
     Balanced: "NONE",
-    "Gaps present": "MODERATE",
+    "Gaps present": "MINOR",
   },
   PROGRESSION_SOUNDNESS: {
     Sound: "NONE",
-    "Issue found": "MODERATE",
+    "Issue found": "MINOR",
   },
   RECOVERY_COST: {
     Low: "NONE",
-    Moderate: "MINOR",
+    Moderate: "NONE",
     High: "MINOR",
     Excessive: "MODERATE",
   },
 };
 
 // ---------------------------------------------------------------------------
-// Severity × Weight → Leverage — PROVISIONAL 12-cell table. See ARCH-029.
+// Severity x Weight -> Leverage. Tier 4, UNCHANGED from the existing table.
 // ---------------------------------------------------------------------------
-
-// PROVISIONAL — not scientifically validated. See ARCH-029 and
-// 06-assessment-engine.md. Replaced when SCIENTIFIC INPUT lands.
-//
-// Shape (severity × weight) is fixed by 06-assessment-engine.md. Cell contents
-// are this profile's illustrative values, chosen so the worked example's four
-// tuples resolve:
-//   Chest    MAJOR    × HIGH   → HIGH
-//   Back     NONE     × LOW    → NONE
-//   Quads    MINOR    × MEDIUM → LOW
-//   Recovery MODERATE × MEDIUM → MODERATE
 const SEVERITY_WEIGHT_TABLE: SeverityWeightTable = {
   NONE: { LOW: "NONE", MEDIUM: "NONE", HIGH: "NONE" },
   MINOR: { LOW: "NONE", MEDIUM: "LOW", HIGH: "MODERATE" },
@@ -128,18 +126,8 @@ const SEVERITY_WEIGHT_TABLE: SeverityWeightTable = {
 };
 
 // ---------------------------------------------------------------------------
-// Fit Score projection — PROVISIONAL illustrative values. See ARCH-029.
+// Fit Score projection. Tier 4, UNCHANGED.
 // ---------------------------------------------------------------------------
-
-// PROVISIONAL — not scientifically validated. See ARCH-029 and
-// 06-assessment-engine.md §"Fit Score — guaranteed consistent by construction".
-//
-// Rule-based ordinal projection, config-supplied. No numeric intermediate:
-// `leverageOrdinal` is used only for ordering (indexOf comparison), never as
-// a magnitude. `worstLeverageToBand` maps the worst found leverage to a
-// coarse band; the band strings are the generic placeholders the phase file
-// directs (NEEDS_WORK / DECENT / STRONG) pending the unavailable Assessment-
-// Redesign source text.
 const HYPERTROPHY_FIT_SCORE_PROJECTION: FitScoreProjection = {
   leverageOrdinal: ["NONE", "LOW", "MODERATE", "HIGH"],
   worstLeverageToBand: {
@@ -151,44 +139,65 @@ const HYPERTROPHY_FIT_SCORE_PROJECTION: FitScoreProjection = {
 };
 
 // ---------------------------------------------------------------------------
-// Axis weights — keys present, every value null. See file header.
+// Axis weights — Tier 4; ORDER follows evidence strength.
 // ---------------------------------------------------------------------------
-
-// Every weight is null — [SCIENTIFIC INPUT REQUIRED].
-//
-// The keys use the axis-level form `"<AXIS_TYPE>:"` (empty scope), which the
-// engine treats as a fallback when a scoped key (`"VOLUME:chest"`) is absent
-// (see `GoalProfileConfig.axisWeights` in ../analysis/types.ts and the
-// resolution precedence implemented in assessment/rollup.ts). Scoped keys are
-// added when scientific input lands; until then every lookup — scoped or
-// axis-level — resolves to `null`, and the assessment is UNVALIDATED.
 const HYPERTROPHY_AXIS_WEIGHTS: GoalProfileConfig["axisWeights"] = {
   "VOLUME:": {
-    weight: null,
-    rationale: "UNRESOLVED — SCIENTIFIC INPUT REQUIRED",
-  },
-  "FREQUENCY:": {
-    weight: null,
-    rationale: "UNRESOLVED — SCIENTIFIC INPUT REQUIRED",
-  },
-  "EXERCISE_SELECTION_BALANCE:": {
-    weight: null,
-    rationale: "UNRESOLVED — SCIENTIFIC INPUT REQUIRED",
+    weight: "HIGH",
+    rationale:
+      "Tier 4, ordered by Tier 1-2 evidence: weekly volume is the best-supported structural driver (ACSM 2026; Pelland 2026).",
   },
   "PROGRESSION_SOUNDNESS:": {
-    weight: null,
-    rationale: "UNRESOLVED — SCIENTIFIC INPUT REQUIRED",
+    weight: "MEDIUM",
+    rationale:
+      "Tier 4: effort and overload matter (Robinson 2024) but the current rule is a weak proxy; scheme-agnostic evidence (Plotkin 2022).",
   },
   "RECOVERY_COST:": {
-    weight: null,
-    rationale: "UNRESOLVED — SCIENTIFIC INPUT REQUIRED",
+    weight: "MEDIUM",
+    rationale:
+      "Tier 4: modifier of volume, not a goal in itself; model index, not a measurement.",
+  },
+  "FREQUENCY:": {
+    weight: "LOW",
+    rationale:
+      "Tier 4: negligible independent effect once weekly volume is controlled (Schoenfeld 2019; Pelland 2026).",
+  },
+  "EXERCISE_SELECTION_BALANCE:": {
+    weight: "LOW",
+    rationale:
+      "Tier 4: movement-pattern coverage is a coaching heuristic (Tier 3), redundant with per-muscle VOLUME.",
   },
 };
 
 // ---------------------------------------------------------------------------
+// Relevant muscle groups — Phase 10.2 / E3. Names (not ids) because
+// MuscleGroup.id is a cuid and MuscleGroup.name is @unique and stable.
+// ---------------------------------------------------------------------------
+const RELEVANT_MUSCLE_GROUPS: readonly string[] = [
+  "chest",
+  "lats",
+  "upper back",
+  "side delts",
+  "rear delts",
+  "biceps",
+  "triceps",
+  "quads",
+  "hamstrings",
+  "glutes",
+  "calves",
+];
+
+const RELEVANT_AXES: readonly AxisType[] = [
+  "VOLUME",
+  "FREQUENCY",
+  "EXERCISE_SELECTION_BALANCE",
+  "PROGRESSION_SOUNDNESS",
+  "RECOVERY_COST",
+];
+
+// ---------------------------------------------------------------------------
 // The config
 // ---------------------------------------------------------------------------
-
 export const HYPERTROPHY_CONFIG: GoalProfileConfig = {
   goalProfileKey: "HYPERTROPHY",
   axisWeights: HYPERTROPHY_AXIS_WEIGHTS,
@@ -201,11 +210,7 @@ export const HYPERTROPHY_CONFIG: GoalProfileConfig = {
   },
   severityMap: SEVERITY_MAP,
   severityWeightTable: SEVERITY_WEIGHT_TABLE,
-  // PROVISIONAL — not scientifically validated.
   materialitySeverityThreshold: "MODERATE",
-  // Phase 10.2 / E2: only these axes can be Strengths when severity is NONE.
-  // FREQUENCY ("once weekly is fine") and RECOVERY_COST ("low recovery cost")
-  // are excluded — neither is an achievement for a hypertrophy goal.
   strengthEligibleAxes: [
     "VOLUME",
     "EXERCISE_SELECTION_BALANCE",
@@ -214,22 +219,12 @@ export const HYPERTROPHY_CONFIG: GoalProfileConfig = {
   fitScoreProjection: HYPERTROPHY_FIT_SCORE_PROJECTION,
   validated: false,
   sourceNote:
-    "UNRESOLVED — SCIENTIFIC INPUT REQUIRED. Bounds, weights, severity " +
-    "mappings, leverage-table cell contents, and fit-score projection are " +
-    "pending sports-science sign-off; see 05-analysis-engine.md, " +
-    "06-assessment-engine.md, and the Final Freeze §10 / Appendix C.",
+    "provisional thresholds — bands populated from candidate config, pending expert review",
 };
-
-const RELEVANT_AXES: readonly AxisType[] = [
-  "VOLUME",
-  "FREQUENCY",
-  "EXERCISE_SELECTION_BALANCE",
-  "PROGRESSION_SOUNDNESS",
-  "RECOVERY_COST",
-];
 
 export const hypertrophyProfile: GoalProfileDefinition = {
   key: "HYPERTROPHY",
   relevantAxes: RELEVANT_AXES,
+  relevantMuscleGroups: RELEVANT_MUSCLE_GROUPS,
   loadConfig: () => HYPERTROPHY_CONFIG,
 };

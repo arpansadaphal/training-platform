@@ -24,12 +24,13 @@ import { workedExampleConfig } from "../__fixtures__/workedExample";
 
 // A validated profile, using the worked-example fixture's config
 // (validated: true) so loadConfig() returns a well-formed config.
+
 const validatedProfile: GoalProfileDefinition = {
-  key: "TEST_VALIDATED",
+  key: "TEST_PROFILE",
   relevantAxes: [],
+  relevantMuscleGroups: [],   // ← ADD THIS LINE
   loadConfig: () => workedExampleConfig,
 };
-
 function makeValidatedRegistry(): InMemoryGoalProfileRegistry {
   const r = new InMemoryGoalProfileRegistry();
   r.register(validatedProfile);
