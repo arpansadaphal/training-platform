@@ -149,6 +149,7 @@
 .actionRootCause code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   background: var(--border);
+  color: var(--fg);
   padding: 0.05rem 0.3rem;
   border-radius: 3px;
 }
@@ -185,7 +186,7 @@
 }
 .provisionalReason {
   font-size: 0.8125rem;
-  color: var(--fg-muted, #555);
+  color: var(--muted);
   margin: 0 0 1.25rem;
   font-style: italic;
 }

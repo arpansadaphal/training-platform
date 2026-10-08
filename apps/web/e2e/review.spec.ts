@@ -74,20 +74,21 @@ async function commitV1(page: Page, programHref: string): Promise<void> {
   await expect(page.getByRole("heading", { name: /Option A/ })).toBeVisible();
 
   await page.getByRole("button", { name: "+ Add workout day" }).click();
-  await page
-    .getByLabel("Choose an exercise", { exact: true })
-    .selectOption({ index: 1 });
+  await page.getByLabel("Choose an exercise", { exact: true }).selectOption({ index: 1 });
   await page.getByRole("button", { name: "Add exercise" }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
 
   const assessmentPanel = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Assessment" }),
   });
+  // Phase 10.2: HYPERTROPHY config is populated but validated: false, so the
+  // panel renders the classification under the provisional banner rather than
+  // the "not yet available" state. Assert both the banner and a real section
+  // so a blank panel or a missing banner both fail.
   await expect(
-    assessmentPanel.getByRole("heading", {
-      name: "Assessment not yet available",
-    }),
+    assessmentPanel.getByRole("note", { name: /provisional thresholds/i }),
   ).toBeVisible();
+  await expect(assessmentPanel.getByRole("heading", { name: "Overall" })).toBeVisible();
 
   await page.getByRole("button", { name: "Commit", exact: true }).click();
   await expect(page.getByText(/Committed as version 1\./)).toBeVisible();
@@ -103,16 +104,12 @@ async function commitV2(page: Page, programHref: string): Promise<void> {
 
   await page.getByPlaceholder("Option B").fill("Option A v2");
   await page.getByRole("button", { name: "Create draft" }).click();
-  await expect(
-    page.getByRole("heading", { name: /Option A v2/ }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Option A v2/ })).toBeVisible();
 
   await page.getByRole("button", { name: "+ Add workout day" }).click();
   // Anchored: once v1 exists, SimulateChangePanel's <select> is also on the
   // page and substring-matches the same label.
-  await page
-    .getByLabel("Choose an exercise", { exact: true })
-    .selectOption({ index: 1 });
+  await page.getByLabel("Choose an exercise", { exact: true }).selectOption({ index: 1 });
   await page.getByRole("button", { name: "Add exercise" }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
 
@@ -120,10 +117,9 @@ async function commitV2(page: Page, programHref: string): Promise<void> {
     has: page.getByRole("heading", { name: "Assessment" }),
   });
   await expect(
-    assessmentPanel.getByRole("heading", {
-      name: "Assessment not yet available",
-    }),
+    assessmentPanel.getByRole("note", { name: /provisional thresholds/i }),
   ).toBeVisible();
+  await expect(assessmentPanel.getByRole("heading", { name: "Overall" })).toBeVisible();
 
   await page.getByRole("button", { name: "Commit", exact: true }).click();
   await expect(page.getByText(/Committed as version 2\./)).toBeVisible();
@@ -163,25 +159,17 @@ test("Review of an ACTIVE block shows the partial banner and the commit-time ass
   await expect(page).toHaveURL(new RegExp(`/app/review/${blockId}$`));
 
   // Partial banner is present — the block is still ACTIVE.
-  await expect(
-    page.getByText(/This block is still in progress/),
-  ).toBeVisible();
+  await expect(page.getByText(/This block is still in progress/)).toBeVisible();
 
   // The default view is the commit-time snapshot, not a live recompute.
+  await expect(page.getByRole("heading", { name: "Assessment at commit time" })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Assessment at commit time" }),
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      /What you saw when you started this block\. Not recomputed\./,
-    ),
+    page.getByText(/What you saw when you started this block\. Not recomputed\./),
   ).toBeVisible();
 
   // The opt-in recompute is present but collapsed — the phase file
   // requires it be available, not that it render by default.
-  await expect(
-    page.getByRole("button", { name: "Show recompute" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show recompute" })).toBeVisible();
 });
 
 test("Review of a closed block omits the partial banner", async ({ page }) => {
@@ -205,17 +193,11 @@ test("Review of a closed block omits the partial banner", async ({ page }) => {
   await expect(page).toHaveURL(new RegExp(`/app/review/${v1BlockId}$`));
 
   // No partial banner — v1's block is now closed.
-  await expect(
-    page.getByText(/This block is still in progress/),
-  ).not.toBeVisible();
+  await expect(page.getByText(/This block is still in progress/)).not.toBeVisible();
 
   // The commit-time assessment is still rendered.
+  await expect(page.getByRole("heading", { name: "Assessment at commit time" })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Assessment at commit time" }),
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      /What you saw when you started this block\. Not recomputed\./,
-    ),
+    page.getByText(/What you saw when you started this block\. Not recomputed\./),
   ).toBeVisible();
 });

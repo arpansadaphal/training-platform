@@ -75,10 +75,7 @@ async function createProgram(page: Page, name: string): Promise<string> {
   return href;
 }
 
-async function buildAndCommitV1(
-  page: Page,
-  programHref: string,
-): Promise<void> {
+async function buildAndCommitV1(page: Page, programHref: string): Promise<void> {
   await page.goto(programHref);
 
   await page.getByRole("link", { name: "Open Builder" }).click();
@@ -86,9 +83,7 @@ async function buildAndCommitV1(
 
   await page.getByPlaceholder("Option B").fill("Regression draft");
   await page.getByRole("button", { name: "Create draft" }).click();
-  await expect(
-    page.getByRole("heading", { name: /Regression draft/ }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Regression draft/ })).toBeVisible();
 
   await page.getByRole("button", { name: "+ Add workout day" }).click();
   await page.getByLabel("Choose an exercise").selectOption({ index: 1 });
@@ -98,11 +93,14 @@ async function buildAndCommitV1(
   const assessmentPanel = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Assessment" }),
   });
+  // Phase 10.2: HYPERTROPHY config is populated but validated: false, so the
+  // panel renders the classification under the provisional banner rather than
+  // the "not yet available" state. Assert both the banner and a real section
+  // so a blank panel or a missing banner both fail.
   await expect(
-    assessmentPanel.getByRole("heading", {
-      name: "Assessment not yet available",
-    }),
+    assessmentPanel.getByRole("note", { name: /provisional thresholds/i }),
   ).toBeVisible();
+  await expect(assessmentPanel.getByRole("heading", { name: "Overall" })).toBeVisible();
 
   await page.getByRole("button", { name: "Commit", exact: true }).click();
   await expect(page.getByText(/Committed as version 1\./)).toBeVisible();
@@ -160,9 +158,7 @@ async function trainOneSession(page: Page): Promise<void> {
 
   await completeButton.click();
 
-  await expect(
-    page.getByText(/this session is complete/i),
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/this session is complete/i)).toBeVisible({ timeout: 15_000 });
 }
 
 async function openReviewAndRecompute(page: Page): Promise<void> {
@@ -176,9 +172,7 @@ async function openReviewAndRecompute(page: Page): Promise<void> {
 
   const reviewHref = await reviewLink.getAttribute("href");
   if (!reviewHref || !reviewHref.startsWith("/app/review/")) {
-    throw new Error(
-      `Review block link has unexpected href: ${reviewHref ?? "(null)"}`,
-    );
+    throw new Error(`Review block link has unexpected href: ${reviewHref ?? "(null)"}`);
   }
   await page.goto(reviewHref);
   await expect(page).toHaveURL(/\/app\/review\/[^/]+$/);
@@ -188,13 +182,9 @@ async function openReviewAndRecompute(page: Page): Promise<void> {
       name: /provisional thresholds disclaimer/i,
     }),
   ).toBeVisible();
-  await expect(
-    page.getByText(/not yet scientifically validated/i),
-  ).toBeVisible();
+  await expect(page.getByText(/not yet scientifically validated/i)).toBeVisible();
 
-  await expect(
-    page.getByRole("heading", { name: /assessment at commit time/i }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /assessment at commit time/i })).toBeVisible();
 
   const recomputeButton = page.getByRole("button", {
     name: /show recompute/i,
@@ -202,17 +192,15 @@ async function openReviewAndRecompute(page: Page): Promise<void> {
   await expect(recomputeButton).toBeVisible();
   await recomputeButton.click();
 
-  await expect(
-    page.getByText(/live recompute using current thresholds/i),
-  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/live recompute using current thresholds/i)).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 async function simulateAndApplyViaCoach(page: Page): Promise<void> {
   const textarea = page.getByPlaceholder("Ask the Coach…");
   await expect(textarea).toBeVisible();
-  await textarea.fill(
-    "Please simulate adding a new day, then offer me the button to apply it.",
-  );
+  await textarea.fill("Please simulate adding a new day, then offer me the button to apply it.");
   await page.getByRole("button", { name: /^Send$/ }).click();
 
   const applyButton = page.getByRole("button", {
