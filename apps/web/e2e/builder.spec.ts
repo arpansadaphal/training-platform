@@ -3,24 +3,26 @@ import { test, expect, type Page } from "@playwright/test";
 /**
  * Phase 4's Builder E2E.
  *
- * Rewritten per the Q3 ruling at the Phase 4 kickoff: the shipped
- * HYPERTROPHY_CONFIG has all-null thresholds per ARCH-029–031, so
- * computeAssessment returns UNVALIDATED and there is no banded
- * Assessment to render. The phase file's original acceptance criterion
- * ("verify the Assessment screen surfaces it as Biggest Opportunity") was
- * unsatisfiable without fabricating thresholds, which the freeze forbids.
+  * Rewritten per the Q3 ruling at the Phase 4 kickoff, and re-rewritten in
+ * Phase 10.2 when the HYPERTROPHY config was populated.
  *
- * The rewritten test asserts the honest state instead:
- *   - the Assessment panel shows "Assessment not yet available",
- *   - none of the VALIDATED-only sections (Strengths / Attention areas /
- *     Biggest Opportunity / Actions) render,
+ * Phase 4 shipped with all-null thresholds, so computeAssessment returned
+ * UNVALIDATED with no classification and the panel showed
+ * "Assessment not yet available". Phase 10.2 populated the config with
+ * candidate values (validated: false), so the panel now renders the
+ * classification under the provisional banner.
+ *
+ * What the test asserts:
+ *   - the Assessment panel shows the provisional-thresholds banner,
+ *   - the panel renders a real section heading ("Overall"),
  *   - committing produces a real version, visible on the program page.
  *
- * The negative assertions are the substance of the Q3 test: without them,
- * a future regression that starts rendering bands on an unvalidated config
- * would still pass the "commit succeeds" path. Asserting absence of the
- * section headings — rather than absence of specific band strings — keeps
- * the test structural and independent of the provisional band names.
+ * The two panel assertions are the substance: asserting BOTH the banner
+ * (honesty still present) and a rendered section (classification actually
+ * shown) means a future regression — a missing banner, or a blank panel —
+ * fails. Neither the specific band names nor the classification contents
+ * are asserted; those are exercised by the domain test suite and the
+ * calibration harness.
  *
  * No cleanup of the test user after the run. Phase 0's E2E leaves its
  * fixtures in place too; a test-data sweep belongs to a future phase, not
@@ -133,7 +135,7 @@ test("Builder: build a draft, see the unvalidated Assessment state, commit a ver
   await expect(
     page.getByRole("heading", { name: /Option A/ }),
   ).toBeVisible();
-
+  
   // ── Add a workout day and one exercise ────────────────────────────────
   await page.getByRole("button", { name: "+ Add workout day" }).click();
 
@@ -148,29 +150,21 @@ test("Builder: build a draft, see the unvalidated Assessment state, commit a ver
   await page.getByRole("button", { name: "Save", exact: true }).click();
 
   // ── The Q3 assertions ─────────────────────────────────────────────────
-  const assessmentPanel = page.locator("section").filter({
-    has: page.getByRole("heading", { name: "Assessment" }),
-  });
+ const assessmentPanel = page.locator("section").filter({
+  has: page.getByRole("heading", { name: "Assessment" }),
+});
+// Phase 10.2: HYPERTROPHY config is populated but validated: false, so the
+// panel renders the classification under the provisional banner rather than
+// the "not yet available" state. Assert both the banner and a real section
+// so a blank panel or a missing banner both fail.
+await expect(
+  assessmentPanel.getByRole("note", { name: /provisional thresholds/i }),
+).toBeVisible();
+await expect(
+  assessmentPanel.getByRole("heading", { name: "Overall" }),
+).toBeVisible();
 
-  await expect(
-    assessmentPanel.getByRole("heading", {
-      name: "Assessment not yet available",
-    }),
-  ).toBeVisible();
-
-  // None of the VALIDATED-only sections render. Asserting their absence is
-  // the structural equivalent of "no banded assessment was rendered" and
-  // stays valid across provisional band-name revisions.
-  for (const heading of [
-    "Strengths",
-    "Attention areas",
-    "Biggest Opportunity",
-    "Actions",
-  ]) {
-    await expect(
-      assessmentPanel.getByRole("heading", { name: heading }),
-    ).toHaveCount(0);
-  }
+ 
 
   // ── Commit, and verify the version on the program page ────────────────
   await page.getByRole("button", { name: "Commit", exact: true }).click();
