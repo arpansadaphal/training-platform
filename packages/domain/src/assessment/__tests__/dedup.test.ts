@@ -99,15 +99,19 @@ describe("computeAssessment — root-cause deduplication", () => {
     expect(result.kind).toBe("VALIDATED");
   });
 
-  it("classifies exactly one of the two chest axes as biggest opportunity, the other as attention", () => {
-    const { assessment } = result;
-    // Axis order in the analysis is [VOLUME:chest, FREQUENCY:chest], so
-    // first-wins on the argmax tie puts VOLUME:chest in the biggest-
-    // opportunity slot and FREQUENCY:chest in attention.
-    expect(assessment.biggestOpportunity?.axisType).toBe("VOLUME");
-    expect(assessment.attentionAreas).toHaveLength(1);
-    expect(assessment.attentionAreas[0]!.axisType).toBe("FREQUENCY");
-  });
+it("collapses two chest axes into one biggest opportunity; attention list is empty because the duplicate is deduped", () => {
+  const { assessment } = result;
+  // Axis order in the analysis is [VOLUME:chest, FREQUENCY:chest], so
+  // first-wins on the argmax tie puts VOLUME:chest in the biggest-
+  // opportunity slot.
+  expect(assessment.biggestOpportunity?.axisType).toBe("VOLUME");
+  // Phase 10.2: FREQUENCY:chest shares a root-cause key with
+  // VOLUME:chest (both templates emit volume:add-chest), so it is
+  // deduped out of the attention list. Two axes, one problem, one card.
+  // The action below preserves the second axis's information — only the
+  // presentation collapses.
+  expect(assessment.attentionAreas).toHaveLength(0);
+});
 
   it("produces exactly ONE action, not two — both templates emit volume:add-chest", () => {
     expect(result.assessment.actions).toHaveLength(1);
