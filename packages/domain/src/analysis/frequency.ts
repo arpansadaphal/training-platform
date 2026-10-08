@@ -8,6 +8,10 @@
 // so Phase 2 uses the conservative default `involvementFactor > 0` — i.e. any
 // non-zero involvement counts. Adding a configurable threshold later is a
 // purely additive change to this function.
+//
+// Phase 10.2 / E14 (partially resolved): `scopeKey` is the muscle-group
+// NAME, matching volume.ts. See that file's header for the rationale.
+// The internal lookup still keys on muscleGroup.id.
 
 import type { ProgramStructure } from "../types";
 import type {
@@ -54,7 +58,7 @@ export function computeFrequencyAxis(
     const metricValue = daysTouched.size;
     results.push({
       axisType: "FREQUENCY",
-      scopeKey: muscleGroup.id,
+      scopeKey: muscleGroup.name,
       metricValue,
       status: resolveBand(metricValue, bands),
     });

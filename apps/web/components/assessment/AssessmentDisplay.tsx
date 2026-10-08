@@ -11,8 +11,7 @@
 //
 // The union narrowing happens here, once, at the top — the caller passes the
 // raw AssessmentResult and FitScoreResult, and this component decides whether
-// the assessment is renderable at all. A caller that pre-unwraps the union
-// would defeat the guarantee.
+// the assessment is renderable at all.
 //
 // ARCH-046: this component is also the ONLY place the provisional-
 // thresholds banner is mounted. Every assessment surface in the app goes
@@ -22,17 +21,21 @@
 // structurally — a new component that imports AssessmentResult or
 // FitScoreResult without going through this file fails CI.
 //
-// "use client": added in Phase 9 because the banner's visibility is
-// resolved by `useProvisionalBanner`, a hook. Every existing consumer of
-// this component is already inside a "use client" tree (ReviewClient,
-// CoachPanel, the Builder's draft panel), so this directive makes an
-// already-true fact explicit; it does not change where this component
-// runs.
+// PHASE 10.2 (Option B): the meaning of `kind: "UNVALIDATED"` changed when
+// the HYPERTROPHY config was populated. Before, UNVALIDATED meant the
+// roll-up was BLOCKED — null weights, missing bands, no classification to
+// show. Now, with the config populated but `validated: false`, the roll-up
+// SUCCEEDS and the classification fields are populated. The UNVALIDATED
+// kind now means "provisional", not "unavailable". This component renders
+// the classification under the provisional banner when there is content to
+// show, and falls back to the UnvalidatedState message only when the
+// classification is genuinely empty (the roll-up-blocked case).
 
 "use client";
 
 import type {
   AssessedAxis,
+  Assessment,
   AssessmentResult,
   FitScoreResult,
 } from "@training/domain";
@@ -51,6 +54,32 @@ function axisKey(axis: AssessedAxis): string {
   return `${axis.axisType}:${axis.scopeKey ?? ""}`;
 }
 
+/**
+ * Whether the inner Assessment has any content worth rendering.
+ *
+ * The discriminator between two very different states that both carry
+ * `kind: "UNVALIDATED"`:
+ *   - Populated-but-provisional (roll-up succeeded, config validated false):
+ *     strengths / attentionAreas / biggestOpportunity / actions carry real
+ *     content. Render it under the banner.
+ *   - Genuinely blocked (roll-up failed): those four fields are empty/null
+ *     by domain contract. Show the reason string instead.
+ *
+ * Known limitation: a program that legitimately has no findings at all
+ * would take the fallback path. At MVP this does not occur — every
+ * assessable program carries at least one strength (Adequate VOLUME axes
+ * are strengths via strengthEligibleAxes). If it appears in practice,
+ * refine the discriminator.
+ */
+function hasRenderableContent(a: Assessment): boolean {
+  return (
+    a.strengths.length > 0 ||
+    a.attentionAreas.length > 0 ||
+    a.biggestOpportunity !== null ||
+    a.actions.length > 0
+  );
+}
+
 export function AssessmentDisplay({ result, fitScore }: Props) {
   // ARCH-046: the banner is a property of the configuration, not of any
   // one assessment. `useProvisionalBanner` reads HYPERTROPHY_CONFIG's
@@ -58,17 +87,13 @@ export function AssessmentDisplay({ result, fitScore }: Props) {
   // is always. When a validated config ships, the hook returns false and
   // the banner disappears from every surface at once.
   const provisional = useProvisionalBanner();
+  const a = result.assessment;
 
-  // Per Q3: an UNVALIDATED assessment carries no classifications — the inner
-  // Assessment's strengths/attention/opportunity/actions are empty/null by
-  // domain contract (see packages/domain/src/assessment/computeAssessment.ts).
-  // Rendering those empty lists would fabricate the appearance of "no
-  // problems found." The honest surface is the reason string.
-  //
-  // The banner appears above UnvalidatedState as well: the user is being
-  // told the assessment is unavailable BECAUSE the thresholds are
-  // provisional, and the two facts belong together.
-  if (result.kind === "UNVALIDATED") {
+  // Genuinely blocked: UNVALIDATED and no classification content.
+  // Fall back to the reason string. This is the "roll-up could not
+  // classify" state — null weights, missing bands, missing severity
+  // mapping. There is nothing useful to render.
+  if (result.kind === "UNVALIDATED" && !hasRenderableContent(a)) {
     return (
       <>
         {provisional ? <ProvisionalBanner /> : null}
@@ -77,12 +102,32 @@ export function AssessmentDisplay({ result, fitScore }: Props) {
     );
   }
 
-  const a = result.assessment;
-
+  // Provisional-but-populated (or fully VALIDATED): render the
+  // classification. When the result is UNVALIDATED, show the reason string
+  // as a subordinate note so the user knows why the assessment is labeled
+  // provisional.
   return (
     <article className={styles.wrapper}>
       {provisional ? <ProvisionalBanner /> : null}
 
+      {result.kind === "UNVALIDATED" ? (
+        <p className={styles.provisionalReason}>{result.reason}</p>
+      ) : null}
+
+      <AssessmentBody a={a} fitScore={fitScore} />
+    </article>
+  );
+}
+
+function AssessmentBody({
+  a,
+  fitScore,
+}: {
+  a: Assessment;
+  fitScore: FitScoreResult;
+}) {
+  return (
+    <>
       <section className={styles.overall}>
         <h2 className={styles.sectionHeading}>Overall</h2>
         <p className={styles.overallSummary}>{a.overallSummary}</p>
@@ -150,6 +195,6 @@ export function AssessmentDisplay({ result, fitScore }: Props) {
           </ul>
         </section>
       ) : null}
-    </article>
+    </>
   );
 }
