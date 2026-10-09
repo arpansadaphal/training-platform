@@ -73,11 +73,14 @@ async function commitV1(page: Page, programHref: string): Promise<void> {
   const assessmentPanel = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Assessment" }),
   });
+  // Phase 10.2: HYPERTROPHY config is populated but validated: false, so the
+  // panel renders the classification under the provisional banner rather than
+  // the "not yet available" state. Assert both the banner and a real section
+  // so a blank panel or a missing banner both fail.
   await expect(
-    assessmentPanel.getByRole("heading", {
-      name: "Assessment not yet available",
-    }),
+    assessmentPanel.getByRole("note", { name: /provisional thresholds/i }),
   ).toBeVisible();
+  await expect(assessmentPanel.getByRole("heading", { name: "Overall" })).toBeVisible();
 
   await page.getByRole("button", { name: "Commit", exact: true }).click();
   await expect(page.getByText(/Committed as version 1\./)).toBeVisible();
@@ -94,9 +97,7 @@ test("Landing dashboard: primary program surfaces as the identity/progress conte
   await signUpFreshUser(page);
 
   // ── New user sees an honest empty state, not a feature grid ───────────
-  await expect(
-    page.getByRole("heading", { name: /Start your first program/ }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Start your first program/ })).toBeVisible();
 
   // ── Create + commit ──────────────────────────────────────────────────
   const programHref = await createProgram(page, programName);
@@ -107,47 +108,35 @@ test("Landing dashboard: primary program surfaces as the identity/progress conte
   await expect(page).toHaveURL(/\/app$/);
 
   // Identity greeting present.
-  await expect(
-    page.getByRole("heading", { name: /Hi,|Welcome back/ }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Hi,|Welcome back/ })).toBeVisible();
 
   // Program name is the primary heading — not "Dashboard", not a feature
   // card in a grid.
-  await expect(
-    page.getByRole("heading", { name: programName }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: programName })).toBeVisible();
 
   // Lifetime-stats region present.
+  await expect(page.getByRole("region", { name: "Lifetime stats" })).toBeVisible();
   await expect(
-    page.getByRole("region", { name: "Lifetime stats" }),
+    page
+      .getByRole("region", { name: "Lifetime stats" })
+      .getByText("Sessions completed", { exact: true }),
   ).toBeVisible();
-  await expect(
-  page
-    .getByRole("region", { name: "Lifetime stats" })
-    .getByText("Sessions completed", { exact: true }),
-).toBeVisible();
 
   // A primary CTA is present, and it points at the training surface.
   // (Before any session exists, the CTA is "Start next session" — the
   // block was opened automatically by the commit, per ARCH-039.)
-  await expect(
-    page.getByRole("link", { name: "Start next session" }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Start next session" })).toBeVisible();
 
   // ── Train one session to completion ──────────────────────────────────
   await page.getByRole("link", { name: "Start next session" }).click();
   await expect(page).toHaveURL(/\/train$/);
 
   const programCard = page.locator("li").filter({ hasText: programName });
-  await programCard
-    .getByRole("button", { name: "Start training" })
-    .click();
+  await programCard.getByRole("button", { name: "Start training" }).click();
   await expect(page).toHaveURL(/\/train\/session\/[^/]+$/);
 
   await page.getByRole("button", { name: "Start session" }).click();
-  await expect(
-    page.getByRole("button", { name: "Mark complete" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Mark complete" })).toBeVisible();
 
   const repsInput = page.getByLabel("Reps").first();
   await repsInput.fill("8");
@@ -160,16 +149,10 @@ test("Landing dashboard: primary program surfaces as the identity/progress conte
   // ── Back to /app: the identity surface is intact, stats reflect the
   //    completed session ────────────────────────────────────────────────
   await page.goto("/app");
-  await expect(
-    page.getByRole("heading", { name: programName }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "Lifetime stats" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: programName })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Lifetime stats" })).toBeVisible();
 
   // The block strip is present with a Review link — the entry point into
   // Phase 7's Review screen.
-  await expect(
-    page.getByRole("link", { name: "Review block" }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Review block" })).toBeVisible();
 });

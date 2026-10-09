@@ -1,4 +1,3 @@
-
 // apps/web/e2e/coach.spec.ts
 //
 // The Phase 8 acceptance test: the Apply button does not auto-fire
@@ -81,11 +80,14 @@ async function reachReview(page: Page): Promise<void> {
   const assessmentPanel = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Assessment" }),
   });
+  // Phase 10.2: HYPERTROPHY config is populated but validated: false, so the
+  // panel renders the classification under the provisional banner rather than
+  // the "not yet available" state. Assert both the banner and a real section
+  // so a blank panel or a missing banner both fail.
   await expect(
-    assessmentPanel.getByRole("heading", {
-      name: "Assessment not yet available",
-    }),
+    assessmentPanel.getByRole("note", { name: /provisional thresholds/i }),
   ).toBeVisible();
+  await expect(assessmentPanel.getByRole("heading", { name: "Overall" })).toBeVisible();
 
   await page.getByRole("button", { name: "Commit", exact: true }).click();
   await expect(page.getByText(/Committed as version 1\./)).toBeVisible();
@@ -101,9 +103,7 @@ async function reachReview(page: Page): Promise<void> {
 
   const reviewHref = await reviewLink.getAttribute("href");
   if (!reviewHref || !reviewHref.startsWith("/app/review/")) {
-    throw new Error(
-      `Review block link has unexpected href: ${reviewHref ?? "(null)"}`,
-    );
+    throw new Error(`Review block link has unexpected href: ${reviewHref ?? "(null)"}`);
   }
 
   // Navigate directly rather than clicking. Under a cold dev server, a
@@ -116,25 +116,17 @@ async function reachReview(page: Page): Promise<void> {
 // ── Non-gated smoke tests ─────────────────────────────────────────────
 
 test.describe("Coach surfaces (no model required)", () => {
-  test("the /app/coach route renders a conversation sidebar", async ({
-    page,
-  }) => {
+  test("the /app/coach route renders a conversation sidebar", async ({ page }) => {
     test.setTimeout(180_000);
 
     await signUpFreshUser(page);
     await page.goto("/app/coach");
 
-    await expect(
-      page.getByRole("heading", { name: /coach/i }).first(),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /new/i }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: /coach/i }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /new/i })).toBeVisible();
   });
 
-  test("the review screen renders the Coach panel beside the review body", async ({
-    page,
-  }) => {
+  test("the review screen renders the Coach panel beside the review body", async ({ page }) => {
     test.setTimeout(240_000);
 
     await reachReview(page);
@@ -220,8 +212,7 @@ test.describe("Coach apply-button boundary (requires MODEL_PROVIDER=mock)", () =
     // (which would mean something auto-retried or a re-render re-fired).
     await expect
       .poll(() => commitRequests.length, {
-        message:
-          "expected exactly one commitFromSimulation request after clicking Apply",
+        message: "expected exactly one commitFromSimulation request after clicking Apply",
         timeout: 30_000,
       })
       .toBe(1);

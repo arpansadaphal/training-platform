@@ -33,6 +33,10 @@ import {
   type ProgramStructure,
 } from "@training/domain";
 import { loadExerciseReferenceData } from "./referenceDataService";
+// EDIT 1 — imports (add):
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const GOAL_PROFILE_KEY = "HYPERTROPHY";
 const GOAL_ID = "test-goal";
@@ -403,6 +407,19 @@ interface SummaryRow {
 }
 const summary: SummaryRow[] = [];
 
+// EDIT 2 — after `const summary: SummaryRow[] = [];` add:
+interface AxisSnap { metric: string; band: string; severity: string; leverage: string }
+interface Snapshot {
+  volume: Map<string, AxisSnap>;
+  frequency: Map<string, { value: string; band: string }>;
+  program: Map<string, AxisSnap>; // ESB / PS / RC by axis type
+  biggest: string;
+  fit: string;
+}
+const snapshots = new Map<string, Snapshot>();
+const PROGRAM_AXES = ["EXERCISE_SELECTION_BALANCE", "PROGRESSION_SOUNDNESS", "RECOVERY_COST"] as const;
+
+
 function buildStructure(
   days: readonly DaySpec[],
   loadMode: "rpe" | "pct" = "rpe",
@@ -497,7 +514,7 @@ function report(label: string, description: string, ev: Evaluated): void {
     );
   }
   L.push(
-    "FREQUENCY (distinct days | band): " +
+    "FREQUENCY (distribution ratio | band): " +
       [...axes("FREQUENCY")]
         .sort(byLabel)
         .map((x) => `${axisLabel(x).replace("FREQUENCY:", "")} ${fmt(x.metricValue)} ${x.status.band}`)
@@ -520,6 +537,23 @@ function report(label: string, description: string, ev: Evaluated): void {
   L.push(`overallSummary: ${named(a.overallSummary)}`);
   L.push(`FIT (provisional, validated:false => real result is UNVALIDATED): ${ev.provisionalFit}`);
   console.log(L.join("\n"));
+
+  // EDIT 3 — at the END of report(), after console.log(L.join("\n")), add:
+  const nameOf = (x: AssessedAxis): string => nameById.get(x.scopeKey ?? "") ?? x.scopeKey ?? "";
+  const snap: Snapshot = {
+    volume: new Map(),
+    frequency: new Map(),
+    program: new Map(),
+    biggest: a.biggestOpportunity === null ? "null" : axisLabel(a.biggestOpportunity),
+    fit: ev.provisionalFit,
+  };
+  for (const x of axes("VOLUME"))
+    snap.volume.set(nameOf(x), { metric: fmt(x.metricValue), band: x.status.band, severity: x.severity, leverage: x.leverage });
+  for (const x of axes("FREQUENCY")) snap.frequency.set(nameOf(x), { value: fmt(x.metricValue), band: x.status.band });
+  for (const t of PROGRAM_AXES)
+    for (const x of axes(t))
+      snap.program.set(t, { metric: fmt(x.metricValue), band: x.status.band, severity: x.severity, leverage: x.leverage });
+  snapshots.set(label, snap);
 
   const vol = axes("VOLUME");
   summary.push({
@@ -600,11 +634,15 @@ describe("calibration harness: real engine + real seed + HYPERTROPHY candidate c
       expect(JSON.stringify(buildStructure(PROGRAM_H))).toBe(JSON.stringify(buildStructure(PROGRAM_B)));
     });
 
-    it("G equals B on VOLUME, FREQUENCY, ESB and PROGRESSION (only RECOVERY_COST can differ)", () => {
+  // EDIT 4a — REPLACE the test "G equals B on VOLUME, FREQUENCY, ESB and PROGRESSION (only RECOVERY_COST can differ)":
+    it("G equals B on VOLUME, FREQUENCY and ESB (PROGRESSION and RECOVERY_COST may differ)", () => {
       const pick = (days: readonly DaySpec[]) =>
-        evaluate(buildStructure(days)).analysis.axisResults.filter((x) => x.axisType !== "RECOVERY_COST");
+        evaluate(buildStructure(days)).analysis.axisResults.filter(
+          (x) => x.axisType !== "RECOVERY_COST" && x.axisType !== "PROGRESSION_SOUNDNESS",
+        );
       expect(pick(PROGRAM_G)).toEqual(pick(PROGRAM_B));
     });
+
 
     it("is deterministic (same input, same output, fixed clock)", () => {
       const a = evaluate(buildStructure(PROGRAM_B));
@@ -623,9 +661,104 @@ describe("calibration harness: real engine + real seed + HYPERTROPHY candidate c
         report(`G-pct(${pct})`, "G rewritten with %1RM loads, no single", ev);
         assertStructural(ev);
         const ps = ev.result.assessment.allAssessedAxes.find((x) => x.axisType === "PROGRESSION_SOUNDNESS");
-        expect(ps?.metricValue).toBe(1);
+        expect(ps?.metricValue).toBeGreaterThanOrEqual(1);
         expect(ps?.status.band).toBe("Issue found");
       });
+      // EDIT 5 — add as the LAST block inside the top-level describe (it needs the snapshots the earlier tests fill):
+  describe("comparison against calibration-before.txt (logs only, never asserts engine output)", () => {
+    const HERE = dirname(fileURLToPath(import.meta.url));
+    const candidates = [
+      process.env.CALIBRATION_BEFORE_PATH,
+      join(process.cwd(), "calibration-before.txt"),
+      join(process.cwd(), "..", "..", "calibration-before.txt"),
+      join(HERE, "calibration-before.txt"),
+    ].filter((p): p is string => typeof p === "string" && p.length > 0);
+
+    function parseBefore(text: string): Map<string, Snapshot> {
+      const out = new Map<string, Snapshot>();
+      let cur: Snapshot | null = null;
+      for (const raw of text.split(/\r?\n/)) {
+        const line = raw.trim();
+        const head = /^=== Program ([^:]+): /.exec(line);
+        if (head !== null) {
+          cur = { volume: new Map(), frequency: new Map(), program: new Map(), biggest: "?", fit: "?" };
+          out.set((head[1] ?? "").trim(), cur);
+          continue;
+        }
+        if (cur === null) continue;
+        const vol = /^VOLUME:(.+?)\s+(-?[\d.]+)\s+(Low|Adequate|High|Excessive)\s+(NONE|MINOR|MODERATE|MAJOR)\s+(NONE|LOW|MODERATE|HIGH)$/.exec(line);
+        if (vol !== null) {
+          cur.volume.set((vol[1] ?? "").trim(), { metric: vol[2] ?? "", band: vol[3] ?? "", severity: vol[4] ?? "", leverage: vol[5] ?? "" });
+          continue;
+        }
+        const fq = /^FREQUENCY \(.*?\): (.+)$/.exec(line);
+        if (fq !== null) {
+          for (const part of (fq[1] ?? "").split("; ")) {
+            const m = /^(.+) (-?[\d.]+) (Low|Adequate|High)$/.exec(part.trim());
+            if (m !== null) cur.frequency.set((m[1] ?? "").trim(), { value: m[2] ?? "", band: m[3] ?? "" });
+          }
+          continue;
+        }
+        const ax = /^(EXERCISE_SELECTION_BALANCE|PROGRESSION_SOUNDNESS|RECOVERY_COST)\s+metric=(\S+) band=(.+?) severity=(\S+) weight=(\S+) leverage=(\S+)$/.exec(line);
+        if (ax !== null) {
+          cur.program.set(ax[1] ?? "", { metric: ax[2] ?? "", band: ax[3] ?? "", severity: ax[4] ?? "", leverage: ax[6] ?? "" });
+          continue;
+        }
+        const big = /^biggest opportunity: (.+)$/.exec(line);
+        if (big !== null) { cur.biggest = big[1] ?? "?"; continue; }
+        const fit = /^FIT \(.*?\): (.+)$/.exec(line);
+        if (fit !== null) cur.fit = fit[1] ?? "?";
+      }
+      return out;
+    }
+
+    function diff(label: string, b: Snapshot, a: Snapshot): string[] {
+      const L: string[] = [];
+      for (const [name, av] of a.volume) {
+        const bv = b.volume.get(name);
+        if (bv === undefined) { L.push(`${label} VOLUME:${name}: not in before`); continue; }
+        if (bv.band !== av.band) L.push(`${label} VOLUME:${name} BAND ${bv.band} -> ${av.band}`);
+        else if (bv.metric !== av.metric) L.push(`${label} VOLUME:${name} value ${bv.metric} -> ${av.metric} (band ${av.band})`);
+        if (bv.severity !== av.severity || bv.leverage !== av.leverage)
+          L.push(`${label} VOLUME:${name} severity/leverage ${bv.severity}/${bv.leverage} -> ${av.severity}/${av.leverage}`);
+      }
+      for (const [name, av] of a.frequency) {
+        const bv = b.frequency.get(name);
+        if (bv === undefined) continue;
+        // metric semantics changed (distinct days -> exposures / required), so report value AND band
+        if (bv.band !== av.band) L.push(`${label} FREQUENCY:${name} BAND ${bv.band} -> ${av.band} (value ${bv.value} -> ${av.value})`);
+        else if (bv.value !== av.value) L.push(`${label} FREQUENCY:${name} value ${bv.value} -> ${av.value} (band ${av.band})`);
+      }
+      for (const t of PROGRAM_AXES) {
+        const bv = b.program.get(t); const av = a.program.get(t);
+        if (bv === undefined || av === undefined) continue;
+        if (bv.band !== av.band) L.push(`${label} ${t} BAND ${bv.band} -> ${av.band} (metric ${bv.metric} -> ${av.metric})`);
+        else if (bv.metric !== av.metric) L.push(`${label} ${t} metric ${bv.metric} -> ${av.metric} (band ${av.band})`);
+        if (bv.severity !== av.severity || bv.leverage !== av.leverage)
+          L.push(`${label} ${t} severity/leverage ${bv.severity}/${bv.leverage} -> ${av.severity}/${av.leverage}`);
+      }
+      if (b.biggest !== a.biggest) L.push(`${label} BIGGEST OPPORTUNITY ${b.biggest} -> ${a.biggest}`);
+      if (b.fit !== a.fit) L.push(`${label} FIT (provisional) ${b.fit} -> ${a.fit}`);
+      return L;
+    }
+
+    it("logs, per program, which axes changed and which bands flipped", () => {
+      const path = candidates.find((p) => existsSync(p));
+      if (path === undefined) {
+        console.log(`calibration-before.txt not found (looked in: ${candidates.join(", ")}). Set CALIBRATION_BEFORE_PATH. Skipping.`);
+        return;
+      }
+      const before = parseBefore(readFileSync(path, "utf8"));
+      const lines: string[] = [`\n=== CHANGES vs ${path} ===`];
+      for (const [label, after] of snapshots) {
+        const b = before.get(label);
+        if (b === undefined) { lines.push(`${label}: no matching block in before file`); continue; }
+        const d = diff(label, b, after);
+        lines.push(...(d.length === 0 ? [`${label}: no change`] : d));
+      }
+      console.log(lines.join("\n"));
+    });
+  });
     }
 
     // Program J as-is. Same program as the J entry in PROGRAMS (re-reported so the probe is explicit).

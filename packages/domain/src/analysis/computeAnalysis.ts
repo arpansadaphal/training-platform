@@ -1,15 +1,8 @@
 // packages/domain/src/analysis/computeAnalysis.ts
 //
-// The single entry point for the Analysis engine. Pure function: same input
-// -> same output modulo the injected clock (used only for `computedAt`).
-//
-// Signature note: 05-analysis-engine.md shows `computeAnalysis(structure,
-// referenceData)`, but the axis banding is config-driven, so Phase 2 adds an
-// explicit `config: GoalProfileConfig` parameter. The config is passed in by
-// the caller rather than looked up from a registry — this keeps the domain
-// layer free of I/O and of any implicit global state, matching ARCH-010.
-// Phase 3 (Assessment) will own the registry lookup path; the engine here
-// stays pure.
+// The single entry point for the Analysis engine. Pure function: same input -> same output modulo the
+// injected clock (used only for `computedAt`). E9: options.recoveryCostCalculator replaces the provisional
+// recovery-cost calculator for this run.
 
 import type { ProgramStructure } from "../types";
 import type {
@@ -39,7 +32,7 @@ export function computeAnalysis(
     ...computeFrequencyAxis(structure, referenceData, config),
     computeExerciseSelectionBalanceAxis(structure, referenceData, config),
     computeProgressionSoundnessAxis(structure, referenceData, config),
-    computeRecoveryCostAxis(structure, referenceData, config),
+    computeRecoveryCostAxis(structure, referenceData, config, options.recoveryCostCalculator),
   ];
 
   return {

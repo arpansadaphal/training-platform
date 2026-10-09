@@ -52,17 +52,25 @@ const VOLUME_BANDS: AxisBandDefinition[] = [
   { status: "N/A", lowerBound: null, upperBound: null },
 ];
 
-// FREQUENCY. Unit: distinct training days per week with ANY involvementFactor > 0.
+// EDIT 1 — replace FREQUENCY_BANDS
+// FREQUENCY (E6, REFRAMED). Unit: exposures / required exposures, where required = ceil(weekly fractional
+// hard sets / 10) and an exposure is a session with >= 2.0 fractional hard sets for the muscle. 1.0 means the
+// weekly dose is spread over exactly as many sessions as it needs. Direction is Tier 1-2: frequency has no
+// independent effect on hypertrophy once volume is controlled (Schoenfeld 2019; Pelland 2026); the per-session
+// cap is Tier 3 (Remmert 2025 preprint, not peer reviewed). Cutpoints are Tier 4.
 const FREQUENCY_BANDS: AxisBandDefinition[] = [
-  // Tier 4. Low = 0 days. One session per week is Adequate.
+  // Tier 4. Below 1: too few sessions for the dose, or no real exposure at all.
   { status: "Low", lowerBound: null, upperBound: 1 },
-  { status: "Adequate", lowerBound: 1, upperBound: 6 },
-  // Tier 4. Informational only.
-  { status: "High", lowerBound: 6, upperBound: null },
+  { status: "Adequate", lowerBound: 1, upperBound: 4 },
+  // Tier 4. Informational only (severity NONE): the dose is spread over many more sessions than it needs.
+  { status: "High", lowerBound: 4, upperBound: null },
   { status: "N/A", lowerBound: null, upperBound: null },
 ];
 
-// EXERCISE_SELECTION_BALANCE. Unit: fraction of the 8 hard-coded movement patterns present.
+// EDIT 2 — ESB_BANDS: values unchanged, comment replaced
+// EXERCISE_SELECTION_BALANCE. Unit: fraction of config.requiredMovementPatterns present (six patterns, E7).
+// Tier 3/4. 0.75 now means ONE missing pattern is tolerated (5/6 = 0.833 passes; 4/6 = 0.667 does not).
+// Before E7 it tolerated two of eight. CARRY and ISOLATION are no longer required.
 const ESB_BANDS: AxisBandDefinition[] = [
   { status: "Gaps present", lowerBound: null, upperBound: 0.75 },
   { status: "Balanced", lowerBound: 0.75, upperBound: null },
@@ -74,7 +82,10 @@ const PS_BANDS: AxisBandDefinition[] = [
   { status: "Issue found", lowerBound: 1, upperBound: null },
 ];
 
-// RECOVERY_COST. Unit: sum of targetSets x intensityWeight (a MODEL index).
+// EDIT 3 — RC_BANDS: values unchanged, comment addition
+//   Weights changed under E9: prescriptions with no stated effort now weigh 0.8 (was 1.0 for FIXED_WEIGHT and
+//   BODYWEIGHT, and the raw percent for PERCENT_1RM). The 40 / 90 / 130 cutpoints were NOT recalibrated;
+//   programs written without effort will read about 20% lower than before.
 const RC_BANDS: AxisBandDefinition[] = [
   { status: "Low", lowerBound: null, upperBound: 40 },
   { status: "Moderate", lowerBound: 40, upperBound: 90 },
@@ -216,6 +227,36 @@ export const HYPERTROPHY_CONFIG: GoalProfileConfig = {
     "EXERCISE_SELECTION_BALANCE",
     "PROGRESSION_SOUNDNESS",
   ],
+  // EDIT 4 — inside HYPERTROPHY_CONFIG, add:
+  // E7. Tier 3: no hypertrophy evidence requires loaded carries; per-muscle coverage is judged by VOLUME.
+    requiredMovementPatterns: [
+    "SQUAT",
+    "HINGE",
+    "HORIZONTAL_PUSH",
+    "VERTICAL_PUSH",
+    "HORIZONTAL_PULL",
+    "VERTICAL_PULL",
+  ],
+    // E5. Tier 3/4. Hypertrophy rises as sets approach failure but failure itself is unnecessary
+  // (Robinson 2024; Refalo 2023; ACSM 2026). The cut points are engine boundaries.
+  hardSetCredit: {
+    fullCreditMaxRir: 3, // RPE >= 7
+    zeroCreditMinRir: 5, // RPE <= 5
+    halfCredit: 0.5, // RIR 4
+    assumedRirWhenUndefined: 2, // Tier 4
+  },
+   // E6. Cap: Tier 3 (Remmert 2025 preprint). Exposure threshold: Tier 4.
+  frequencyDistribution: { perSessionSetCap: 10, minExposureSets: 2 },
+  // E8. Tier 3/4. Rep range 5-30: load-agnostic when sets are taken near failure (Robinson 2024 and the
+  // load literature it cites; not independently re-verified). Epley tolerance is Tier 4.
+  progressionRules: {
+    minShareEffortDefined: 0.8,
+    farFromFailureMinRir: 5,
+    maxShareFarFromFailure: 0.25,
+    acceptedRepRange: [5, 30],
+    minShareInAcceptedRepRange: 0.8,
+    percent1RmRepTolerance: 1,
+  },
   fitScoreProjection: HYPERTROPHY_FIT_SCORE_PROJECTION,
   validated: false,
   sourceNote:

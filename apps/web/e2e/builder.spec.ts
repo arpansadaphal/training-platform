@@ -3,7 +3,7 @@ import { test, expect, type Page } from "@playwright/test";
 /**
  * Phase 4's Builder E2E.
  *
-  * Rewritten per the Q3 ruling at the Phase 4 kickoff, and re-rewritten in
+ * Rewritten per the Q3 ruling at the Phase 4 kickoff, and re-rewritten in
  * Phase 10.2 when the HYPERTROPHY config was populated.
  *
  * Phase 4 shipped with all-null thresholds, so computeAssessment returned
@@ -71,9 +71,7 @@ async function signUpFreshUser(page: Page): Promise<string> {
 async function createProgram(page: Page, name: string): Promise<string> {
   await page.goto("/app/programs");
 
-  await page
-    .getByPlaceholder("e.g. 4-day upper/lower")
-    .fill(name);
+  await page.getByPlaceholder("e.g. 4-day upper/lower").fill(name);
   await page.getByRole("button", { name: "Create" }).click();
 
   // Wait for the Server Action POST to complete, then reload so the
@@ -87,9 +85,7 @@ async function createProgram(page: Page, name: string): Promise<string> {
 
   const href = await programLink.getAttribute("href");
   if (!href) {
-    throw new Error(
-      `Program link "${name}" is visible but has no href attribute`,
-    );
+    throw new Error(`Program link "${name}" is visible but has no href attribute`);
   }
   return href;
 }
@@ -132,60 +128,46 @@ test("Builder: build a draft, see the unvalidated Assessment state, commit a ver
   await page.getByRole("button", { name: "Create draft" }).click();
 
   // The draft's label becomes the editor heading.
-  await expect(
-    page.getByRole("heading", { name: /Option A/ }),
-  ).toBeVisible();
-  
+  await expect(page.getByRole("heading", { name: /Option A/ })).toBeVisible();
+
   // ── Add a workout day and one exercise ────────────────────────────────
   await page.getByRole("button", { name: "+ Add workout day" }).click();
 
   // Exercise picker: choose the first real option (index 0 is the
   // "Choose an exercise…" placeholder).
-  await page
-    .getByLabel("Choose an exercise")
-    .selectOption({ index: 1 });
+  await page.getByLabel("Choose an exercise").selectOption({ index: 1 });
   await page.getByRole("button", { name: "Add exercise" }).click();
 
   // ── Save, and wait for the assessment panel to reflect the saved draft ─
   await page.getByRole("button", { name: "Save", exact: true }).click();
 
   // ── The Q3 assertions ─────────────────────────────────────────────────
- const assessmentPanel = page.locator("section").filter({
-  has: page.getByRole("heading", { name: "Assessment" }),
-});
-// Phase 10.2: HYPERTROPHY config is populated but validated: false, so the
-// panel renders the classification under the provisional banner rather than
-// the "not yet available" state. Assert both the banner and a real section
-// so a blank panel or a missing banner both fail.
-await expect(
-  assessmentPanel.getByRole("note", { name: /provisional thresholds/i }),
-).toBeVisible();
-await expect(
-  assessmentPanel.getByRole("heading", { name: "Overall" }),
-).toBeVisible();
-
- 
+  const assessmentPanel = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Assessment" }),
+  });
+  // Phase 10.2: HYPERTROPHY config is populated but validated: false, so the
+  // panel renders the classification under the provisional banner rather than
+  // the "not yet available" state. Assert both the banner and a real section
+  // so a blank panel or a missing banner both fail.
+  await expect(
+    assessmentPanel.getByRole("note", { name: /provisional thresholds/i }),
+  ).toBeVisible();
+  await expect(assessmentPanel.getByRole("heading", { name: "Overall" })).toBeVisible();
 
   // ── Commit, and verify the version on the program page ────────────────
   await page.getByRole("button", { name: "Commit", exact: true }).click();
 
   // Commit success clears the selected draft and shows a confirmation.
-  await expect(
-    page.getByText(/Committed as version 1\./),
-  ).toBeVisible();
+  await expect(page.getByText(/Committed as version 1\./)).toBeVisible();
 
   // Navigate back to the program detail page via the breadcrumb.
-  await page
-    .getByRole("link", { name: new RegExp(`← ${programName}`) })
-    .click();
+  await page.getByRole("link", { name: new RegExp(`← ${programName}`) }).click();
   await expect(page).toHaveURL(/\/app\/programs\/[^/]+$/);
 
   // The Versions section now lists version 1, marked active.
   const versionsSection = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Versions" }),
   });
-  await expect(
-    versionsSection.getByText("Version 1"),
-  ).toBeVisible();
+  await expect(versionsSection.getByText("Version 1")).toBeVisible();
   await expect(versionsSection.getByText("(active)")).toBeVisible();
 });

@@ -93,11 +93,14 @@ test("Training: commit a version, start the session, log a deviation, mark compl
   const assessmentPanel = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Assessment" }),
   });
+  // Phase 10.2: HYPERTROPHY config is populated but validated: false, so the
+  // panel renders the classification under the provisional banner rather than
+  // the "not yet available" state. Assert both the banner and a real section
+  // so a blank panel or a missing banner both fail.
   await expect(
-    assessmentPanel.getByRole("heading", {
-      name: "Assessment not yet available",
-    }),
+    assessmentPanel.getByRole("note", { name: /provisional thresholds/i }),
   ).toBeVisible();
+  await expect(assessmentPanel.getByRole("heading", { name: "Overall" })).toBeVisible();
 
   await page.getByRole("button", { name: "Commit", exact: true }).click();
   await expect(page.getByText(/Committed as version 1\./)).toBeVisible();
@@ -108,24 +111,16 @@ test("Training: commit a version, start the session, log a deviation, mark compl
   await expect(page.getByText(programName)).toBeVisible();
 
   // ── Start training ────────────────────────────────────────────────────
-  const programCard = page
-    .locator("li")
-    .filter({ hasText: programName });
-  await programCard
-    .getByRole("button", { name: "Start training" })
-    .click();
+  const programCard = page.locator("li").filter({ hasText: programName });
+  await programCard.getByRole("button", { name: "Start training" }).click();
   await expect(page).toHaveURL(/\/train\/session\/[^/]+$/);
 
   // The session detail heading is "Program — Day A" per SessionClient.
-  await expect(
-    page.getByRole("heading", { name: new RegExp(programName) }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: new RegExp(programName) })).toBeVisible();
 
   // ── Start session, log one deviation, mark complete ───────────────────
   await page.getByRole("button", { name: "Start session" }).click();
-  await expect(
-    page.getByRole("button", { name: "Mark complete" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Mark complete" })).toBeVisible();
 
   // Log a set with a reps value that is (deliberately) a deviation from the
   // plan. The default add-exercise target is 3×8-10, so "5" is off-plan.
