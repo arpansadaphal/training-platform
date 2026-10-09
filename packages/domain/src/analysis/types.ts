@@ -204,6 +204,39 @@ export interface FitScoreProjection {
   readonly worstLeverageToBand: Readonly<Record<Leverage, FitScoreBand>>;
 }
 
+// EDIT 1 — add above GoalProfileConfig:
+
+/** E5. See hardSetCredit.ts. Tier 3/4 engine boundaries. */
+export interface HardSetCreditConfig {
+  /** RIR at or below this earns full credit (1). */
+  readonly fullCreditMaxRir: number;
+  /** RIR at or above this earns zero credit. Strictly between the two earns `halfCredit`. */
+  readonly zeroCreditMinRir: number;
+  readonly halfCredit: number;
+  /** RIR assumed when a prescription states no effort. */
+  readonly assumedRirWhenUndefined: number;
+}
+
+/** E6. See frequency.ts. */
+export interface FrequencyDistributionConfig {
+  /** Fractional sets one session is expected to carry for one muscle at most. Must be > 0. */
+  readonly perSessionSetCap: number;
+  /** Fractional sets a session needs for the muscle to count as an exposure. */
+  readonly minExposureSets: number;
+}
+
+/** E8. See progressionSoundness.ts. */
+export interface ProgressionRulesConfig {
+  readonly minShareEffortDefined: number;
+  readonly farFromFailureMinRir: number;
+  readonly maxShareFarFromFailure: number;
+  readonly acceptedRepRange: readonly [number, number];
+  readonly minShareInAcceptedRepRange: number;
+  /** Reps of slack allowed beyond the Epley estimate before a %1RM prescription is called infeasible. */
+  readonly percent1RmRepTolerance: number;
+}
+
+
 // ---------------------------------------------------------------------------
 // Goal-profile config (Phase 3 shape)
 // ---------------------------------------------------------------------------
@@ -224,6 +257,16 @@ export interface GoalProfileConfig {
    *   3. Neither → weight resolves to `null` → the axis is UNVALIDATED.
    *      Not an error, not a silent default.
    */
+  // EDIT 2 — inside GoalProfileConfig, add (all optional; code defaults apply when absent):
+  /** E7. Patterns EXERCISE_SELECTION_BALANCE requires. Default: the six hypertrophy patterns. */
+  readonly requiredMovementPatterns?: readonly MovementPattern[];
+  /** E5. Defaults: 3 / 5 / 0.5 / 2. */
+  readonly hardSetCredit?: HardSetCreditConfig;
+  /** E6. Defaults: cap 10, exposure threshold 2. */
+  readonly frequencyDistribution?: FrequencyDistributionConfig;
+  /** E8. Defaults as in progressionSoundness.ts. */
+  readonly progressionRules?: ProgressionRulesConfig;
+
   axisWeights: Record<string, AxisWeight>;
   statusBands: Record<AxisType, AxisBandDefinition[]>;
   /** Per-axis status → severity. See ARCH-029. */
@@ -265,6 +308,8 @@ export interface ComputeAnalysisOptions {
    * Injectable clock, used only so a determinism test can compare two runs
    * byte-for-byte. Production callers omit it and get `new Date()`.
    */
+  /** E9. Replaces the provisional recovery-cost calculator for this run. */
+  recoveryCostCalculator?: RecoveryCostCalculator;
   now?: () => Date;
 }
 
@@ -281,11 +326,12 @@ export interface ComputeAnalysisOptions {
  * This interface exists so the placeholder can be swapped for a
  * sports-science-validated calculator without touching `computeAnalysis`.
  */
+// EDIT 4 — RecoveryCostCalculator: add an optional third parameter (existing implementers still compile)
 export interface RecoveryCostCalculator {
-  /** Returns a non-negative aggregate fatigue signal. */
   compute(
     structure: ProgramStructure,
     referenceData: ExerciseReferenceData,
+    config?: GoalProfileConfig,
   ): number;
 }
 

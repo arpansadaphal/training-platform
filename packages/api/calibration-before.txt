@@ -1,0 +1,415 @@
+
+> @training/api@0.0.0 test /Users/arpan/Documents/code/training-platform/packages/api
+> vitest run "calibration.test.ts"
+
+
+ RUN  v2.1.9 /Users/arpan/Documents/code/training-platform/packages/api
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > seed uses the 1.0 / 0.5 involvement convention (predictions assume it)
+distinct involvementFactor values in reference data: 0.5, 1
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program A: Clearly under-dosed
+
+=== Program A: Clearly under-dosed ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps               2  Low       MAJOR     HIGH
+  VOLUME:calves               0  Low       MAJOR     HIGH
+  VOLUME:chest                2  Low       MAJOR     HIGH
+  VOLUME:glutes               2  Low       MAJOR     HIGH
+  VOLUME:hamstrings           2  Low       MAJOR     HIGH
+  VOLUME:lats                 4  Low       MAJOR     HIGH
+  VOLUME:quads                2  Low       MAJOR     HIGH
+  VOLUME:rear delts           1  Low       MAJOR     HIGH
+  VOLUME:side delts           1  Low       MAJOR     HIGH
+  VOLUME:triceps              2  Low       MAJOR     HIGH
+  VOLUME:upper back           2  Low       MAJOR     HIGH
+FREQUENCY (distinct days | band): biceps 2 Adequate; calves 0 Low; chest 1 Adequate; glutes 2 Adequate; hamstrings 1 Adequate; lats 2 Adequate; quads 1 Adequate; rear delts 1 Adequate; side delts 1 Adequate; triceps 2 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.75 band=Balanced severity=NONE weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
+RECOVERY_COST               metric=9.6 band=Low severity=NONE weight=MEDIUM leverage=NONE
+material findings (leverage >= LOW): VOLUME:biceps [Low, MAJOR x HIGH -> HIGH]; VOLUME:calves [Low, MAJOR x HIGH -> HIGH]; VOLUME:chest [Low, MAJOR x HIGH -> HIGH]; VOLUME:glutes [Low, MAJOR x HIGH -> HIGH]; VOLUME:hamstrings [Low, MAJOR x HIGH -> HIGH]; VOLUME:lats [Low, MAJOR x HIGH -> HIGH]; VOLUME:quads [Low, MAJOR x HIGH -> HIGH]; VOLUME:rear delts [Low, MAJOR x HIGH -> HIGH]; VOLUME:side delts [Low, MAJOR x HIGH -> HIGH]; VOLUME:triceps [Low, MAJOR x HIGH -> HIGH]; VOLUME:upper back [Low, MAJOR x HIGH -> HIGH]; FREQUENCY:calves [Low, MODERATE x LOW -> LOW]
+strengths (2): EXERCISE_SELECTION_BALANCE, PROGRESSION_SOUNDNESS
+attention areas (10): VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+biggest opportunity: VOLUME:biceps
+actions (11): volume:add-biceps :: Add weekly volume for biceps. | volume:add-calves :: Add weekly volume for calves. | volume:add-chest :: Add weekly volume for chest. | volume:add-glutes :: Add weekly volume for glutes. | volume:add-hamstrings :: Add weekly volume for hamstrings. | volume:add-lats :: Add weekly volume for lats. | volume:add-quads :: Add weekly volume for quads. | volume:add-rear delts :: Add weekly volume for rear delts. | volume:add-side delts :: Add weekly volume for side delts. | volume:add-triceps :: Add weekly volume for triceps. | volume:add-upper back :: Add weekly volume for upper back.
+overallSummary: Identified 2 strengths, 10 attention areas, biggest opportunity on VOLUME:biceps.
+FIT (provisional, validated:false => real result is UNVALIDATED): NEEDS_WORK
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program B: Balanced hypertrophy
+
+=== Program B: Balanced hypertrophy ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps              12  Adequate  NONE      NONE
+  VOLUME:calves               9  Adequate  NONE      NONE
+  VOLUME:chest               12  Adequate  NONE      NONE
+  VOLUME:glutes               9  Adequate  NONE      NONE
+  VOLUME:hamstrings        10.5  Adequate  NONE      NONE
+  VOLUME:lats                12  Adequate  NONE      NONE
+  VOLUME:quads               12  Adequate  NONE      NONE
+  VOLUME:rear delts           9  Adequate  NONE      NONE
+  VOLUME:side delts         7.5  Adequate  NONE      NONE
+  VOLUME:triceps             12  Adequate  NONE      NONE
+  VOLUME:upper back           9  Adequate  NONE      NONE
+FREQUENCY (distinct days | band): biceps 3 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 3 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
+RECOVERY_COST               metric=71.7 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
+material findings (leverage >= LOW): none
+strengths (13): EXERCISE_SELECTION_BALANCE, PROGRESSION_SOUNDNESS, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+attention areas (0): none
+biggest opportunity: null
+actions (0): none
+overallSummary: Identified 13 strengths.
+FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program C: Excessive volume
+
+=== Program C: Excessive volume ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps              36  Excessive MODERATE  HIGH
+  VOLUME:calves              12  Adequate  NONE      NONE
+  VOLUME:chest               26  High      NONE      NONE
+  VOLUME:glutes              13  Adequate  NONE      NONE
+  VOLUME:hamstrings          16  Adequate  NONE      NONE
+  VOLUME:lats                36  Excessive MODERATE  HIGH
+  VOLUME:quads               26  High      NONE      NONE
+  VOLUME:rear delts          19  Adequate  NONE      NONE
+  VOLUME:side delts          16  Adequate  NONE      NONE
+  VOLUME:triceps             31  Excessive MODERATE  HIGH
+  VOLUME:upper back          23  High      NONE      NONE
+FREQUENCY (distinct days | band): biceps 2 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 2 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
+RECOVERY_COST               metric=173.2 band=Excessive severity=MODERATE weight=MEDIUM leverage=MODERATE
+material findings (leverage >= LOW): VOLUME:biceps [Excessive, MODERATE x HIGH -> HIGH]; VOLUME:lats [Excessive, MODERATE x HIGH -> HIGH]; VOLUME:triceps [Excessive, MODERATE x HIGH -> HIGH]; RECOVERY_COST [Excessive, MODERATE x MEDIUM -> MODERATE]
+strengths (10): EXERCISE_SELECTION_BALANCE, PROGRESSION_SOUNDNESS, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:upper back
+attention areas (3): VOLUME:lats, VOLUME:triceps, RECOVERY_COST
+biggest opportunity: VOLUME:biceps
+actions (4): volume:reduce-biceps :: Reduce weekly volume for biceps. | volume:reduce-lats :: Reduce weekly volume for lats. | volume:reduce-triceps :: Reduce weekly volume for triceps. | recoveryCost:reduce-intensity :: Reduce weekly intensity or insert a deload day.
+overallSummary: Identified 10 strengths, 3 attention areas, biggest opportunity on VOLUME:biceps.
+FIT (provisional, validated:false => real result is UNVALIDATED): NEEDS_WORK
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program D: Low frequency, reasonable volume
+
+=== Program D: Low frequency, reasonable volume ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps              17  Adequate  NONE      NONE
+  VOLUME:calves               9  Adequate  NONE      NONE
+  VOLUME:chest               13  Adequate  NONE      NONE
+  VOLUME:glutes               9  Adequate  NONE      NONE
+  VOLUME:hamstrings        11.5  Adequate  NONE      NONE
+  VOLUME:lats                14  Adequate  NONE      NONE
+  VOLUME:quads               12  Adequate  NONE      NONE
+  VOLUME:rear delts         6.5  Adequate  NONE      NONE
+  VOLUME:side delts         9.5  Adequate  NONE      NONE
+  VOLUME:triceps           12.5  Adequate  NONE      NONE
+  VOLUME:upper back         8.5  Adequate  NONE      NONE
+FREQUENCY (distinct days | band): biceps 2 Adequate; calves 1 Adequate; chest 1 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 1 Adequate; quads 1 Adequate; rear delts 2 Adequate; side delts 1 Adequate; triceps 2 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
+RECOVERY_COST               metric=77.7 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
+material findings (leverage >= LOW): none
+strengths (13): EXERCISE_SELECTION_BALANCE, PROGRESSION_SOUNDNESS, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+attention areas (0): none
+biggest opportunity: null
+actions (0): none
+overallSummary: Identified 13 strengths.
+FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program E: High frequency, controlled volume
+
+=== Program E: High frequency, controlled volume ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps              15  Adequate  NONE      NONE
+  VOLUME:calves              10  Adequate  NONE      NONE
+  VOLUME:chest               10  Adequate  NONE      NONE
+  VOLUME:glutes              11  Adequate  NONE      NONE
+  VOLUME:hamstrings          12  Adequate  NONE      NONE
+  VOLUME:lats                10  Adequate  NONE      NONE
+  VOLUME:quads               10  Adequate  NONE      NONE
+  VOLUME:rear delts          13  Adequate  NONE      NONE
+  VOLUME:side delts          12  Adequate  NONE      NONE
+  VOLUME:triceps             15  Adequate  NONE      NONE
+  VOLUME:upper back          10  Adequate  NONE      NONE
+FREQUENCY (distinct days | band): biceps 5 Adequate; calves 5 Adequate; chest 5 Adequate; glutes 5 Adequate; hamstrings 5 Adequate; lats 5 Adequate; quads 5 Adequate; rear delts 5 Adequate; side delts 5 Adequate; triceps 5 Adequate; upper back 5 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
+RECOVERY_COST               metric=84.4 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
+material findings (leverage >= LOW): none
+strengths (13): EXERCISE_SELECTION_BALANCE, PROGRESSION_SOUNDNESS, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+attention areas (0): none
+biggest opportunity: null
+actions (0): none
+overallSummary: Identified 13 strengths.
+FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program F1: Redundant selection (coverage intact)
+
+=== Program F1: Redundant selection (coverage intact) ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps              18  Adequate  NONE      NONE
+  VOLUME:calves              14  Adequate  NONE      NONE
+  VOLUME:chest               16  Adequate  NONE      NONE
+  VOLUME:glutes               7  Adequate  NONE      NONE
+  VOLUME:hamstrings          12  Adequate  NONE      NONE
+  VOLUME:lats                12  Adequate  NONE      NONE
+  VOLUME:quads               14  Adequate  NONE      NONE
+  VOLUME:rear delts          12  Adequate  NONE      NONE
+  VOLUME:side delts           6  Adequate  NONE      NONE
+  VOLUME:triceps             14  Adequate  NONE      NONE
+  VOLUME:upper back           9  Adequate  NONE      NONE
+FREQUENCY (distinct days | band): biceps 2 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 2 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.625 band=Gaps present severity=MINOR weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
+RECOVERY_COST               metric=84 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
+material findings (leverage >= LOW): none
+strengths (12): PROGRESSION_SOUNDNESS, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+attention areas (0): none
+biggest opportunity: null
+actions (0): none
+overallSummary: Identified 12 strengths.
+FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program F2: Redundant selection + coverage gap
+
+=== Program F2: Redundant selection + coverage gap ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps              24  High      NONE      NONE
+  VOLUME:calves               0  Low       MAJOR     HIGH
+  VOLUME:chest               24  High      NONE      NONE
+  VOLUME:glutes               0  Low       MAJOR     HIGH
+  VOLUME:hamstrings           0  Low       MAJOR     HIGH
+  VOLUME:lats                12  Adequate  NONE      NONE
+  VOLUME:quads                0  Low       MAJOR     HIGH
+  VOLUME:rear delts           9  Adequate  NONE      NONE
+  VOLUME:side delts           6  Adequate  NONE      NONE
+  VOLUME:triceps             15  Adequate  NONE      NONE
+  VOLUME:upper back           9  Adequate  NONE      NONE
+FREQUENCY (distinct days | band): biceps 4 Adequate; calves 0 Low; chest 2 Adequate; glutes 0 Low; hamstrings 0 Low; lats 2 Adequate; quads 0 Low; rear delts 2 Adequate; side delts 2 Adequate; triceps 2 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.5 band=Gaps present severity=MINOR weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
+RECOVERY_COST               metric=61.8 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
+material findings (leverage >= LOW): VOLUME:calves [Low, MAJOR x HIGH -> HIGH]; VOLUME:glutes [Low, MAJOR x HIGH -> HIGH]; VOLUME:hamstrings [Low, MAJOR x HIGH -> HIGH]; VOLUME:quads [Low, MAJOR x HIGH -> HIGH]; FREQUENCY:calves [Low, MODERATE x LOW -> LOW]; FREQUENCY:glutes [Low, MODERATE x LOW -> LOW]; FREQUENCY:hamstrings [Low, MODERATE x LOW -> LOW]; FREQUENCY:quads [Low, MODERATE x LOW -> LOW]
+strengths (8): PROGRESSION_SOUNDNESS, VOLUME:biceps, VOLUME:chest, VOLUME:lats, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+attention areas (3): VOLUME:glutes, VOLUME:hamstrings, VOLUME:quads
+biggest opportunity: VOLUME:calves
+actions (4): volume:add-calves :: Add weekly volume for calves. | volume:add-glutes :: Add weekly volume for glutes. | volume:add-hamstrings :: Add weekly volume for hamstrings. | volume:add-quads :: Add weekly volume for quads.
+overallSummary: Identified 8 strengths, 3 attention areas, biggest opportunity on VOLUME:calves.
+FIT (provisional, validated:false => real result is UNVALIDATED): NEEDS_WORK
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program G: Poor progression structure (only effort/reps/load scheme expressible)
+
+=== Program G: Poor progression structure (only effort/reps/load scheme expressible) ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps              12  Adequate  NONE      NONE
+  VOLUME:calves               9  Adequate  NONE      NONE
+  VOLUME:chest               12  Adequate  NONE      NONE
+  VOLUME:glutes               9  Adequate  NONE      NONE
+  VOLUME:hamstrings        10.5  Adequate  NONE      NONE
+  VOLUME:lats                12  Adequate  NONE      NONE
+  VOLUME:quads               12  Adequate  NONE      NONE
+  VOLUME:rear delts           9  Adequate  NONE      NONE
+  VOLUME:side delts         7.5  Adequate  NONE      NONE
+  VOLUME:triceps             12  Adequate  NONE      NONE
+  VOLUME:upper back           9  Adequate  NONE      NONE
+FREQUENCY (distinct days | band): biceps 3 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 3 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
+RECOVERY_COST               metric=77.4 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
+material findings (leverage >= LOW): none
+strengths (13): EXERCISE_SELECTION_BALANCE, PROGRESSION_SOUNDNESS, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+attention areas (0): none
+biggest opportunity: null
+actions (0): none
+overallSummary: Identified 13 strengths.
+FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program H: Strong progression structure (identical to B in ProgramStructure)
+
+=== Program H: Strong progression structure (identical to B in ProgramStructure) ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps              12  Adequate  NONE      NONE
+  VOLUME:calves               9  Adequate  NONE      NONE
+  VOLUME:chest               12  Adequate  NONE      NONE
+  VOLUME:glutes               9  Adequate  NONE      NONE
+  VOLUME:hamstrings        10.5  Adequate  NONE      NONE
+  VOLUME:lats                12  Adequate  NONE      NONE
+  VOLUME:quads               12  Adequate  NONE      NONE
+  VOLUME:rear delts           9  Adequate  NONE      NONE
+  VOLUME:side delts         7.5  Adequate  NONE      NONE
+  VOLUME:triceps             12  Adequate  NONE      NONE
+  VOLUME:upper back           9  Adequate  NONE      NONE
+FREQUENCY (distinct days | band): biceps 3 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 3 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
+RECOVERY_COST               metric=71.7 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
+material findings (leverage >= LOW): none
+strengths (13): EXERCISE_SELECTION_BALANCE, PROGRESSION_SOUNDNESS, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+attention areas (0): none
+biggest opportunity: null
+actions (0): none
+overallSummary: Identified 13 strengths.
+FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program J: Consecutive-day, failure-heavy (weekday order not representable)
+
+=== Program J: Consecutive-day, failure-heavy (weekday order not representable) ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps              18  Adequate  NONE      NONE
+  VOLUME:calves              12  Adequate  NONE      NONE
+  VOLUME:chest               12  Adequate  NONE      NONE
+  VOLUME:glutes              12  Adequate  NONE      NONE
+  VOLUME:hamstrings          24  High      NONE      NONE
+  VOLUME:lats                12  Adequate  NONE      NONE
+  VOLUME:quads               12  Adequate  NONE      NONE
+  VOLUME:rear delts          18  Adequate  NONE      NONE
+  VOLUME:side delts          12  Adequate  NONE      NONE
+  VOLUME:triceps             18  Adequate  NONE      NONE
+  VOLUME:upper back          12  Adequate  NONE      NONE
+FREQUENCY (distinct days | band): biceps 4 Adequate; calves 4 Adequate; chest 4 Adequate; glutes 4 Adequate; hamstrings 4 Adequate; lats 4 Adequate; quads 4 Adequate; rear delts 4 Adequate; side delts 4 Adequate; triceps 4 Adequate; upper back 4 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.625 band=Gaps present severity=MINOR weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
+RECOVERY_COST               metric=120 band=High severity=MINOR weight=MEDIUM leverage=LOW
+material findings (leverage >= LOW): RECOVERY_COST [High, MINOR x MEDIUM -> LOW]
+strengths (12): PROGRESSION_SOUNDNESS, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+attention areas (0): none
+biggest opportunity: RECOVERY_COST
+actions (1): recoveryCost:trim-intensity :: Trim intensity on the highest-fatigue days.
+overallSummary: Identified 12 strengths, biggest opportunity on RECOVERY_COST.
+FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > G with PERCENT_1RM loads, percent=0.75, no 1-rep prescription (PS false-positive check)
+
+=== Program G-pct(0.75): G rewritten with %1RM loads, no single ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps              12  Adequate  NONE      NONE
+  VOLUME:calves               9  Adequate  NONE      NONE
+  VOLUME:chest               12  Adequate  NONE      NONE
+  VOLUME:glutes               9  Adequate  NONE      NONE
+  VOLUME:hamstrings        10.5  Adequate  NONE      NONE
+  VOLUME:lats                12  Adequate  NONE      NONE
+  VOLUME:quads               12  Adequate  NONE      NONE
+  VOLUME:rear delts           9  Adequate  NONE      NONE
+  VOLUME:side delts         7.5  Adequate  NONE      NONE
+  VOLUME:triceps             12  Adequate  NONE      NONE
+  VOLUME:upper back           9  Adequate  NONE      NONE
+FREQUENCY (distinct days | band): biceps 3 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 3 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=1 band=Issue found severity=MINOR weight=MEDIUM leverage=LOW
+RECOVERY_COST               metric=63 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
+material findings (leverage >= LOW): PROGRESSION_SOUNDNESS [Issue found, MINOR x MEDIUM -> LOW]
+strengths (12): EXERCISE_SELECTION_BALANCE, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+attention areas (0): none
+biggest opportunity: PROGRESSION_SOUNDNESS
+actions (1): progressionSoundness:align-schemes :: Align progression schemes across prescriptions.
+overallSummary: Identified 12 strengths, biggest opportunity on PROGRESSION_SOUNDNESS.
+FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > G with PERCENT_1RM loads, percent=75, no 1-rep prescription (PS false-positive check)
+
+=== Program G-pct(75): G rewritten with %1RM loads, no single ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps              12  Adequate  NONE      NONE
+  VOLUME:calves               9  Adequate  NONE      NONE
+  VOLUME:chest               12  Adequate  NONE      NONE
+  VOLUME:glutes               9  Adequate  NONE      NONE
+  VOLUME:hamstrings        10.5  Adequate  NONE      NONE
+  VOLUME:lats                12  Adequate  NONE      NONE
+  VOLUME:quads               12  Adequate  NONE      NONE
+  VOLUME:rear delts           9  Adequate  NONE      NONE
+  VOLUME:side delts         7.5  Adequate  NONE      NONE
+  VOLUME:triceps             12  Adequate  NONE      NONE
+  VOLUME:upper back           9  Adequate  NONE      NONE
+FREQUENCY (distinct days | band): biceps 3 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 3 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=1 band=Issue found severity=MINOR weight=MEDIUM leverage=LOW
+RECOVERY_COST               metric=63 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
+material findings (leverage >= LOW): PROGRESSION_SOUNDNESS [Issue found, MINOR x MEDIUM -> LOW]
+strengths (12): EXERCISE_SELECTION_BALANCE, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+attention areas (0): none
+biggest opportunity: PROGRESSION_SOUNDNESS
+actions (1): progressionSoundness:align-schemes :: Align progression schemes across prescriptions.
+overallSummary: Identified 12 strengths, biggest opportunity on PROGRESSION_SOUNDNESS.
+FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > J as-is (consecutive-day, failure-heavy)
+
+=== Program J(probe): J as-is ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps              18  Adequate  NONE      NONE
+  VOLUME:calves              12  Adequate  NONE      NONE
+  VOLUME:chest               12  Adequate  NONE      NONE
+  VOLUME:glutes              12  Adequate  NONE      NONE
+  VOLUME:hamstrings          24  High      NONE      NONE
+  VOLUME:lats                12  Adequate  NONE      NONE
+  VOLUME:quads               12  Adequate  NONE      NONE
+  VOLUME:rear delts          18  Adequate  NONE      NONE
+  VOLUME:side delts          12  Adequate  NONE      NONE
+  VOLUME:triceps             18  Adequate  NONE      NONE
+  VOLUME:upper back          12  Adequate  NONE      NONE
+FREQUENCY (distinct days | band): biceps 4 Adequate; calves 4 Adequate; chest 4 Adequate; glutes 4 Adequate; hamstrings 4 Adequate; lats 4 Adequate; quads 4 Adequate; rear delts 4 Adequate; side delts 4 Adequate; triceps 4 Adequate; upper back 4 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.625 band=Gaps present severity=MINOR weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
+RECOVERY_COST               metric=120 band=High severity=MINOR weight=MEDIUM leverage=LOW
+material findings (leverage >= LOW): RECOVERY_COST [High, MINOR x MEDIUM -> LOW]
+strengths (12): PROGRESSION_SOUNDNESS, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+attention areas (0): none
+biggest opportunity: RECOVERY_COST
+actions (1): recoveryCost:trim-intensity :: Trim intensity on the highest-fatigue days.
+overallSummary: Identified 12 strengths, biggest opportunity on RECOVERY_COST.
+FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config
+
+=== SUMMARY (provisional Fit; real Fit is UNVALIDATED while validated:false) ===
+┌─────────┬───────────────┬─────┬──────┬───────────┬──────────────────┬───────────┬───────────┬─────────────────────────┬────────────────┐
+│ (index) │ program       │ low │ high │ excessive │ materialFindings │ strengths │ attention │ biggest                 │ provisionalFit │
+├─────────┼───────────────┼─────┼──────┼───────────┼──────────────────┼───────────┼───────────┼─────────────────────────┼────────────────┤
+│ 0       │ 'A'           │ 11  │ 0    │ 0         │ 12               │ 2         │ 10        │ 'VOLUME:biceps'         │ 'NEEDS_WORK'   │
+│ 1       │ 'B'           │ 0   │ 0    │ 0         │ 0                │ 13        │ 0         │ 'null'                  │ 'STRONG'       │
+│ 2       │ 'C'           │ 0   │ 3    │ 3         │ 4                │ 10        │ 3         │ 'VOLUME:biceps'         │ 'NEEDS_WORK'   │
+│ 3       │ 'D'           │ 0   │ 0    │ 0         │ 0                │ 13        │ 0         │ 'null'                  │ 'STRONG'       │
+│ 4       │ 'E'           │ 0   │ 0    │ 0         │ 0                │ 13        │ 0         │ 'null'                  │ 'STRONG'       │
+│ 5       │ 'F1'          │ 0   │ 0    │ 0         │ 0                │ 12        │ 0         │ 'null'                  │ 'STRONG'       │
+│ 6       │ 'F2'          │ 4   │ 2    │ 0         │ 8                │ 8         │ 3         │ 'VOLUME:calves'         │ 'NEEDS_WORK'   │
+│ 7       │ 'G'           │ 0   │ 0    │ 0         │ 0                │ 13        │ 0         │ 'null'                  │ 'STRONG'       │
+│ 8       │ 'H'           │ 0   │ 0    │ 0         │ 0                │ 13        │ 0         │ 'null'                  │ 'STRONG'       │
+│ 9       │ 'J'           │ 0   │ 1    │ 0         │ 1                │ 12        │ 0         │ 'RECOVERY_COST'         │ 'STRONG'       │
+│ 10      │ 'G-pct(0.75)' │ 0   │ 0    │ 0         │ 1                │ 12        │ 0         │ 'PROGRESSION_SOUNDNESS' │ 'STRONG'       │
+│ 11      │ 'G-pct(75)'   │ 0   │ 0    │ 0         │ 1                │ 12        │ 0         │ 'PROGRESSION_SOUNDNESS' │ 'STRONG'       │
+│ 12      │ 'J(probe)'    │ 0   │ 1    │ 0         │ 1                │ 12        │ 0         │ 'RECOVERY_COST'         │ 'STRONG'       │
+└─────────┴───────────────┴─────┴──────┴───────────┴──────────────────┴───────────┴───────────┴─────────────────────────┴────────────────┘
+
+ ✓ src/services/calibration.test.ts (18 tests) 58ms
+
+ Test Files  1 passed (1)
+      Tests  18 passed (18)
+   Start at  00:39:17
+   Duration  391ms (transform 118ms, setup 0ms, collect 179ms, tests 58ms, environment 0ms, prepare 43ms)
+

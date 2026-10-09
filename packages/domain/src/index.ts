@@ -125,3 +125,9 @@ export {
 } from "./assessment/launchGate";
 
 export { ASSESSMENT_ENGINE_VERSION } from "./assessment/version";
+export type { HardSetCreditConfig, FrequencyDistributionConfig, ProgressionRulesConfig } from "./analysis/types";
+export {
+  DEFAULT_HARD_SET_CREDIT, hardSetCredit, creditedSets, prescribedRpe, prescribedRir, hasDefinedEffort,
+} from "./analysis/hardSetCredit";
+export { evaluateProgressionChecks, epleyMaxReps } from "./analysis/progressionSoundness";
+export type { ProgressionCheck, ProgressionCheckId } from "./analysis/progressionSoundness";

@@ -69,14 +69,15 @@ export function actionTemplateFor(
       }
 
       case "FREQUENCY": {
-        if (band === "Low") {
-          // Root cause is treated as a volume-side fix so it dedupes with
-          // the corresponding VOLUME × Low action for the same scope — the
-          // "missing chest day" scenario from phases/phase-03-*.md's dedup
-          // test. The description is frequency-worded; the key is shared.
+                if (band === "Low") {
+          // E6: Low now means the weekly dose is spread over too few sessions (or the muscle has no real
+          // exposure). The key is no longer shared with VOLUME x Low, so the two actions do not dedupe.
+          const noExposure = typeof axis.metricValue === "number" && axis.metricValue === 0;
           return {
-            description: `Spread ${scope} across more training days.`,
-            rootCauseKey: `volume:add-${scope}`,
+            description: noExposure
+              ? `Give ${scope} at least one session with two or more hard sets.`
+              : `Split ${scope} across more training days so no session carries more than about ten sets.`,
+            rootCauseKey: `frequency:split-${scope}`,
           };
         }
         if (band === "High") {

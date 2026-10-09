@@ -1,25 +1,14 @@
 // packages/domain/src/analysis/volume.ts
 //
-// Volume axis — per-muscle-group weekly set volume.
+// Volume axis: per-muscle-group weekly HARD-SET volume.
 //
-// Formula (05-analysis-engine.md §"Analysis axes"):
+// Formula (E5):
 //   sum over all ExercisePrescriptions of
-//     targetSets × involvementFactor(exercise, muscleGroup)
-// summed across every WorkoutDay in the ProgramStructure.
+//     targetSets x hardSetCredit(prescription) x involvementFactor(exercise, muscleGroup)
+// summed across every WorkoutDay. hardSetCredit is 1 / 0.5 / 0 by proximity to failure (hardSetCredit.ts);
+// a prescription with no stated effort is assumed to be RIR 2 and earns full credit.
 //
-// Weekly assumption: the ProgramStructure is treated as one representative
-// week (a microcycle). The source documents do not describe multi-week
-// structures; if that ever changes, this assumption — and only this
-// assumption — is what to revisit.
-//
-// Phase 10.2 / E14 (partially resolved): `scopeKey` on the axis result is
-// the muscle-group NAME, not its id. Names are @unique and stable across
-// environments; cuids are not, and they leaked into every user-facing
-// surface (strengths cards, action descriptions, root cause keys, the
-// overall summary). The internal involvement lookup still keys on
-// muscleGroup.id — only the outward-facing scopeKey uses the name. This
-// also makes the scoped-weight key format (`VOLUME:chest`) match what a
-// config author would naturally write.
+// Weekly assumption: the ProgramStructure is treated as one representative week (a microcycle).
 
 import type { ProgramStructure } from "../types";
 import type {
@@ -28,6 +17,7 @@ import type {
   GoalProfileConfig,
 } from "./types";
 import { resolveBand } from "./bandResolution";
+import { creditedSets, resolveHardSetCreditConfig } from "./hardSetCredit";
 
 export function computeVolumeAxis(
   structure: ProgramStructure,
@@ -35,6 +25,7 @@ export function computeVolumeAxis(
   config: GoalProfileConfig,
 ): AnalysisAxisResult[] {
   const bands = config.statusBands.VOLUME;
+  const credit = resolveHardSetCreditConfig(config);
 
   // exerciseId -> muscleGroupId -> involvementFactor
   const involvementByExercise = new Map<string, Map<string, number>>();
@@ -54,17 +45,15 @@ export function computeVolumeAxis(
 
     for (const day of structure.workoutDays) {
       for (const prescription of day.prescriptions) {
-        const byMuscle = involvementByExercise.get(prescription.exerciseId);
-        if (!byMuscle) continue;
-        const factor = byMuscle.get(muscleGroup.id);
+        const factor = involvementByExercise.get(prescription.exerciseId)?.get(muscleGroup.id);
         if (factor === undefined || factor <= 0) continue;
-        totalWeeklySets += prescription.targetSets * factor;
+        totalWeeklySets += creditedSets(prescription, credit) * factor;
       }
     }
 
     results.push({
       axisType: "VOLUME",
-      scopeKey: muscleGroup.name,
+      scopeKey: muscleGroup.id,
       metricValue: totalWeeklySets,
       status: resolveBand(totalWeeklySets, bands),
     });

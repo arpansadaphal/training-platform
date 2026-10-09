@@ -1,37 +1,32 @@
 // packages/domain/src/analysis/exerciseSelectionBalance.ts
 //
-// Exercise Selection Balance — program-wide movement-pattern coverage check.
+// Exercise Selection Balance: program-wide movement-pattern coverage check (E7).
 //
-// 05-analysis-engine.md: "Movement-pattern coverage check across all
-// prescriptions — resolvable from structural logic alone, no external
-// validation needed."
+// The required pattern set now comes from config.requiredMovementPatterns, defaulting to the hypertrophy
+// recommendation: SQUAT, HINGE, HORIZONTAL_PUSH, VERTICAL_PUSH, HORIZONTAL_PULL, VERTICAL_PULL.
+// CARRY and ISOLATION are NO LONGER required: no hypertrophy evidence requires loaded carries, and
+// per-muscle coverage is already judged by VOLUME. "OTHER" is never a required pattern.
 //
-// Required pattern set: all MovementPattern values except "OTHER". "OTHER"
-// is a catch-all and is never treated as a required pattern. If Phase 3+
-// wants this configurable, add a config field then; not in Phase 2.
-//
-// metricValue = coverage ratio in [0, 1] = (required patterns present) / (all required patterns).
-// The band names "Balanced" / "Gaps present" come from the config; the domain
-// never hard-codes those strings.
+// metricValue = (required patterns present) / (required patterns). An empty required list is vacuously
+// covered (1). Band names come from the config; the domain never hard-codes them.
+// Regional rules (triceps overhead, hamstring knee flexion) are DEFERRED.
 
-import type { MovementPattern } from "./types";
 import type { ProgramStructure } from "../types";
 import type {
   AnalysisAxisResult,
   ExerciseReferenceData,
   GoalProfileConfig,
+  MovementPattern,
 } from "./types";
 import { resolveBand } from "./bandResolution";
 
-const REQUIRED_PATTERNS: readonly MovementPattern[] = [
+export const DEFAULT_REQUIRED_MOVEMENT_PATTERNS: readonly MovementPattern[] = [
   "SQUAT",
   "HINGE",
   "HORIZONTAL_PUSH",
   "VERTICAL_PUSH",
   "HORIZONTAL_PULL",
   "VERTICAL_PULL",
-  "CARRY",
-  "ISOLATION",
 ];
 
 export function computeExerciseSelectionBalanceAxis(
@@ -39,6 +34,10 @@ export function computeExerciseSelectionBalanceAxis(
   referenceData: ExerciseReferenceData,
   config: GoalProfileConfig,
 ): AnalysisAxisResult {
+  const required = new Set<MovementPattern>(
+    config.requiredMovementPatterns ?? DEFAULT_REQUIRED_MOVEMENT_PATTERNS,
+  );
+
   const patternByExercise = new Map<string, MovementPattern>();
   for (const ex of referenceData.exercises) {
     patternByExercise.set(ex.id, ex.movementPattern);
@@ -52,8 +51,12 @@ export function computeExerciseSelectionBalanceAxis(
     }
   }
 
-  const coveredCount = REQUIRED_PATTERNS.filter((p) => present.has(p)).length;
-  const coverageRatio = coveredCount / REQUIRED_PATTERNS.length;
+  let covered = 0;
+  for (const pattern of required) {
+    if (present.has(pattern)) covered += 1;
+  }
+  const rawRatio = required.size === 0 ? 1 : covered / required.size;
+  const coverageRatio = Math.round(rawRatio * 1e6) / 1e6;
 
   return {
     axisType: "EXERCISE_SELECTION_BALANCE",

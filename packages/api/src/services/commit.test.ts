@@ -100,7 +100,7 @@ describe("commitFromDraft — end to end", () => {
     expect(snapshot).not.toBeNull();
     const snap = assertDefined(snapshot, "snapshot");
     expect(snap.engineVersion).toBe(ASSESSMENT_ENGINE_VERSION);
-    expect(snap.engineVersion).toBe("0.2.0");
+    expect(snap.engineVersion).toBe("0.3.0");
     // thresholdsVersion comes from GoalProfileDefinition.configVersion,
     // which the seed sets to a non-empty string. Asserting non-empty rather
     // than a specific value keeps the test stable across seed revisions.
