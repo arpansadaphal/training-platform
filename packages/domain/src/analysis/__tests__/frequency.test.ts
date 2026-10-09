@@ -1,13 +1,14 @@
 // packages/domain/src/analysis/__tests__/frequency.test.ts
 import { describe, expect, it } from "vitest";
 import type { ExercisePrescriptionStructure, ProgramStructure, WorkoutDayStructure } from "../../types";
+import type { GoalProfileConfig } from "../types";
 import { computeFrequencyAxis, requiredExposures } from "../frequency";
 import { testReferenceData } from "../__fixtures__/exerciseReferenceData";
 import { emptyProgram, fullyCoveredProgram } from "../__fixtures__/programStructures";
 import { TEST_CONFIG_ALL_NULL, TEST_CONFIG_BOUNDED } from "../__fixtures__/testGoalProfiles";
 
 // E6 bands, as in the hypertrophy profile: Low < 1, Adequate 1 to < 4, High >= 4.
-const CONFIG = {
+const CONFIG: GoalProfileConfig = {
   ...TEST_CONFIG_BOUNDED,
   statusBands: {
     ...TEST_CONFIG_BOUNDED.statusBands,
