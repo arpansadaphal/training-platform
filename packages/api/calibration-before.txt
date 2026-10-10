@@ -416,7 +416,7 @@ actions (1): recoveryCost:trim-intensity :: Trim intensity on the highest-fatigu
 overallSummary: Identified 12 strengths, biggest opportunity on RECOVERY_COST.
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
 
- ✓ src/services/calibration.test.ts (20 tests) 85ms
+ ✓ src/services/calibration.test.ts (20 tests) 74ms
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config
 
 === SUMMARY (provisional Fit; real Fit is UNVALIDATED while validated:false) ===
@@ -441,6 +441,6 @@ stdout | src/services/calibration.test.ts > calibration harness: real engine + r
 
  Test Files  1 passed (1)
       Tests  20 passed (20)
-   Start at  12:30:32
-   Duration  1.05s (transform 151ms, setup 0ms, collect 756ms, tests 85ms, environment 0ms, prepare 59ms)
+   Start at  12:43:49
+   Duration  437ms (transform 128ms, setup 0ms, collect 200ms, tests 74ms, environment 0ms, prepare 48ms)
 
