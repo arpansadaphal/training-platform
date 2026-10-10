@@ -25,16 +25,16 @@ VOLUME   (fractional sets/wk | band | severity | leverage)
   VOLUME:side delts           1  Low       MAJOR     HIGH
   VOLUME:triceps              2  Low       MAJOR     HIGH
   VOLUME:upper back           2  Low       MAJOR     HIGH
-FREQUENCY (distinct days | band): biceps 2 Adequate; calves 0 Low; chest 1 Adequate; glutes 2 Adequate; hamstrings 1 Adequate; lats 2 Adequate; quads 1 Adequate; rear delts 1 Adequate; side delts 1 Adequate; triceps 2 Adequate; upper back 2 Adequate
-EXERCISE_SELECTION_BALANCE  metric=0.75 band=Balanced severity=NONE weight=LOW leverage=NONE
+FREQUENCY (distribution ratio | band): biceps 0 Low; calves 0 Low; chest 1 Adequate; glutes 0 Low; hamstrings 1 Adequate; lats 2 Adequate; quads 1 Adequate; rear delts 0 Low; side delts 0 Low; triceps 0 Low; upper back 0 Low
+EXERCISE_SELECTION_BALANCE  metric=1 band=Balanced severity=NONE weight=LOW leverage=NONE
 PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
 RECOVERY_COST               metric=9.6 band=Low severity=NONE weight=MEDIUM leverage=NONE
-material findings (leverage >= LOW): VOLUME:biceps [Low, MAJOR x HIGH -> HIGH]; VOLUME:calves [Low, MAJOR x HIGH -> HIGH]; VOLUME:chest [Low, MAJOR x HIGH -> HIGH]; VOLUME:glutes [Low, MAJOR x HIGH -> HIGH]; VOLUME:hamstrings [Low, MAJOR x HIGH -> HIGH]; VOLUME:lats [Low, MAJOR x HIGH -> HIGH]; VOLUME:quads [Low, MAJOR x HIGH -> HIGH]; VOLUME:rear delts [Low, MAJOR x HIGH -> HIGH]; VOLUME:side delts [Low, MAJOR x HIGH -> HIGH]; VOLUME:triceps [Low, MAJOR x HIGH -> HIGH]; VOLUME:upper back [Low, MAJOR x HIGH -> HIGH]; FREQUENCY:calves [Low, MODERATE x LOW -> LOW]
+material findings (leverage >= LOW): VOLUME:biceps [Low, MAJOR x HIGH -> HIGH]; VOLUME:calves [Low, MAJOR x HIGH -> HIGH]; VOLUME:chest [Low, MAJOR x HIGH -> HIGH]; VOLUME:glutes [Low, MAJOR x HIGH -> HIGH]; VOLUME:hamstrings [Low, MAJOR x HIGH -> HIGH]; VOLUME:lats [Low, MAJOR x HIGH -> HIGH]; VOLUME:quads [Low, MAJOR x HIGH -> HIGH]; VOLUME:rear delts [Low, MAJOR x HIGH -> HIGH]; VOLUME:side delts [Low, MAJOR x HIGH -> HIGH]; VOLUME:triceps [Low, MAJOR x HIGH -> HIGH]; VOLUME:upper back [Low, MAJOR x HIGH -> HIGH]; FREQUENCY:biceps [Low, MODERATE x LOW -> LOW]; FREQUENCY:calves [Low, MODERATE x LOW -> LOW]; FREQUENCY:glutes [Low, MODERATE x LOW -> LOW]; FREQUENCY:rear delts [Low, MODERATE x LOW -> LOW]; FREQUENCY:side delts [Low, MODERATE x LOW -> LOW]; FREQUENCY:triceps [Low, MODERATE x LOW -> LOW]; FREQUENCY:upper back [Low, MODERATE x LOW -> LOW]
 strengths (2): EXERCISE_SELECTION_BALANCE, PROGRESSION_SOUNDNESS
-attention areas (10): VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+attention areas (17): VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back, FREQUENCY:biceps, FREQUENCY:calves, FREQUENCY:glutes, FREQUENCY:rear delts, FREQUENCY:side delts, FREQUENCY:triceps, FREQUENCY:upper back
 biggest opportunity: VOLUME:biceps
-actions (11): volume:add-biceps :: Add weekly volume for biceps. | volume:add-calves :: Add weekly volume for calves. | volume:add-chest :: Add weekly volume for chest. | volume:add-glutes :: Add weekly volume for glutes. | volume:add-hamstrings :: Add weekly volume for hamstrings. | volume:add-lats :: Add weekly volume for lats. | volume:add-quads :: Add weekly volume for quads. | volume:add-rear delts :: Add weekly volume for rear delts. | volume:add-side delts :: Add weekly volume for side delts. | volume:add-triceps :: Add weekly volume for triceps. | volume:add-upper back :: Add weekly volume for upper back.
-overallSummary: Identified 2 strengths, 10 attention areas, biggest opportunity on VOLUME:biceps.
+actions (18): volume:add-biceps :: Add weekly volume for biceps. | volume:add-calves :: Add weekly volume for calves. | volume:add-chest :: Add weekly volume for chest. | volume:add-glutes :: Add weekly volume for glutes. | volume:add-hamstrings :: Add weekly volume for hamstrings. | volume:add-lats :: Add weekly volume for lats. | volume:add-quads :: Add weekly volume for quads. | volume:add-rear delts :: Add weekly volume for rear delts. | volume:add-side delts :: Add weekly volume for side delts. | volume:add-triceps :: Add weekly volume for triceps. | volume:add-upper back :: Add weekly volume for upper back. | frequency:split-biceps :: Give biceps at least one session with two or more hard sets. | frequency:split-calves :: Give calves at least one session with two or more hard sets. | frequency:split-glutes :: Give glutes at least one session with two or more hard sets. | frequency:split-rear delts :: Give rear delts at least one session with two or more hard sets. | frequency:split-side delts :: Give side delts at least one session with two or more hard sets. | frequency:split-triceps :: Give triceps at least one session with two or more hard sets. | frequency:split-upper back :: Give upper back at least one session with two or more hard sets.
+overallSummary: Identified 2 strengths, 17 attention areas, biggest opportunity on VOLUME:biceps.
 FIT (provisional, validated:false => real result is UNVALIDATED): NEEDS_WORK
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program B: Balanced hypertrophy
@@ -54,8 +54,8 @@ VOLUME   (fractional sets/wk | band | severity | leverage)
   VOLUME:side delts         7.5  Adequate  NONE      NONE
   VOLUME:triceps             12  Adequate  NONE      NONE
   VOLUME:upper back           9  Adequate  NONE      NONE
-FREQUENCY (distinct days | band): biceps 3 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 3 Adequate; upper back 2 Adequate
-EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
+FREQUENCY (distribution ratio | band): biceps 1.5 Adequate; calves 2 Adequate; chest 1 Adequate; glutes 2 Adequate; hamstrings 1 Adequate; lats 1 Adequate; quads 1 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 1.5 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=1 band=Balanced severity=NONE weight=LOW leverage=NONE
 PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
 RECOVERY_COST               metric=71.7 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
 material findings (leverage >= LOW): none
@@ -83,16 +83,16 @@ VOLUME   (fractional sets/wk | band | severity | leverage)
   VOLUME:side delts          16  Adequate  NONE      NONE
   VOLUME:triceps             31  Excessive MODERATE  HIGH
   VOLUME:upper back          23  High      NONE      NONE
-FREQUENCY (distinct days | band): biceps 2 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 2 Adequate; upper back 2 Adequate
-EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
+FREQUENCY (distribution ratio | band): biceps 0.5 Low; calves 1 Adequate; chest 0.667 Low; glutes 1 Adequate; hamstrings 1 Adequate; lats 0.5 Low; quads 0.667 Low; rear delts 1 Adequate; side delts 1 Adequate; triceps 0.5 Low; upper back 0.667 Low
+EXERCISE_SELECTION_BALANCE  metric=1 band=Balanced severity=NONE weight=LOW leverage=NONE
 PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
 RECOVERY_COST               metric=173.2 band=Excessive severity=MODERATE weight=MEDIUM leverage=MODERATE
-material findings (leverage >= LOW): VOLUME:biceps [Excessive, MODERATE x HIGH -> HIGH]; VOLUME:lats [Excessive, MODERATE x HIGH -> HIGH]; VOLUME:triceps [Excessive, MODERATE x HIGH -> HIGH]; RECOVERY_COST [Excessive, MODERATE x MEDIUM -> MODERATE]
+material findings (leverage >= LOW): VOLUME:biceps [Excessive, MODERATE x HIGH -> HIGH]; VOLUME:lats [Excessive, MODERATE x HIGH -> HIGH]; VOLUME:triceps [Excessive, MODERATE x HIGH -> HIGH]; FREQUENCY:biceps [Low, MODERATE x LOW -> LOW]; FREQUENCY:chest [Low, MODERATE x LOW -> LOW]; FREQUENCY:lats [Low, MODERATE x LOW -> LOW]; FREQUENCY:quads [Low, MODERATE x LOW -> LOW]; FREQUENCY:triceps [Low, MODERATE x LOW -> LOW]; FREQUENCY:upper back [Low, MODERATE x LOW -> LOW]; RECOVERY_COST [Excessive, MODERATE x MEDIUM -> MODERATE]
 strengths (10): EXERCISE_SELECTION_BALANCE, PROGRESSION_SOUNDNESS, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:upper back
-attention areas (3): VOLUME:lats, VOLUME:triceps, RECOVERY_COST
+attention areas (9): VOLUME:lats, VOLUME:triceps, FREQUENCY:biceps, FREQUENCY:chest, FREQUENCY:lats, FREQUENCY:quads, FREQUENCY:triceps, FREQUENCY:upper back, RECOVERY_COST
 biggest opportunity: VOLUME:biceps
-actions (4): volume:reduce-biceps :: Reduce weekly volume for biceps. | volume:reduce-lats :: Reduce weekly volume for lats. | volume:reduce-triceps :: Reduce weekly volume for triceps. | recoveryCost:reduce-intensity :: Reduce weekly intensity or insert a deload day.
-overallSummary: Identified 10 strengths, 3 attention areas, biggest opportunity on VOLUME:biceps.
+actions (10): volume:reduce-biceps :: Reduce weekly volume for biceps. | volume:reduce-lats :: Reduce weekly volume for lats. | volume:reduce-triceps :: Reduce weekly volume for triceps. | frequency:split-biceps :: Split biceps across more training days so no session carries more than about ten sets. | frequency:split-chest :: Split chest across more training days so no session carries more than about ten sets. | frequency:split-lats :: Split lats across more training days so no session carries more than about ten sets. | frequency:split-quads :: Split quads across more training days so no session carries more than about ten sets. | frequency:split-triceps :: Split triceps across more training days so no session carries more than about ten sets. | frequency:split-upper back :: Split upper back across more training days so no session carries more than about ten sets. | recoveryCost:reduce-intensity :: Reduce weekly intensity or insert a deload day.
+overallSummary: Identified 10 strengths, 9 attention areas, biggest opportunity on VOLUME:biceps.
 FIT (provisional, validated:false => real result is UNVALIDATED): NEEDS_WORK
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program D: Low frequency, reasonable volume
@@ -112,16 +112,16 @@ VOLUME   (fractional sets/wk | band | severity | leverage)
   VOLUME:side delts         9.5  Adequate  NONE      NONE
   VOLUME:triceps           12.5  Adequate  NONE      NONE
   VOLUME:upper back         8.5  Adequate  NONE      NONE
-FREQUENCY (distinct days | band): biceps 2 Adequate; calves 1 Adequate; chest 1 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 1 Adequate; quads 1 Adequate; rear delts 2 Adequate; side delts 1 Adequate; triceps 2 Adequate; upper back 2 Adequate
-EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
+FREQUENCY (distribution ratio | band): biceps 1 Adequate; calves 1 Adequate; chest 0.5 Low; glutes 2 Adequate; hamstrings 0.5 Low; lats 0.5 Low; quads 0.5 Low; rear delts 2 Adequate; side delts 1 Adequate; triceps 0.5 Low; upper back 1 Adequate
+EXERCISE_SELECTION_BALANCE  metric=1 band=Balanced severity=NONE weight=LOW leverage=NONE
 PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
 RECOVERY_COST               metric=77.7 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
-material findings (leverage >= LOW): none
+material findings (leverage >= LOW): FREQUENCY:chest [Low, MODERATE x LOW -> LOW]; FREQUENCY:hamstrings [Low, MODERATE x LOW -> LOW]; FREQUENCY:lats [Low, MODERATE x LOW -> LOW]; FREQUENCY:quads [Low, MODERATE x LOW -> LOW]; FREQUENCY:triceps [Low, MODERATE x LOW -> LOW]
 strengths (13): EXERCISE_SELECTION_BALANCE, PROGRESSION_SOUNDNESS, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
-attention areas (0): none
-biggest opportunity: null
-actions (0): none
-overallSummary: Identified 13 strengths.
+attention areas (4): FREQUENCY:hamstrings, FREQUENCY:lats, FREQUENCY:quads, FREQUENCY:triceps
+biggest opportunity: FREQUENCY:chest
+actions (5): frequency:split-chest :: Split chest across more training days so no session carries more than about ten sets. | frequency:split-hamstrings :: Split hamstrings across more training days so no session carries more than about ten sets. | frequency:split-lats :: Split lats across more training days so no session carries more than about ten sets. | frequency:split-quads :: Split quads across more training days so no session carries more than about ten sets. | frequency:split-triceps :: Split triceps across more training days so no session carries more than about ten sets.
+overallSummary: Identified 13 strengths, 4 attention areas, biggest opportunity on FREQUENCY:chest.
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program E: High frequency, controlled volume
@@ -141,8 +141,8 @@ VOLUME   (fractional sets/wk | band | severity | leverage)
   VOLUME:side delts          12  Adequate  NONE      NONE
   VOLUME:triceps             15  Adequate  NONE      NONE
   VOLUME:upper back          10  Adequate  NONE      NONE
-FREQUENCY (distinct days | band): biceps 5 Adequate; calves 5 Adequate; chest 5 Adequate; glutes 5 Adequate; hamstrings 5 Adequate; lats 5 Adequate; quads 5 Adequate; rear delts 5 Adequate; side delts 5 Adequate; triceps 5 Adequate; upper back 5 Adequate
-EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
+FREQUENCY (distribution ratio | band): biceps 2.5 Adequate; calves 5 High; chest 5 High; glutes 1 Adequate; hamstrings 2.5 Adequate; lats 5 High; quads 5 High; rear delts 2.5 Adequate; side delts 2.5 Adequate; triceps 2.5 Adequate; upper back 5 High
+EXERCISE_SELECTION_BALANCE  metric=1 band=Balanced severity=NONE weight=LOW leverage=NONE
 PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
 RECOVERY_COST               metric=84.4 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
 material findings (leverage >= LOW): none
@@ -170,8 +170,8 @@ VOLUME   (fractional sets/wk | band | severity | leverage)
   VOLUME:side delts           6  Adequate  NONE      NONE
   VOLUME:triceps             14  Adequate  NONE      NONE
   VOLUME:upper back           9  Adequate  NONE      NONE
-FREQUENCY (distinct days | band): biceps 2 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 2 Adequate; upper back 2 Adequate
-EXERCISE_SELECTION_BALANCE  metric=0.625 band=Gaps present severity=MINOR weight=LOW leverage=NONE
+FREQUENCY (distribution ratio | band): biceps 1 Adequate; calves 1 Adequate; chest 1 Adequate; glutes 2 Adequate; hamstrings 1 Adequate; lats 1 Adequate; quads 1 Adequate; rear delts 1 Adequate; side delts 2 Adequate; triceps 1 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.667 band=Gaps present severity=MINOR weight=LOW leverage=NONE
 PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
 RECOVERY_COST               metric=84 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
 material findings (leverage >= LOW): none
@@ -199,16 +199,16 @@ VOLUME   (fractional sets/wk | band | severity | leverage)
   VOLUME:side delts           6  Adequate  NONE      NONE
   VOLUME:triceps             15  Adequate  NONE      NONE
   VOLUME:upper back           9  Adequate  NONE      NONE
-FREQUENCY (distinct days | band): biceps 4 Adequate; calves 0 Low; chest 2 Adequate; glutes 0 Low; hamstrings 0 Low; lats 2 Adequate; quads 0 Low; rear delts 2 Adequate; side delts 2 Adequate; triceps 2 Adequate; upper back 2 Adequate
+FREQUENCY (distribution ratio | band): biceps 1.333 Adequate; calves 0 Low; chest 0.667 Low; glutes 0 Low; hamstrings 0 Low; lats 1 Adequate; quads 0 Low; rear delts 2 Adequate; side delts 2 Adequate; triceps 1 Adequate; upper back 2 Adequate
 EXERCISE_SELECTION_BALANCE  metric=0.5 band=Gaps present severity=MINOR weight=LOW leverage=NONE
 PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
 RECOVERY_COST               metric=61.8 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
-material findings (leverage >= LOW): VOLUME:calves [Low, MAJOR x HIGH -> HIGH]; VOLUME:glutes [Low, MAJOR x HIGH -> HIGH]; VOLUME:hamstrings [Low, MAJOR x HIGH -> HIGH]; VOLUME:quads [Low, MAJOR x HIGH -> HIGH]; FREQUENCY:calves [Low, MODERATE x LOW -> LOW]; FREQUENCY:glutes [Low, MODERATE x LOW -> LOW]; FREQUENCY:hamstrings [Low, MODERATE x LOW -> LOW]; FREQUENCY:quads [Low, MODERATE x LOW -> LOW]
+material findings (leverage >= LOW): VOLUME:calves [Low, MAJOR x HIGH -> HIGH]; VOLUME:glutes [Low, MAJOR x HIGH -> HIGH]; VOLUME:hamstrings [Low, MAJOR x HIGH -> HIGH]; VOLUME:quads [Low, MAJOR x HIGH -> HIGH]; FREQUENCY:calves [Low, MODERATE x LOW -> LOW]; FREQUENCY:chest [Low, MODERATE x LOW -> LOW]; FREQUENCY:glutes [Low, MODERATE x LOW -> LOW]; FREQUENCY:hamstrings [Low, MODERATE x LOW -> LOW]; FREQUENCY:quads [Low, MODERATE x LOW -> LOW]
 strengths (8): PROGRESSION_SOUNDNESS, VOLUME:biceps, VOLUME:chest, VOLUME:lats, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
-attention areas (3): VOLUME:glutes, VOLUME:hamstrings, VOLUME:quads
+attention areas (8): VOLUME:glutes, VOLUME:hamstrings, VOLUME:quads, FREQUENCY:calves, FREQUENCY:chest, FREQUENCY:glutes, FREQUENCY:hamstrings, FREQUENCY:quads
 biggest opportunity: VOLUME:calves
-actions (4): volume:add-calves :: Add weekly volume for calves. | volume:add-glutes :: Add weekly volume for glutes. | volume:add-hamstrings :: Add weekly volume for hamstrings. | volume:add-quads :: Add weekly volume for quads.
-overallSummary: Identified 8 strengths, 3 attention areas, biggest opportunity on VOLUME:calves.
+actions (9): volume:add-calves :: Add weekly volume for calves. | volume:add-glutes :: Add weekly volume for glutes. | volume:add-hamstrings :: Add weekly volume for hamstrings. | volume:add-quads :: Add weekly volume for quads. | frequency:split-calves :: Give calves at least one session with two or more hard sets. | frequency:split-chest :: Split chest across more training days so no session carries more than about ten sets. | frequency:split-glutes :: Give glutes at least one session with two or more hard sets. | frequency:split-hamstrings :: Give hamstrings at least one session with two or more hard sets. | frequency:split-quads :: Give quads at least one session with two or more hard sets.
+overallSummary: Identified 8 strengths, 8 attention areas, biggest opportunity on VOLUME:calves.
 FIT (provisional, validated:false => real result is UNVALIDATED): NEEDS_WORK
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program G: Poor progression structure (only effort/reps/load scheme expressible)
@@ -228,16 +228,16 @@ VOLUME   (fractional sets/wk | band | severity | leverage)
   VOLUME:side delts         7.5  Adequate  NONE      NONE
   VOLUME:triceps             12  Adequate  NONE      NONE
   VOLUME:upper back           9  Adequate  NONE      NONE
-FREQUENCY (distinct days | band): biceps 3 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 3 Adequate; upper back 2 Adequate
-EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
-PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
-RECOVERY_COST               metric=77.4 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
-material findings (leverage >= LOW): none
-strengths (13): EXERCISE_SELECTION_BALANCE, PROGRESSION_SOUNDNESS, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+FREQUENCY (distribution ratio | band): biceps 1.5 Adequate; calves 2 Adequate; chest 1 Adequate; glutes 2 Adequate; hamstrings 1 Adequate; lats 1 Adequate; quads 1 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 1.5 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=1 band=Balanced severity=NONE weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=1 band=Issue found severity=MINOR weight=MEDIUM leverage=LOW
+RECOVERY_COST               metric=67.2 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
+material findings (leverage >= LOW): PROGRESSION_SOUNDNESS [Issue found, MINOR x MEDIUM -> LOW]
+strengths (12): EXERCISE_SELECTION_BALANCE, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
 attention areas (0): none
-biggest opportunity: null
-actions (0): none
-overallSummary: Identified 13 strengths.
+biggest opportunity: PROGRESSION_SOUNDNESS
+actions (1): progressionSoundness:align-schemes :: Align progression schemes across prescriptions.
+overallSummary: Identified 12 strengths, biggest opportunity on PROGRESSION_SOUNDNESS.
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program H: Strong progression structure (identical to B in ProgramStructure)
@@ -257,8 +257,8 @@ VOLUME   (fractional sets/wk | band | severity | leverage)
   VOLUME:side delts         7.5  Adequate  NONE      NONE
   VOLUME:triceps             12  Adequate  NONE      NONE
   VOLUME:upper back           9  Adequate  NONE      NONE
-FREQUENCY (distinct days | band): biceps 3 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 3 Adequate; upper back 2 Adequate
-EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
+FREQUENCY (distribution ratio | band): biceps 1.5 Adequate; calves 2 Adequate; chest 1 Adequate; glutes 2 Adequate; hamstrings 1 Adequate; lats 1 Adequate; quads 1 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 1.5 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=1 band=Balanced severity=NONE weight=LOW leverage=NONE
 PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
 RECOVERY_COST               metric=71.7 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
 material findings (leverage >= LOW): none
@@ -286,8 +286,8 @@ VOLUME   (fractional sets/wk | band | severity | leverage)
   VOLUME:side delts          12  Adequate  NONE      NONE
   VOLUME:triceps             18  Adequate  NONE      NONE
   VOLUME:upper back          12  Adequate  NONE      NONE
-FREQUENCY (distinct days | band): biceps 4 Adequate; calves 4 Adequate; chest 4 Adequate; glutes 4 Adequate; hamstrings 4 Adequate; lats 4 Adequate; quads 4 Adequate; rear delts 4 Adequate; side delts 4 Adequate; triceps 4 Adequate; upper back 4 Adequate
-EXERCISE_SELECTION_BALANCE  metric=0.625 band=Gaps present severity=MINOR weight=LOW leverage=NONE
+FREQUENCY (distribution ratio | band): biceps 2 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 1.333 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 2 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.667 band=Gaps present severity=MINOR weight=LOW leverage=NONE
 PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
 RECOVERY_COST               metric=120 band=High severity=MINOR weight=MEDIUM leverage=LOW
 material findings (leverage >= LOW): RECOVERY_COST [High, MINOR x MEDIUM -> LOW]
@@ -315,10 +315,10 @@ VOLUME   (fractional sets/wk | band | severity | leverage)
   VOLUME:side delts         7.5  Adequate  NONE      NONE
   VOLUME:triceps             12  Adequate  NONE      NONE
   VOLUME:upper back           9  Adequate  NONE      NONE
-FREQUENCY (distinct days | band): biceps 3 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 3 Adequate; upper back 2 Adequate
-EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
-PROGRESSION_SOUNDNESS       metric=1 band=Issue found severity=MINOR weight=MEDIUM leverage=LOW
-RECOVERY_COST               metric=63 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
+FREQUENCY (distribution ratio | band): biceps 1.5 Adequate; calves 2 Adequate; chest 1 Adequate; glutes 2 Adequate; hamstrings 1 Adequate; lats 1 Adequate; quads 1 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 1.5 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=1 band=Balanced severity=NONE weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=2 band=Issue found severity=MINOR weight=MEDIUM leverage=LOW
+RECOVERY_COST               metric=67.2 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
 material findings (leverage >= LOW): PROGRESSION_SOUNDNESS [Issue found, MINOR x MEDIUM -> LOW]
 strengths (12): EXERCISE_SELECTION_BALANCE, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
 attention areas (0): none
@@ -326,6 +326,21 @@ biggest opportunity: PROGRESSION_SOUNDNESS
 actions (1): progressionSoundness:align-schemes :: Align progression schemes across prescriptions.
 overallSummary: Identified 12 strengths, biggest opportunity on PROGRESSION_SOUNDNESS.
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > comparison against calibration-before.txt (logs only, never asserts engine output) > logs, per program, which axes changed and which bands flipped
+
+=== CHANGES vs /Users/arpan/Documents/code/training-platform/packages/api/calibration-before.txt ===
+A: no matching block in before file
+B: no matching block in before file
+C: no matching block in before file
+D: no matching block in before file
+E: no matching block in before file
+F1: no matching block in before file
+F2: no matching block in before file
+G: no matching block in before file
+H: no matching block in before file
+J: no matching block in before file
+G-pct(0.75): no matching block in before file
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > G with PERCENT_1RM loads, percent=75, no 1-rep prescription (PS false-positive check)
 
@@ -344,10 +359,10 @@ VOLUME   (fractional sets/wk | band | severity | leverage)
   VOLUME:side delts         7.5  Adequate  NONE      NONE
   VOLUME:triceps             12  Adequate  NONE      NONE
   VOLUME:upper back           9  Adequate  NONE      NONE
-FREQUENCY (distinct days | band): biceps 3 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 2 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 3 Adequate; upper back 2 Adequate
-EXERCISE_SELECTION_BALANCE  metric=0.875 band=Balanced severity=NONE weight=LOW leverage=NONE
-PROGRESSION_SOUNDNESS       metric=1 band=Issue found severity=MINOR weight=MEDIUM leverage=LOW
-RECOVERY_COST               metric=63 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
+FREQUENCY (distribution ratio | band): biceps 1.5 Adequate; calves 2 Adequate; chest 1 Adequate; glutes 2 Adequate; hamstrings 1 Adequate; lats 1 Adequate; quads 1 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 1.5 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=1 band=Balanced severity=NONE weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=2 band=Issue found severity=MINOR weight=MEDIUM leverage=LOW
+RECOVERY_COST               metric=67.2 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
 material findings (leverage >= LOW): PROGRESSION_SOUNDNESS [Issue found, MINOR x MEDIUM -> LOW]
 strengths (12): EXERCISE_SELECTION_BALANCE, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
 attention areas (0): none
@@ -355,6 +370,22 @@ biggest opportunity: PROGRESSION_SOUNDNESS
 actions (1): progressionSoundness:align-schemes :: Align progression schemes across prescriptions.
 overallSummary: Identified 12 strengths, biggest opportunity on PROGRESSION_SOUNDNESS.
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > comparison against calibration-before.txt (logs only, never asserts engine output) > logs, per program, which axes changed and which bands flipped
+
+=== CHANGES vs /Users/arpan/Documents/code/training-platform/packages/api/calibration-before.txt ===
+A: no matching block in before file
+B: no matching block in before file
+C: no matching block in before file
+D: no matching block in before file
+E: no matching block in before file
+F1: no matching block in before file
+F2: no matching block in before file
+G: no matching block in before file
+H: no matching block in before file
+J: no matching block in before file
+G-pct(0.75): no matching block in before file
+G-pct(75): no matching block in before file
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > J as-is (consecutive-day, failure-heavy)
 
@@ -373,8 +404,8 @@ VOLUME   (fractional sets/wk | band | severity | leverage)
   VOLUME:side delts          12  Adequate  NONE      NONE
   VOLUME:triceps             18  Adequate  NONE      NONE
   VOLUME:upper back          12  Adequate  NONE      NONE
-FREQUENCY (distinct days | band): biceps 4 Adequate; calves 4 Adequate; chest 4 Adequate; glutes 4 Adequate; hamstrings 4 Adequate; lats 4 Adequate; quads 4 Adequate; rear delts 4 Adequate; side delts 4 Adequate; triceps 4 Adequate; upper back 4 Adequate
-EXERCISE_SELECTION_BALANCE  metric=0.625 band=Gaps present severity=MINOR weight=LOW leverage=NONE
+FREQUENCY (distribution ratio | band): biceps 2 Adequate; calves 2 Adequate; chest 2 Adequate; glutes 2 Adequate; hamstrings 1.333 Adequate; lats 2 Adequate; quads 2 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 2 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=0.667 band=Gaps present severity=MINOR weight=LOW leverage=NONE
 PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
 RECOVERY_COST               metric=120 band=High severity=MINOR weight=MEDIUM leverage=LOW
 material findings (leverage >= LOW): RECOVERY_COST [High, MINOR x MEDIUM -> LOW]
@@ -385,20 +416,21 @@ actions (1): recoveryCost:trim-intensity :: Trim intensity on the highest-fatigu
 overallSummary: Identified 12 strengths, biggest opportunity on RECOVERY_COST.
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
 
+ ✓ src/services/calibration.test.ts (20 tests) 85ms
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config
 
 === SUMMARY (provisional Fit; real Fit is UNVALIDATED while validated:false) ===
 ┌─────────┬───────────────┬─────┬──────┬───────────┬──────────────────┬───────────┬───────────┬─────────────────────────┬────────────────┐
 │ (index) │ program       │ low │ high │ excessive │ materialFindings │ strengths │ attention │ biggest                 │ provisionalFit │
 ├─────────┼───────────────┼─────┼──────┼───────────┼──────────────────┼───────────┼───────────┼─────────────────────────┼────────────────┤
-│ 0       │ 'A'           │ 11  │ 0    │ 0         │ 12               │ 2         │ 10        │ 'VOLUME:biceps'         │ 'NEEDS_WORK'   │
+│ 0       │ 'A'           │ 11  │ 0    │ 0         │ 18               │ 2         │ 17        │ 'VOLUME:biceps'         │ 'NEEDS_WORK'   │
 │ 1       │ 'B'           │ 0   │ 0    │ 0         │ 0                │ 13        │ 0         │ 'null'                  │ 'STRONG'       │
-│ 2       │ 'C'           │ 0   │ 3    │ 3         │ 4                │ 10        │ 3         │ 'VOLUME:biceps'         │ 'NEEDS_WORK'   │
-│ 3       │ 'D'           │ 0   │ 0    │ 0         │ 0                │ 13        │ 0         │ 'null'                  │ 'STRONG'       │
+│ 2       │ 'C'           │ 0   │ 3    │ 3         │ 10               │ 10        │ 9         │ 'VOLUME:biceps'         │ 'NEEDS_WORK'   │
+│ 3       │ 'D'           │ 0   │ 0    │ 0         │ 5                │ 13        │ 4         │ 'FREQUENCY:chest'       │ 'STRONG'       │
 │ 4       │ 'E'           │ 0   │ 0    │ 0         │ 0                │ 13        │ 0         │ 'null'                  │ 'STRONG'       │
 │ 5       │ 'F1'          │ 0   │ 0    │ 0         │ 0                │ 12        │ 0         │ 'null'                  │ 'STRONG'       │
-│ 6       │ 'F2'          │ 4   │ 2    │ 0         │ 8                │ 8         │ 3         │ 'VOLUME:calves'         │ 'NEEDS_WORK'   │
-│ 7       │ 'G'           │ 0   │ 0    │ 0         │ 0                │ 13        │ 0         │ 'null'                  │ 'STRONG'       │
+│ 6       │ 'F2'          │ 4   │ 2    │ 0         │ 9                │ 8         │ 8         │ 'VOLUME:calves'         │ 'NEEDS_WORK'   │
+│ 7       │ 'G'           │ 0   │ 0    │ 0         │ 1                │ 12        │ 0         │ 'PROGRESSION_SOUNDNESS' │ 'STRONG'       │
 │ 8       │ 'H'           │ 0   │ 0    │ 0         │ 0                │ 13        │ 0         │ 'null'                  │ 'STRONG'       │
 │ 9       │ 'J'           │ 0   │ 1    │ 0         │ 1                │ 12        │ 0         │ 'RECOVERY_COST'         │ 'STRONG'       │
 │ 10      │ 'G-pct(0.75)' │ 0   │ 0    │ 0         │ 1                │ 12        │ 0         │ 'PROGRESSION_SOUNDNESS' │ 'STRONG'       │
@@ -406,10 +438,9 @@ stdout | src/services/calibration.test.ts > calibration harness: real engine + r
 │ 12      │ 'J(probe)'    │ 0   │ 1    │ 0         │ 1                │ 12        │ 0         │ 'RECOVERY_COST'         │ 'STRONG'       │
 └─────────┴───────────────┴─────┴──────┴───────────┴──────────────────┴───────────┴───────────┴─────────────────────────┴────────────────┘
 
- ✓ src/services/calibration.test.ts (18 tests) 58ms
 
  Test Files  1 passed (1)
-      Tests  18 passed (18)
-   Start at  00:39:17
-   Duration  391ms (transform 118ms, setup 0ms, collect 179ms, tests 58ms, environment 0ms, prepare 43ms)
+      Tests  20 passed (20)
+   Start at  12:30:32
+   Duration  1.05s (transform 151ms, setup 0ms, collect 756ms, tests 85ms, environment 0ms, prepare 59ms)
 
