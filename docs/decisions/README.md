@@ -88,3 +88,4 @@ force.
 - [ARCH-050](./ARCH-050.md) — E2E (Playwright) runs in CI, whole `e2e/` directory, 
 MODEL_PROVIDER=mock
 - [ARCH-051](./ARCH-051.md) — HYPERTROPHY candidate configuration, reference-data scoping, and seed convention
+- [ARCH-052](./ARCH-052.md) — Axis rebuild E5–E9: effort-aware counting, frequency as distribution, config-driven selection patterns, progression rule set, injectable recovery calculator
