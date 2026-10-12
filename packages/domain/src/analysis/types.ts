@@ -202,8 +202,35 @@ export interface FitScoreProjection {
   readonly leverageOrdinal: readonly Leverage[];
   /** Worst leverage found → coarse band. Cell contents PROVISIONAL. */
   readonly worstLeverageToBand: Readonly<Record<Leverage, FitScoreBand>>;
+   /**
+   * E11 (engine 0.4.0). Optional breadth floors, applied after the worst-leverage mapping. Absent, or
+   * `floors: []`, means exactly the 0.3.0 behaviour: existing fixtures need no change and reverting is a
+   * config edit. Counts are compared with integer thresholds and discarded, so this introduces no numeric
+   * score and no ordinal-to-numeric mapping.
+   */
+  readonly breadth?: FitBreadthRules;
+}
+/**
+ * E11. One breadth rule: when at least `minCount` findings sit at `leverageAtLeast` or worse, the Fit band
+ * is no better than `band`. Counting is cumulative (a HIGH finding also counts toward a LOW floor). Floors
+ * only ever make the band worse; see computeFitScore.ts.
+ */
+export interface FitBreadthFloor {
+  readonly leverageAtLeast: Leverage;
+  /** Integer >= 1. */
+  readonly minCount: number;
+  readonly band: FitScoreBand;
 }
 
+/**
+ * E11. `findingMinSeverity` is the bar an axis must clear to count as a finding. Set it to the profile's
+ * `materialitySeverityThreshold`, so that every finding that moves the band is one the narrative lists as
+ * an attention area or the biggest opportunity.
+ */
+export interface FitBreadthRules {
+  readonly findingMinSeverity: Severity;
+  readonly floors: readonly FitBreadthFloor[];
+}
 // EDIT 1 — add above GoalProfileConfig:
 
 /** E5. See hardSetCredit.ts. Tier 3/4 engine boundaries. */

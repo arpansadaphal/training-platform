@@ -137,7 +137,29 @@ const SEVERITY_WEIGHT_TABLE: SeverityWeightTable = {
 };
 
 // ---------------------------------------------------------------------------
-// Fit Score projection. Tier 4, UNCHANGED.
+// Fit Score projection. Tier 4. E11 (engine 0.4.0): breadth-aware.
+//
+// Base rule UNCHANGED: the worst single leverage maps to a band (NONE and LOW read STRONG, MODERATE reads
+// DECENT, HIGH reads NEEDS_WORK).
+//
+// New: one breadth floor. Three or more findings at LOW leverage or worse stop the band reading STRONG, no
+// matter how small each one is. A finding is an assessed axis with leverage >= LOW whose severity is at
+// least MODERATE: the same bar as `materialitySeverityThreshold`, so every finding that counts is one the
+// narrative shows as an attention area or the biggest opportunity. MINOR-severity axes (PROGRESSION_SOUNDNESS
+// "Issue found", RECOVERY_COST "High") carry LOW leverage but do not count toward breadth.
+//
+// Why 3 (an engine boundary, not a measurement): the calibration programs bracket it (no program has one or
+// two counted findings except L, whose HIGH dominates; D has five) but cannot pin it. Any value from 1 to 5
+// reproduces A-L identically.
+//
+// Deliberate cap: this config ships NO floor that can produce NEEDS_WORK from findings below HIGH. The axis
+// weights are ordered by evidence (VOLUME HIGH; FREQUENCY and EXERCISE_SELECTION_BALANCE LOW), so summing many
+// weak signals should not outvote that ordering. Changing the cap is a config edit (add a floor), not an engine
+// change. So is the opposite policy, a lone HIGH reading DECENT: set worstLeverageToBand.HIGH to "DECENT" and
+// add { leverageAtLeast: "HIGH", minCount: 2, band: "NEEDS_WORK" } (demonstrated in fit-score.test.ts).
+//
+// Reverting to worst-single-leverage is deleting `breadth`. `findingMinSeverity` must equal
+// `materialitySeverityThreshold`; fit-score.test.ts pins that.
 // ---------------------------------------------------------------------------
 const HYPERTROPHY_FIT_SCORE_PROJECTION: FitScoreProjection = {
   leverageOrdinal: ["NONE", "LOW", "MODERATE", "HIGH"],
@@ -146,6 +168,10 @@ const HYPERTROPHY_FIT_SCORE_PROJECTION: FitScoreProjection = {
     LOW: "STRONG",
     MODERATE: "DECENT",
     HIGH: "NEEDS_WORK",
+  },
+  breadth: {
+    findingMinSeverity: "MODERATE",
+    floors: [{ leverageAtLeast: "LOW", minCount: 3, band: "DECENT" }],
   },
 };
 
