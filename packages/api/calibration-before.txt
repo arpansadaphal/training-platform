@@ -330,17 +330,17 @@ FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > comparison against calibration-before.txt (logs only, never asserts engine output) > logs, per program, which axes changed and which bands flipped
 
 === CHANGES vs /Users/arpan/Documents/code/training-platform/packages/api/calibration-before.txt ===
-A: no matching block in before file
-B: no matching block in before file
-C: no matching block in before file
-D: no matching block in before file
-E: no matching block in before file
-F1: no matching block in before file
-F2: no matching block in before file
-G: no matching block in before file
-H: no matching block in before file
-J: no matching block in before file
-G-pct(0.75): no matching block in before file
+A: no change
+B: no change
+C: no change
+D: no change
+E: no change
+F1: no change
+F2: no change
+G: no change
+H: no change
+J: no change
+G-pct(0.75): no change
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > G with PERCENT_1RM loads, percent=75, no 1-rep prescription (PS false-positive check)
 
@@ -374,18 +374,18 @@ FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > comparison against calibration-before.txt (logs only, never asserts engine output) > logs, per program, which axes changed and which bands flipped
 
 === CHANGES vs /Users/arpan/Documents/code/training-platform/packages/api/calibration-before.txt ===
-A: no matching block in before file
-B: no matching block in before file
-C: no matching block in before file
-D: no matching block in before file
-E: no matching block in before file
-F1: no matching block in before file
-F2: no matching block in before file
-G: no matching block in before file
-H: no matching block in before file
-J: no matching block in before file
-G-pct(0.75): no matching block in before file
-G-pct(75): no matching block in before file
+A: no change
+B: no change
+C: no change
+D: no change
+E: no change
+F1: no change
+F2: no change
+G: no change
+H: no change
+J: no change
+G-pct(0.75): no change
+G-pct(75): no change
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > J as-is (consecutive-day, failure-heavy)
 
@@ -416,7 +416,7 @@ actions (1): recoveryCost:trim-intensity :: Trim intensity on the highest-fatigu
 overallSummary: Identified 12 strengths, biggest opportunity on RECOVERY_COST.
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
 
- ✓ src/services/calibration.test.ts (20 tests) 85ms
+ ✓ src/services/calibration.test.ts (20 tests) 57ms
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config
 
 === SUMMARY (provisional Fit; real Fit is UNVALIDATED while validated:false) ===
@@ -441,6 +441,6 @@ stdout | src/services/calibration.test.ts > calibration harness: real engine + r
 
  Test Files  1 passed (1)
       Tests  20 passed (20)
-   Start at  12:30:32
-   Duration  1.05s (transform 151ms, setup 0ms, collect 756ms, tests 85ms, environment 0ms, prepare 59ms)
+   Start at  08:17:52
+   Duration  409ms (transform 126ms, setup 0ms, collect 199ms, tests 57ms, environment 0ms, prepare 41ms)
 

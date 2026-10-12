@@ -48,6 +48,12 @@ const LEVERAGE_RANK: Readonly<Record<AssessedAxis["leverage"], number>> = {
   MODERATE: 2,
   HIGH: 3,
 };
+const SEVERITY_RANK: Readonly<Record<AssessedAxis["severity"], number>> = {
+  NONE: 0,
+  MINOR: 1,
+  MODERATE: 2,
+  MAJOR: 3,
+};
 
 // ---------------------------------------------------------------------------
 // Shorthand (shadow_engine_calibration.py) -> seeded exercise name (seed.ts).
@@ -372,6 +378,65 @@ const PROGRAM_J: readonly DaySpec[] = [
   { day: 3, rows: J_DAY },
 ];
 
+// ---------------------------------------------------------------------------
+// E11 probes. Built to isolate what a breadth-aware Fit must distinguish.
+//
+// K: the widest sub-HIGH profile this config can produce. RECOVERY_COST Excessive is the ONLY axis x band
+// that maps to MODERATE leverage under the shipped tables (MODERATE severity x MEDIUM weight), so one
+// MODERATE finding is the most a program can carry; K adds a wide spread of LOW findings (FREQUENCY Low)
+// and NO HIGH finding. It is C trimmed so that no muscle reaches 30 weekly sets (no VOLUME Excessive) while
+// the muscles above 20 weekly sets still get only two sessions (FREQUENCY Low), with enough hard sets for
+// RECOVERY_COST >= 130.
+// Predicted (axis arithmetic, not an engine run): RECOVERY_COST 162 Excessive; FREQUENCY Low (0.667) on
+// chest, lats, upper back, rear delts, biceps, triceps and quads; every VOLUME axis Adequate or High
+// (chest 26, lats 28, upper back 22, rear delts 23, biceps 26, triceps 27, quads 26); PROGRESSION Sound;
+// SELECTION Balanced.
+//
+// L: one HIGH finding and nothing else. B minus its second calf exercise: calves fall to 5 weekly sets
+// (VOLUME Low, MAJOR x HIGH = HIGH) in a single session (FREQUENCY Adequate); every other axis is B's.
+// Predicted: VOLUME:calves is the only finding; RECOVERY_COST 68.1 Moderate.
+// ---------------------------------------------------------------------------
+const K_PUSH: readonly Row[] = [
+  r("bench_press", 5, [6, 10], 1),
+  r("incline_db_press", 4, [8, 12], 1),
+  r("overhead_press", 4, [6, 10], 1),
+  r("cable_fly", 4, [10, 15], 0),
+  r("lateral_raise", 6, [12, 20], 0),
+  r("triceps_pushdown", 4, [10, 15], 0),
+  r("overhead_triceps_ext", 3, [10, 15], 0),
+];
+const K_PULL: readonly Row[] = [
+  r("pull_up", 4, [6, 10], 1),
+  r("barbell_row", 4, [6, 10], 1),
+  r("seated_row", 3, [8, 12], 1),
+  r("lat_pulldown", 3, [8, 12], 1),
+  r("reverse_pec_deck", 4, [12, 20], 0),
+  r("face_pull", 4, [12, 20], 0),
+  r("biceps_curl", 3, [10, 15], 0),
+  r("hammer_curl", 3, [10, 15], 0),
+];
+const K_LEGS: readonly Row[] = [
+  r("back_squat", 5, [6, 10], 1),
+  r("rdl", 4, [8, 10], 1),
+  r("leg_press", 4, [10, 15], 1),
+  r("leg_curl", 4, [10, 15], 0),
+  r("leg_extension", 4, [10, 15], 0),
+  r("standing_calf_raise", 6, [8, 15], 0),
+];
+const PROGRAM_K: readonly DaySpec[] = [
+  { day: 0, rows: K_PUSH },
+  { day: 1, rows: K_PULL },
+  { day: 2, rows: K_LEGS },
+  { day: 3, rows: K_PUSH },
+  { day: 4, rows: K_PULL },
+  { day: 5, rows: K_LEGS },
+];
+
+const PROGRAM_L: readonly DaySpec[] = PROGRAM_B.map((d) => ({
+  day: d.day,
+  rows: d.rows.filter((row) => row.ex !== "seated_calf_raise"),
+}));
+
 const PROGRAMS: readonly ProgramSpec[] = [
   { id: "A", description: "Clearly under-dosed", days: PROGRAM_A },
   { id: "B", description: "Balanced hypertrophy", days: PROGRAM_B },
@@ -383,6 +448,8 @@ const PROGRAMS: readonly ProgramSpec[] = [
   { id: "G", description: "Poor progression structure (only effort/reps/load scheme expressible)", days: PROGRAM_G },
   { id: "H", description: "Strong progression structure (identical to B in ProgramStructure)", days: PROGRAM_H },
   { id: "J", description: "Consecutive-day, failure-heavy (weekday order not representable)", days: PROGRAM_J },
+   { id: "K", description: "E11 probe: one MODERATE + seven LOW findings, no HIGH (sub-HIGH breadth)", days: PROGRAM_K },
+  { id: "L", description: "E11 probe: one HIGH finding (calves Low), nothing else", days: PROGRAM_L },
 ];
 
 // ---------------------------------------------------------------------------
@@ -535,6 +602,15 @@ function report(label: string, description: string, ev: Evaluated): void {
     `actions (${a.actions.length}): ${a.actions.map((x) => `${named(x.rootCauseKey)} :: ${named(x.description)}`).join(" | ") || "none"}`,
   );
   L.push(`overallSummary: ${named(a.overallSummary)}`);
+   // E11: what the breadth floors count (findings that clear the severity bar), for diagnosing a band.
+  const breadthGate = config.fitScoreProjection.breadth?.findingMinSeverity ?? "NONE";
+  const counted = a.allAssessedAxes.filter((x) => SEVERITY_RANK[x.severity] >= SEVERITY_RANK[breadthGate]);
+  const countedAtLeast = (t: AssessedAxis["leverage"]): number =>
+    counted.filter((x) => LEVERAGE_RANK[x.leverage] >= LEVERAGE_RANK[t]).length;
+  L.push(
+    `FIT inputs: findings counted toward breadth (severity >= ${breadthGate}) at leverage >= LOW / MODERATE / HIGH: ` +
+      `${countedAtLeast("LOW")} / ${countedAtLeast("MODERATE")} / ${countedAtLeast("HIGH")}`,
+  );
   L.push(`FIT (provisional, validated:false => real result is UNVALIDATED): ${ev.provisionalFit}`);
   console.log(L.join("\n"));
 
@@ -651,6 +727,18 @@ describe("calibration harness: real engine + real seed + HYPERTROPHY candidate c
     });
   });
 
+  // E11: structural facts about how the probes are built. No Fit band is asserted anywhere in this harness.
+  describe("E11 probes: construction sanity", () => {
+    const prescriptionCount = (days: readonly DaySpec[]): number => days.reduce((n, d) => n + d.rows.length, 0);
+    const calfRows = (days: readonly DaySpec[]): number =>
+      days.reduce((n, d) => n + d.rows.filter((row) => row.ex.endsWith("calf_raise")).length, 0);
+
+    it("L is B minus exactly one prescription (the second calf exercise)", () => {
+      expect(prescriptionCount(PROGRAM_L)).toBe(prescriptionCount(PROGRAM_B) - 1);
+      expect(calfRows(PROGRAM_L)).toBe(calfRows(PROGRAM_B) - 1);
+    });
+  });
+
   describe("extra probes", () => {
     // Program G rewritten with a %1RM load scheme and no 1-rep prescription (reps stay 10-10).
     // percent is logged at 0.75 AND 75 because LoadScheme.percent has no stated unit and
@@ -664,7 +752,17 @@ describe("calibration harness: real engine + real seed + HYPERTROPHY candidate c
         expect(ps?.metricValue).toBeGreaterThanOrEqual(1);
         expect(ps?.status.band).toBe("Issue found");
       });
-      // EDIT 5 — add as the LAST block inside the top-level describe (it needs the snapshots the earlier tests fill):
+    }
+
+    // Program J as-is. Same program as the J entry in PROGRAMS (re-reported so the probe is explicit).
+    it("J as-is (consecutive-day, failure-heavy)", () => {
+      const ev = evaluate(buildStructure(PROGRAM_J));
+      report("J(probe)", "J as-is", ev);
+      assertStructural(ev);
+    });
+  });
+
+  // Defined LAST so every snapshot (A-L, G-pct x2, J(probe)) exists when it runs.
   describe("comparison against calibration-before.txt (logs only, never asserts engine output)", () => {
     const HERE = dirname(fileURLToPath(import.meta.url));
     const candidates = [
@@ -757,15 +855,6 @@ describe("calibration harness: real engine + real seed + HYPERTROPHY candidate c
         lines.push(...(d.length === 0 ? [`${label}: no change`] : d));
       }
       console.log(lines.join("\n"));
-    });
-  });
-    }
-
-    // Program J as-is. Same program as the J entry in PROGRAMS (re-reported so the probe is explicit).
-    it("J as-is (consecutive-day, failure-heavy)", () => {
-      const ev = evaluate(buildStructure(PROGRAM_J));
-      report("J(probe)", "J as-is", ev);
-      assertStructural(ev);
     });
   });
 });
