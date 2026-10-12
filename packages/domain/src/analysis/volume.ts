@@ -53,7 +53,7 @@ export function computeVolumeAxis(
 
     results.push({
       axisType: "VOLUME",
-      scopeKey: muscleGroup.id,
+      scopeKey: muscleGroup.name,
       metricValue: totalWeeklySets,
       status: resolveBand(totalWeeklySets, bands),
     });

@@ -83,7 +83,7 @@ export function computeFrequencyAxis(
     const metricValue = exposures / requiredExposures(weeklySets, dist.perSessionSetCap);
     results.push({
       axisType: "FREQUENCY",
-      scopeKey: muscleGroup.id,
+      scopeKey: muscleGroup.name,
       metricValue,
       status: resolveBand(metricValue, bands),
     });

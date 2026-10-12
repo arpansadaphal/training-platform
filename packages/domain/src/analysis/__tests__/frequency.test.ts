@@ -113,7 +113,7 @@ describe("computeFrequencyAxis (E6: distribution of the weekly dose)", () => {
 
   it("returns one result per muscle group", () => {
     const rs = run(fullyCoveredProgram);
-    expect(rs.map((r) => r.scopeKey).sort()).toEqual(testReferenceData.muscleGroups.map((m) => m.id).sort());
+    expect(rs.map((r) => r.scopeKey).sort()).toEqual(testReferenceData.muscleGroups.map((m) => m.name).sort());
     for (const r of rs) expect(r.axisType).toBe("FREQUENCY");
   });
 
