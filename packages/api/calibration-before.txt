@@ -35,6 +35,7 @@ attention areas (17): VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstri
 biggest opportunity: VOLUME:biceps
 actions (18): volume:add-biceps :: Add weekly volume for biceps. | volume:add-calves :: Add weekly volume for calves. | volume:add-chest :: Add weekly volume for chest. | volume:add-glutes :: Add weekly volume for glutes. | volume:add-hamstrings :: Add weekly volume for hamstrings. | volume:add-lats :: Add weekly volume for lats. | volume:add-quads :: Add weekly volume for quads. | volume:add-rear delts :: Add weekly volume for rear delts. | volume:add-side delts :: Add weekly volume for side delts. | volume:add-triceps :: Add weekly volume for triceps. | volume:add-upper back :: Add weekly volume for upper back. | frequency:split-biceps :: Give biceps at least one session with two or more hard sets. | frequency:split-calves :: Give calves at least one session with two or more hard sets. | frequency:split-glutes :: Give glutes at least one session with two or more hard sets. | frequency:split-rear delts :: Give rear delts at least one session with two or more hard sets. | frequency:split-side delts :: Give side delts at least one session with two or more hard sets. | frequency:split-triceps :: Give triceps at least one session with two or more hard sets. | frequency:split-upper back :: Give upper back at least one session with two or more hard sets.
 overallSummary: Identified 2 strengths, 17 attention areas, biggest opportunity on VOLUME:biceps.
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 18 / 11 / 11
 FIT (provisional, validated:false => real result is UNVALIDATED): NEEDS_WORK
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program B: Balanced hypertrophy
@@ -64,6 +65,7 @@ attention areas (0): none
 biggest opportunity: null
 actions (0): none
 overallSummary: Identified 13 strengths.
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 0 / 0 / 0
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program C: Excessive volume
@@ -93,6 +95,7 @@ attention areas (9): VOLUME:lats, VOLUME:triceps, FREQUENCY:biceps, FREQUENCY:ch
 biggest opportunity: VOLUME:biceps
 actions (10): volume:reduce-biceps :: Reduce weekly volume for biceps. | volume:reduce-lats :: Reduce weekly volume for lats. | volume:reduce-triceps :: Reduce weekly volume for triceps. | frequency:split-biceps :: Split biceps across more training days so no session carries more than about ten sets. | frequency:split-chest :: Split chest across more training days so no session carries more than about ten sets. | frequency:split-lats :: Split lats across more training days so no session carries more than about ten sets. | frequency:split-quads :: Split quads across more training days so no session carries more than about ten sets. | frequency:split-triceps :: Split triceps across more training days so no session carries more than about ten sets. | frequency:split-upper back :: Split upper back across more training days so no session carries more than about ten sets. | recoveryCost:reduce-intensity :: Reduce weekly intensity or insert a deload day.
 overallSummary: Identified 10 strengths, 9 attention areas, biggest opportunity on VOLUME:biceps.
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 10 / 4 / 3
 FIT (provisional, validated:false => real result is UNVALIDATED): NEEDS_WORK
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program D: Low frequency, reasonable volume
@@ -122,7 +125,8 @@ attention areas (4): FREQUENCY:hamstrings, FREQUENCY:lats, FREQUENCY:quads, FREQ
 biggest opportunity: FREQUENCY:chest
 actions (5): frequency:split-chest :: Split chest across more training days so no session carries more than about ten sets. | frequency:split-hamstrings :: Split hamstrings across more training days so no session carries more than about ten sets. | frequency:split-lats :: Split lats across more training days so no session carries more than about ten sets. | frequency:split-quads :: Split quads across more training days so no session carries more than about ten sets. | frequency:split-triceps :: Split triceps across more training days so no session carries more than about ten sets.
 overallSummary: Identified 13 strengths, 4 attention areas, biggest opportunity on FREQUENCY:chest.
-FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 5 / 0 / 0
+FIT (provisional, validated:false => real result is UNVALIDATED): DECENT
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program E: High frequency, controlled volume
 
@@ -151,6 +155,7 @@ attention areas (0): none
 biggest opportunity: null
 actions (0): none
 overallSummary: Identified 13 strengths.
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 0 / 0 / 0
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program F1: Redundant selection (coverage intact)
@@ -180,6 +185,7 @@ attention areas (0): none
 biggest opportunity: null
 actions (0): none
 overallSummary: Identified 12 strengths.
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 0 / 0 / 0
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program F2: Redundant selection + coverage gap
@@ -209,6 +215,7 @@ attention areas (8): VOLUME:glutes, VOLUME:hamstrings, VOLUME:quads, FREQUENCY:c
 biggest opportunity: VOLUME:calves
 actions (9): volume:add-calves :: Add weekly volume for calves. | volume:add-glutes :: Add weekly volume for glutes. | volume:add-hamstrings :: Add weekly volume for hamstrings. | volume:add-quads :: Add weekly volume for quads. | frequency:split-calves :: Give calves at least one session with two or more hard sets. | frequency:split-chest :: Split chest across more training days so no session carries more than about ten sets. | frequency:split-glutes :: Give glutes at least one session with two or more hard sets. | frequency:split-hamstrings :: Give hamstrings at least one session with two or more hard sets. | frequency:split-quads :: Give quads at least one session with two or more hard sets.
 overallSummary: Identified 8 strengths, 8 attention areas, biggest opportunity on VOLUME:calves.
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 9 / 4 / 4
 FIT (provisional, validated:false => real result is UNVALIDATED): NEEDS_WORK
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program G: Poor progression structure (only effort/reps/load scheme expressible)
@@ -238,6 +245,7 @@ attention areas (0): none
 biggest opportunity: PROGRESSION_SOUNDNESS
 actions (1): progressionSoundness:align-schemes :: Align progression schemes across prescriptions.
 overallSummary: Identified 12 strengths, biggest opportunity on PROGRESSION_SOUNDNESS.
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 0 / 0 / 0
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program H: Strong progression structure (identical to B in ProgramStructure)
@@ -267,6 +275,7 @@ attention areas (0): none
 biggest opportunity: null
 actions (0): none
 overallSummary: Identified 13 strengths.
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 0 / 0 / 0
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program J: Consecutive-day, failure-heavy (weekday order not representable)
@@ -296,7 +305,68 @@ attention areas (0): none
 biggest opportunity: RECOVERY_COST
 actions (1): recoveryCost:trim-intensity :: Trim intensity on the highest-fatigue days.
 overallSummary: Identified 12 strengths, biggest opportunity on RECOVERY_COST.
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 0 / 0 / 0
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program K: E11 probe: one MODERATE + seven LOW findings, no HIGH (sub-HIGH breadth)
+
+=== Program K: E11 probe: one MODERATE + seven LOW findings, no HIGH (sub-HIGH breadth) ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps              26  High      NONE      NONE
+  VOLUME:calves              12  Adequate  NONE      NONE
+  VOLUME:chest               26  High      NONE      NONE
+  VOLUME:glutes              13  Adequate  NONE      NONE
+  VOLUME:hamstrings          16  Adequate  NONE      NONE
+  VOLUME:lats                28  High      NONE      NONE
+  VOLUME:quads               26  High      NONE      NONE
+  VOLUME:rear delts          23  High      NONE      NONE
+  VOLUME:side delts          16  Adequate  NONE      NONE
+  VOLUME:triceps             27  High      NONE      NONE
+  VOLUME:upper back          22  High      NONE      NONE
+FREQUENCY (distribution ratio | band): biceps 0.667 Low; calves 1 Adequate; chest 0.667 Low; glutes 1 Adequate; hamstrings 1 Adequate; lats 0.667 Low; quads 0.667 Low; rear delts 0.667 Low; side delts 1 Adequate; triceps 0.667 Low; upper back 0.667 Low
+EXERCISE_SELECTION_BALANCE  metric=1 band=Balanced severity=NONE weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
+RECOVERY_COST               metric=162 band=Excessive severity=MODERATE weight=MEDIUM leverage=MODERATE
+material findings (leverage >= LOW): FREQUENCY:biceps [Low, MODERATE x LOW -> LOW]; FREQUENCY:chest [Low, MODERATE x LOW -> LOW]; FREQUENCY:lats [Low, MODERATE x LOW -> LOW]; FREQUENCY:quads [Low, MODERATE x LOW -> LOW]; FREQUENCY:rear delts [Low, MODERATE x LOW -> LOW]; FREQUENCY:triceps [Low, MODERATE x LOW -> LOW]; FREQUENCY:upper back [Low, MODERATE x LOW -> LOW]; RECOVERY_COST [Excessive, MODERATE x MEDIUM -> MODERATE]
+strengths (13): EXERCISE_SELECTION_BALANCE, PROGRESSION_SOUNDNESS, VOLUME:biceps, VOLUME:calves, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+attention areas (7): FREQUENCY:biceps, FREQUENCY:chest, FREQUENCY:lats, FREQUENCY:quads, FREQUENCY:rear delts, FREQUENCY:triceps, FREQUENCY:upper back
+biggest opportunity: RECOVERY_COST
+actions (8): recoveryCost:reduce-intensity :: Reduce weekly intensity or insert a deload day. | frequency:split-biceps :: Split biceps across more training days so no session carries more than about ten sets. | frequency:split-chest :: Split chest across more training days so no session carries more than about ten sets. | frequency:split-lats :: Split lats across more training days so no session carries more than about ten sets. | frequency:split-quads :: Split quads across more training days so no session carries more than about ten sets. | frequency:split-rear delts :: Split rear delts across more training days so no session carries more than about ten sets. | frequency:split-triceps :: Split triceps across more training days so no session carries more than about ten sets. | frequency:split-upper back :: Split upper back across more training days so no session carries more than about ten sets.
+overallSummary: Identified 13 strengths, 7 attention areas, biggest opportunity on RECOVERY_COST.
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 8 / 1 / 0
+FIT (provisional, validated:false => real result is UNVALIDATED): DECENT
+
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > Program L: E11 probe: one HIGH finding (calves Low), nothing else
+
+=== Program L: E11 probe: one HIGH finding (calves Low), nothing else ===
+kind=UNVALIDATED  thresholdsValidated=false  rollUpComplete=true  gatedFit=UNVALIDATED
+reason: Goal profile "HYPERTROPHY" is not validated (provisional thresholds — bands populated from candidate config, pending expert review).
+VOLUME   (fractional sets/wk | band | severity | leverage)
+  VOLUME:biceps              12  Adequate  NONE      NONE
+  VOLUME:calves               5  Low       MAJOR     HIGH
+  VOLUME:chest               12  Adequate  NONE      NONE
+  VOLUME:glutes               9  Adequate  NONE      NONE
+  VOLUME:hamstrings        10.5  Adequate  NONE      NONE
+  VOLUME:lats                12  Adequate  NONE      NONE
+  VOLUME:quads               12  Adequate  NONE      NONE
+  VOLUME:rear delts           9  Adequate  NONE      NONE
+  VOLUME:side delts         7.5  Adequate  NONE      NONE
+  VOLUME:triceps             12  Adequate  NONE      NONE
+  VOLUME:upper back           9  Adequate  NONE      NONE
+FREQUENCY (distribution ratio | band): biceps 1.5 Adequate; calves 1 Adequate; chest 1 Adequate; glutes 2 Adequate; hamstrings 1 Adequate; lats 1 Adequate; quads 1 Adequate; rear delts 2 Adequate; side delts 2 Adequate; triceps 1.5 Adequate; upper back 2 Adequate
+EXERCISE_SELECTION_BALANCE  metric=1 band=Balanced severity=NONE weight=LOW leverage=NONE
+PROGRESSION_SOUNDNESS       metric=0 band=Sound severity=NONE weight=MEDIUM leverage=NONE
+RECOVERY_COST               metric=68.1 band=Moderate severity=NONE weight=MEDIUM leverage=NONE
+material findings (leverage >= LOW): VOLUME:calves [Low, MAJOR x HIGH -> HIGH]
+strengths (12): EXERCISE_SELECTION_BALANCE, PROGRESSION_SOUNDNESS, VOLUME:biceps, VOLUME:chest, VOLUME:glutes, VOLUME:hamstrings, VOLUME:lats, VOLUME:quads, VOLUME:rear delts, VOLUME:side delts, VOLUME:triceps, VOLUME:upper back
+attention areas (0): none
+biggest opportunity: VOLUME:calves
+actions (1): volume:add-calves :: Add weekly volume for calves.
+overallSummary: Identified 12 strengths, biggest opportunity on VOLUME:calves.
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 1 / 1 / 1
+FIT (provisional, validated:false => real result is UNVALIDATED): NEEDS_WORK
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > G with PERCENT_1RM loads, percent=0.75, no 1-rep prescription (PS false-positive check)
 
@@ -325,22 +395,8 @@ attention areas (0): none
 biggest opportunity: PROGRESSION_SOUNDNESS
 actions (1): progressionSoundness:align-schemes :: Align progression schemes across prescriptions.
 overallSummary: Identified 12 strengths, biggest opportunity on PROGRESSION_SOUNDNESS.
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 0 / 0 / 0
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
-
-stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > comparison against calibration-before.txt (logs only, never asserts engine output) > logs, per program, which axes changed and which bands flipped
-
-=== CHANGES vs /Users/arpan/Documents/code/training-platform/packages/api/calibration-before.txt ===
-A: no change
-B: no change
-C: no change
-D: no change
-E: no change
-F1: no change
-F2: no change
-G: no change
-H: no change
-J: no change
-G-pct(0.75): no change
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > G with PERCENT_1RM loads, percent=75, no 1-rep prescription (PS false-positive check)
 
@@ -369,23 +425,8 @@ attention areas (0): none
 biggest opportunity: PROGRESSION_SOUNDNESS
 actions (1): progressionSoundness:align-schemes :: Align progression schemes across prescriptions.
 overallSummary: Identified 12 strengths, biggest opportunity on PROGRESSION_SOUNDNESS.
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 0 / 0 / 0
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
-
-stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > comparison against calibration-before.txt (logs only, never asserts engine output) > logs, per program, which axes changed and which bands flipped
-
-=== CHANGES vs /Users/arpan/Documents/code/training-platform/packages/api/calibration-before.txt ===
-A: no change
-B: no change
-C: no change
-D: no change
-E: no change
-F1: no change
-F2: no change
-G: no change
-H: no change
-J: no change
-G-pct(0.75): no change
-G-pct(75): no change
 
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > extra probes > J as-is (consecutive-day, failure-heavy)
 
@@ -414,9 +455,29 @@ attention areas (0): none
 biggest opportunity: RECOVERY_COST
 actions (1): recoveryCost:trim-intensity :: Trim intensity on the highest-fatigue days.
 overallSummary: Identified 12 strengths, biggest opportunity on RECOVERY_COST.
+FIT inputs: findings counted toward breadth (severity >= MODERATE) at leverage >= LOW / MODERATE / HIGH: 0 / 0 / 0
 FIT (provisional, validated:false => real result is UNVALIDATED): STRONG
 
- ✓ src/services/calibration.test.ts (20 tests) 57ms
+stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config > comparison against calibration-before.txt (logs only, never asserts engine output) > logs, per program, which axes changed and which bands flipped
+
+=== CHANGES vs /Users/arpan/Documents/code/training-platform/packages/api/calibration-before.txt ===
+A: no change
+B: no change
+C: no change
+D FIT (provisional) STRONG -> DECENT
+E: no change
+F1: no change
+F2: no change
+G: no change
+H: no change
+J: no change
+K: no matching block in before file
+L: no matching block in before file
+G-pct(0.75): no change
+G-pct(75): no change
+J(probe): no change
+
+ ✓ src/services/calibration.test.ts (22 tests) 63ms
 stdout | src/services/calibration.test.ts > calibration harness: real engine + real seed + HYPERTROPHY candidate config
 
 === SUMMARY (provisional Fit; real Fit is UNVALIDATED while validated:false) ===
@@ -426,21 +487,23 @@ stdout | src/services/calibration.test.ts > calibration harness: real engine + r
 │ 0       │ 'A'           │ 11  │ 0    │ 0         │ 18               │ 2         │ 17        │ 'VOLUME:biceps'         │ 'NEEDS_WORK'   │
 │ 1       │ 'B'           │ 0   │ 0    │ 0         │ 0                │ 13        │ 0         │ 'null'                  │ 'STRONG'       │
 │ 2       │ 'C'           │ 0   │ 3    │ 3         │ 10               │ 10        │ 9         │ 'VOLUME:biceps'         │ 'NEEDS_WORK'   │
-│ 3       │ 'D'           │ 0   │ 0    │ 0         │ 5                │ 13        │ 4         │ 'FREQUENCY:chest'       │ 'STRONG'       │
+│ 3       │ 'D'           │ 0   │ 0    │ 0         │ 5                │ 13        │ 4         │ 'FREQUENCY:chest'       │ 'DECENT'       │
 │ 4       │ 'E'           │ 0   │ 0    │ 0         │ 0                │ 13        │ 0         │ 'null'                  │ 'STRONG'       │
 │ 5       │ 'F1'          │ 0   │ 0    │ 0         │ 0                │ 12        │ 0         │ 'null'                  │ 'STRONG'       │
 │ 6       │ 'F2'          │ 4   │ 2    │ 0         │ 9                │ 8         │ 8         │ 'VOLUME:calves'         │ 'NEEDS_WORK'   │
 │ 7       │ 'G'           │ 0   │ 0    │ 0         │ 1                │ 12        │ 0         │ 'PROGRESSION_SOUNDNESS' │ 'STRONG'       │
 │ 8       │ 'H'           │ 0   │ 0    │ 0         │ 0                │ 13        │ 0         │ 'null'                  │ 'STRONG'       │
 │ 9       │ 'J'           │ 0   │ 1    │ 0         │ 1                │ 12        │ 0         │ 'RECOVERY_COST'         │ 'STRONG'       │
-│ 10      │ 'G-pct(0.75)' │ 0   │ 0    │ 0         │ 1                │ 12        │ 0         │ 'PROGRESSION_SOUNDNESS' │ 'STRONG'       │
-│ 11      │ 'G-pct(75)'   │ 0   │ 0    │ 0         │ 1                │ 12        │ 0         │ 'PROGRESSION_SOUNDNESS' │ 'STRONG'       │
-│ 12      │ 'J(probe)'    │ 0   │ 1    │ 0         │ 1                │ 12        │ 0         │ 'RECOVERY_COST'         │ 'STRONG'       │
+│ 10      │ 'K'           │ 0   │ 7    │ 0         │ 8                │ 13        │ 7         │ 'RECOVERY_COST'         │ 'DECENT'       │
+│ 11      │ 'L'           │ 1   │ 0    │ 0         │ 1                │ 12        │ 0         │ 'VOLUME:calves'         │ 'NEEDS_WORK'   │
+│ 12      │ 'G-pct(0.75)' │ 0   │ 0    │ 0         │ 1                │ 12        │ 0         │ 'PROGRESSION_SOUNDNESS' │ 'STRONG'       │
+│ 13      │ 'G-pct(75)'   │ 0   │ 0    │ 0         │ 1                │ 12        │ 0         │ 'PROGRESSION_SOUNDNESS' │ 'STRONG'       │
+│ 14      │ 'J(probe)'    │ 0   │ 1    │ 0         │ 1                │ 12        │ 0         │ 'RECOVERY_COST'         │ 'STRONG'       │
 └─────────┴───────────────┴─────┴──────┴───────────┴──────────────────┴───────────┴───────────┴─────────────────────────┴────────────────┘
 
 
  Test Files  1 passed (1)
-      Tests  20 passed (20)
-   Start at  08:17:52
-   Duration  409ms (transform 126ms, setup 0ms, collect 199ms, tests 57ms, environment 0ms, prepare 41ms)
+      Tests  22 passed (22)
+   Start at  20:24:03
+   Duration  448ms (transform 137ms, setup 0ms, collect 208ms, tests 63ms, environment 0ms, prepare 46ms)
 
