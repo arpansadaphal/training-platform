@@ -287,6 +287,73 @@
   font: inherit;
 }
 
+/* ── Exercise picker: search + status (additions; .picker and .picker select are unchanged) ───────── */
+
+.pickerBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pickerSearch {
+  position: relative;
+}
+
+.pickerSearch input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem 2rem 0.4rem 0.5rem; /* right padding keeps text clear of the × button */
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+}
+
+.pickerClear {
+  position: absolute;
+  top: 50%;
+  right: 0.25rem;
+  transform: translateY(-50%);
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pickerClear:hover {
+  background: var(--border);
+  color: var(--fg);
+  filter: none;
+}
+
+.pickerRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pickerStatus {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Empty, the status line must stay in the accessibility tree (a display:none live region is announced
+   unreliably), so cancel the column gap instead of hiding it. */
+.pickerStatus:empty {
+  margin-top: -0.4rem;
+}
+
 /* ── Analyze panel ────────────────────────────────────────────────────── */
 
 .analyze {
