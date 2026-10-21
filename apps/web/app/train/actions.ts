@@ -59,3 +59,30 @@ export async function startTrainingAction(formData: FormData): Promise<void> {
 
   redirect(`/train/session/${sessionId}`);
 }
+
+/**
+ * Phase A2 (ARCH-056): start the day chosen in /train's picker. Picking the
+ * rotation's suggested day behaves exactly like startTrainingAction; another
+ * day records the passed-over days as SKIPPED first. Superseded IN_PROGRESS
+ * sessions are auto-closed (ARCH-057).
+ */
+export async function startDayAction(formData: FormData): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id || !session.user.email) {
+    redirect("/login");
+  }
+
+  const programId = String(formData.get("programId") ?? "");
+  const workoutDayId = String(formData.get("workoutDayId") ?? "");
+  if (!programId || !workoutDayId) {
+    throw new Error("Missing programId or workoutDayId");
+  }
+
+  const caller = appRouter.createCaller({
+    user: { id: session.user.id, email: session.user.email },
+  });
+
+  // redirect() stays outside the try, as in startTrainingAction.
+  const started = await caller.session.startSpecificDay({ programId, workoutDayId });
+  redirect(`/train/session/${started.id}`);
+}

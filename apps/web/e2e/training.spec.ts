@@ -133,6 +133,11 @@ test("Training: commit a version, start the session, log a deviation, mark compl
 
   // ── Mark complete ─────────────────────────────────────────────────────
   await page.getByRole("button", { name: "Mark complete" }).click();
+  // Phase A2: if any exercise has no logged sets, the app asks first.
+  const completeAnyway = page.getByRole("button", { name: "Complete anyway" });
+  await completeAnyway
+    .waitFor({ timeout: 2_000 })
+    .then(() => completeAnyway.click(), () => undefined);
   await expect(page.getByText(/Session completed\./)).toBeVisible();
 
   // ── Back to /train: the picker still works ────────────────────────────

@@ -21,6 +21,7 @@ import {
   type ClientConstraintKind,
 } from "./ConstraintsClient";
 import styles from "./constraints.module.css";
+import { AppNav } from "@/components/nav/AppNav";
 
 export const dynamic = "force-dynamic";
 
@@ -44,8 +45,10 @@ export default async function ConstraintsPage() {
   }));
 
   return (
-    <main className={styles.page}>
-      <nav className={styles.nav}>
+    <>
+      <AppNav />
+      <main className={styles.page}>
+      <nav className={styles.nav} aria-label="Breadcrumb">
         <Link href="/app">&larr; Dashboard</Link>
       </nav>
       <header className={styles.header}>
@@ -62,5 +65,6 @@ export default async function ConstraintsPage() {
       </header>
       <ConstraintsClient initialConstraints={initialConstraints} />
     </main>
+    </>
   );
 }

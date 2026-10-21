@@ -119,6 +119,15 @@ export async function archiveProgram(id: string): Promise<ProgramRecord> {
   });
 }
 
+/** Reverses archiveProgram. The block archiving closed stays closed; the user activates a version to train again. */
+export async function unarchiveProgram(id: string): Promise<ProgramRecord> {
+  return prisma.program.update({
+    where: { id },
+    data: { archivedAt: null },
+    select: PROGRAM_SELECT,
+  });
+}
+
 /**
  * Transaction-aware variant of archiveProgram. Used by the Phase 6 archive
  * flow, which closes the Program's open TrainingBlock in the same transaction

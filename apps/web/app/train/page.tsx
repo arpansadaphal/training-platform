@@ -32,8 +32,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { appRouter } from "@training/api";
 import { auth } from "@/src/server/auth";
-import { startTrainingAction } from "./actions";
+import { TRPCError } from "@trpc/server";
+import { DayPicker } from "./DayPicker";
 import styles from "./train.module.css";
+import { AppNav } from "@/components/nav/AppNav";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +62,24 @@ export default async function TrainPage() {
   const ready = programs.filter((p) => p.activeVersionId !== null);
   const notReady = programs.filter((p) => p.activeVersionId === null);
 
+  // Phase A2 (ARCH-056): the day picker's options per ready Program. A
+  // Program with an active version but no active block (e.g. just
+  // unarchived) cannot start a session; it gets a pointer instead.
+  const options = new Map(
+    await Promise.all(
+      ready.map(async (p) => {
+        try {
+          return [p.id, await caller.session.getTrainingOptions({ programId: p.id })] as const;
+        } catch (err) {
+          if (err instanceof TRPCError && err.code === "PRECONDITION_FAILED") {
+            return [p.id, null] as const;
+          }
+          throw err;
+        }
+      }),
+    ),
+  );
+
   // The anticipation cue belongs to whichever Program has an ACTIVE
   // TrainingBlock — which is what identity.primaryProgram.currentBlock
   // resolves to (findActiveTrainingBlockForProgram returns ACTIVE only).
@@ -72,10 +92,9 @@ export default async function TrainPage() {
     identity.primaryProgram?.currentBlock?.anticipationCue.text ?? null;
 
   return (
+    <>
+    <AppNav />
     <main className={styles.page}>
-      <nav className={styles.nav}>
-        <Link href="/app">&larr; Dashboard</Link>
-      </nav>
 
       <h1 className={styles.heading}>Training</h1>
       <p className={styles.muted}>
@@ -99,12 +118,35 @@ export default async function TrainPage() {
                 {p.id === cueProgramId && cueText ? (
                   <p className={styles.muted}>{cueText}</p>
                 ) : null}
-                <form action={startTrainingAction}>
-                  <input type="hidden" name="programId" value={p.id} />
-                  <button type="submit" className={styles.primaryButton}>
-                    Start training
-                  </button>
-                </form>
+                {(() => {
+                  const o = options.get(p.id);
+                  if (!o) {
+                    return (
+                      <p className={styles.muted}>
+                        No active training block.{" "}
+                        <Link href={`/app/programs/${p.id}`}>Activate a version</Link> to train
+                        this program.
+                      </p>
+                    );
+                  }
+                  const suggestedName =
+                    o.days.find((d) => d.id === o.suggestedDayId)?.name ?? "";
+                  return (
+                    <>
+                      <p className={styles.muted}>
+                        {o.pending?.status === "IN_PROGRESS"
+                          ? `In progress: ${suggestedName}`
+                          : `Next up: ${suggestedName}`}
+                      </p>
+                      <DayPicker
+                        programId={p.id}
+                        days={o.days}
+                        suggestedDayId={o.suggestedDayId}
+                        pending={o.pending}
+                      />
+                    </>
+                  );
+                })()}
               </li>
             ))}
           </ul>
@@ -135,5 +177,6 @@ export default async function TrainPage() {
         </section>
       ) : null}
     </main>
+    </>
   );
 }

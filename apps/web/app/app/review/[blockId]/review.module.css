@@ -313,3 +313,10 @@
 .reportLink {
   font-weight: 500;
 }
+/* Phase A2 (ARCH-058): block summary and session log. */
+.summaryLine {
+  margin: 0;
+  font-weight: 500;
+}
+
+

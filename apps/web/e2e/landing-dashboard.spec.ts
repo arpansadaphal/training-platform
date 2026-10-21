@@ -144,6 +144,11 @@ test("Landing dashboard: primary program surfaces as the identity/progress conte
   await expect(page.getByText(/Set logged\./)).toBeVisible();
 
   await page.getByRole("button", { name: "Mark complete" }).click();
+  // Phase A2: if any exercise has no logged sets, the app asks first.
+  const completeAnyway = page.getByRole("button", { name: "Complete anyway" });
+  await completeAnyway
+    .waitFor({ timeout: 2_000 })
+    .then(() => completeAnyway.click(), () => undefined);
   await expect(page.getByText(/Session completed\./)).toBeVisible();
 
   // ── Back to /app: the identity surface is intact, stats reflect the

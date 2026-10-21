@@ -21,6 +21,15 @@
 //     dumbbell exercises). Logged weights are read in the plan's unit: lb if
 //     the plan says lb, kg otherwise. Only the number is stored.
 //
+// Phase A2 additions:
+//   - A session clock ("Session time: MM:SS") and per-set "since last" gaps
+//     while IN_PROGRESS, read from startedAt / completedAt. Client-side only.
+//   - "Last: 60 kg × 10 (Mar 15)" under each exercise: display-only, so the
+//     no-prefill rule above still holds.
+//   - Logged sets can be edited or deleted while IN_PROGRESS (ARCH-055).
+//   - "Mark complete" names any exercise with no logged sets and asks first.
+//   - A COMPLETED session shows its logged sets with times, read-only.
+//
 // HONESTY REQUIREMENT: this component does not reconcile, clamp, or reject a
 // deviation from the plan. Whatever is typed is what is logged. The service
 // layer also does not reconcile (see performanceService's header). That is
@@ -35,7 +44,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ExerciseRecord } from "@training/db";
 import { TRPCProvider, trpc } from "@/src/lib/trpc";
@@ -69,6 +78,8 @@ interface ClientSessionContext {
     workoutDayId: string;
     sequenceIndex: number;
     status: SessionStatus;
+    /** Date from the RSC path; ISO string over tRPC. */
+    startedAt: Date | string | null;
   };
   program: { id: string; name: string };
   workoutDay: ClientWorkoutDay;
@@ -82,7 +93,18 @@ type ClientPerformanceRecord = {
   actualReps: number | null;
   actualLoad: number | null;
   actualRpe: number | null;
+  /** Date from the RSC path; ISO string over tRPC. */
+  completedAt: Date | string;
 };
+
+/** Display-only "last time" hint (sessionService.getLastTimeHints). */
+export interface ClientLastTimeHint {
+  exerciseId: string;
+  load: number | null;
+  reps: number | null;
+  unit: "kg" | "lb";
+  sessionCompletedAt: Date | string;
+}
 
 type ClientObservation = {
   id: string;
@@ -94,6 +116,7 @@ interface Props {
   exercises: ExerciseRecord[];
   initialRecords: ClientPerformanceRecord[];
   initialObservations: ClientObservation[];
+  lastTimeHints: ClientLastTimeHint[];
 }
 
 type InputValues = { reps: string; load: string; rpe: string };
@@ -149,6 +172,58 @@ function describePlan(p: ClientPrescription, equipment: string | null): string {
   return `${p.targetSets} × ${reps}${rpePart}${weightPart}`;
 }
 
+const toDate = (d: Date | string) => (d instanceof Date ? d : new Date(d));
+
+/** "04:07", or "1:04:07" past an hour. */
+export function formatClock(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(h > 0 ? 2 : 2, "0");
+  const ss = String(sec).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/** "2m 05s". */
+export function formatGap(totalSeconds: number): string {
+  const s = Math.max(0, Math.round(totalSeconds));
+  return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+}
+
+/** "Last: 60 kg × 10 (Mar 15)". */
+export function formatHint(h: ClientLastTimeHint, unitLabel: string): string {
+  const what =
+    h.load !== null && h.reps !== null
+      ? `${h.load} ${unitLabel} × ${h.reps}`
+      : h.load !== null
+        ? `${h.load} ${unitLabel}`
+        : h.reps !== null
+          ? `${h.reps} reps`
+          : "logged";
+  const when = toDate(h.sessionCompletedAt).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  return `Last: ${what} (${when})`;
+}
+
+/** Ticking "Session time" for an IN_PROGRESS session. */
+function SessionTimer({ startedAt }: { startedAt: Date }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    // Locale/clock text differs between the server render and the browser;
+    // the client value wins (suppressHydrationWarning covers this text only).
+    <p className={styles.sessionTimer} aria-live="off" suppressHydrationWarning>
+      Session time: {formatClock((now - startedAt.getTime()) / 1000)}
+    </p>
+  );
+}
+
 export function SessionClient(props: Props) {
   return (
     <TRPCProvider>
@@ -162,8 +237,10 @@ function SessionClientInner({
   exercises,
   initialRecords,
   initialObservations,
+  lastTimeHints,
 }: Props) {
   const router = useRouter();
+  const hintByExercise = new Map(lastTimeHints.map((h) => [h.exerciseId, h]));
 
   const [records, setRecords] = useState<ClientPerformanceRecord[]>(
     initialRecords,
@@ -182,6 +259,10 @@ function SessionClientInner({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [observationText, setObservationText] = useState("");
+  // ARCH-055: the set being edited inline, and its draft values.
+  const [editing, setEditing] = useState<{ id: string } & InputValues | null>(null);
+  // "Mark complete" with unlogged exercises asks first; this holds their names.
+  const [unloggedPrompt, setUnloggedPrompt] = useState<string[] | null>(null);
 
   const exerciseNameById = new Map(exercises.map((e) => [e.id, e.name]));
   const equipmentById = new Map(exercises.map((e) => [e.id, e.equipment]));
@@ -222,6 +303,31 @@ function SessionClientInner({
     onSuccess: (created) => {
       setRecords((prev) => [...prev, ...created]);
       setStatusMessage(`${created.length} sets logged.`);
+      setErrorMessage(null);
+    },
+    onError: (err) => {
+      setErrorMessage(err.message);
+      setStatusMessage(null);
+    },
+  });
+
+  const updateSetMutation = trpc.performance.updateSet.useMutation({
+    onSuccess: (updated) => {
+      setRecords((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      setEditing(null);
+      setStatusMessage("Set updated.");
+      setErrorMessage(null);
+    },
+    onError: (err) => {
+      setErrorMessage(err.message);
+      setStatusMessage(null);
+    },
+  });
+
+  const deleteSetMutation = trpc.performance.deleteSet.useMutation({
+    onSuccess: ({ id }) => {
+      setRecords((prev) => prev.filter((r) => r.id !== id));
+      setStatusMessage("Set deleted.");
       setErrorMessage(null);
     },
     onError: (err) => {
@@ -315,6 +421,35 @@ function SessionClientInner({
     logBatchMutation.mutate({ sessionId: context.session.id, entries });
   }
 
+  function handleMarkComplete() {
+    const unlogged = context.workoutDay.prescriptions
+      .filter((p) => recordsFor(p.id).length === 0)
+      .map((p) => exerciseNameById.get(p.exerciseId) ?? p.exerciseId);
+    if (unlogged.length > 0) {
+      setUnloggedPrompt(unlogged);
+      return;
+    }
+    markCompletedMutation.mutate({ sessionId: context.session.id });
+  }
+
+  function handleSaveEdit() {
+    if (!editing) return;
+    updateSetMutation.mutate({
+      sessionId: context.session.id,
+      recordId: editing.id,
+      changes: {
+        actualReps: parseNullableNumber(editing.reps),
+        actualLoad: parseNullableNumber(editing.load),
+        actualRpe: parseNullableNumber(editing.rpe),
+      },
+    });
+  }
+
+  function handleDeleteSet(recordId: string) {
+    if (!window.confirm("Delete this set?")) return;
+    deleteSetMutation.mutate({ sessionId: context.session.id, recordId });
+  }
+
   function handleSaveObservation() {
     const content = observationText.trim();
     if (!content) return;
@@ -328,6 +463,19 @@ function SessionClientInner({
 
   const { session, program, workoutDay } = context;
   const isLogging = session.status === "PLANNED" || session.status === "IN_PROGRESS";
+  const inProgress = session.status === "IN_PROGRESS";
+  const startedAt = session.startedAt ? toDate(session.startedAt) : null;
+
+  // "Since last" gaps: each set against the previous set logged in this
+  // session (any exercise), the first against startedAt.
+  const ordered = [...records].sort(
+    (a, b) => toDate(a.completedAt).getTime() - toDate(b.completedAt).getTime(),
+  );
+  const gapSecondsById = new Map<string, number>();
+  ordered.forEach((r, i) => {
+    const prev = i === 0 ? startedAt : toDate(ordered[i - 1]!.completedAt);
+    if (prev) gapSecondsById.set(r.id, (toDate(r.completedAt).getTime() - prev.getTime()) / 1000);
+  });
 
   return (
     <>
@@ -337,6 +485,7 @@ function SessionClientInner({
       <p className={styles.muted}>
         Session {session.sequenceIndex + 1} · {session.status}
       </p>
+      {inProgress && startedAt ? <SessionTimer startedAt={startedAt} /> : null}
 
       {errorMessage ? (
         <p className={styles.errorBanner}>{errorMessage}</p>
@@ -346,9 +495,19 @@ function SessionClientInner({
       ) : null}
 
       {session.status === "COMPLETED" ? (
-        <p className={styles.statusBanner}>
-          This session is complete. Logs below are final.
-        </p>
+        <>
+          <p className={styles.statusBanner}>
+            This session is complete. Logs below are final.
+          </p>
+          <CompletedLog
+            prescriptions={workoutDay.prescriptions}
+            records={records}
+            exerciseNameById={exerciseNameById}
+            unitLabelFor={(p) =>
+              loadUnitLabel(logUnit(p), equipmentById.get(p.exerciseId) ?? null)
+            }
+          />
+        </>
       ) : null}
       {session.status === "SKIPPED" ? (
         <p className={styles.statusBanner}>This session was skipped.</p>
@@ -386,6 +545,7 @@ function SessionClientInner({
                 const equipment = equipmentById.get(p.exerciseId) ?? null;
                 const unitLabel = loadUnitLabel(logUnit(p), equipment);
                 const planned = plannedWeight(p);
+                const hint = hintByExercise.get(p.exerciseId);
                 return (
                   <li key={p.id} className={styles.exerciseCard}>
                     <div className={styles.exerciseHeader}>
@@ -394,23 +554,111 @@ function SessionClientInner({
                         {describePlan(p, equipment)} · {logged.length}/{p.targetSets} logged
                       </span>
                     </div>
+                    {hint ? (
+                      <p className={styles.lastTimeHint} suppressHydrationWarning>
+                        {formatHint(hint, loadUnitLabel(hint.unit, equipment))}
+                      </p>
+                    ) : null}
 
                     {logged.length > 0 ? (
                       <ul className={styles.setList}>
-                        {logged.map((r) => (
-                          <li key={r.id} className={styles.setItem}>
-                            Set {r.setIndex + 1}:{" "}
-                            {r.actualReps !== null
-                              ? `${r.actualReps} reps`
-                              : "reps not recorded"}
-                            {r.actualLoad !== null
-                              ? ` @ ${r.actualLoad} ${unitLabel}`
-                              : ""}
-                            {r.actualRpe !== null
-                              ? ` @ RPE ${r.actualRpe}`
-                              : ""}
-                          </li>
-                        ))}
+                        {logged.map((r, i) =>
+                          editing?.id === r.id ? (
+                            <li key={r.id} className={styles.setItem}>
+                              <span className={styles.setEditRow}>
+                                Set {i + 1}:
+                                <input
+                                  type="number"
+                                  inputMode="numeric"
+                                  aria-label="Edit reps"
+                                  className={styles.setEditInput}
+                                  value={editing.reps}
+                                  onChange={(e) => setEditing({ ...editing, reps: e.target.value })}
+                                />
+                                reps @
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  aria-label={`Edit weight (${unitLabel})`}
+                                  className={styles.setEditInput}
+                                  value={editing.load}
+                                  onChange={(e) => setEditing({ ...editing, load: e.target.value })}
+                                />
+                                {unitLabel} · RPE
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  aria-label="Edit RPE"
+                                  className={styles.setEditInput}
+                                  value={editing.rpe}
+                                  onChange={(e) => setEditing({ ...editing, rpe: e.target.value })}
+                                />
+                                <button
+                                  type="button"
+                                  className={styles.smallButton}
+                                  onClick={handleSaveEdit}
+                                  disabled={updateSetMutation.isPending}
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.smallSecondaryButton}
+                                  onClick={() => setEditing(null)}
+                                >
+                                  Cancel
+                                </button>
+                              </span>
+                            </li>
+                          ) : (
+                            <li key={r.id} className={styles.setItem}>
+                              Set {i + 1}:{" "}
+                              {r.actualReps !== null
+                                ? `${r.actualReps} reps`
+                                : "reps not recorded"}
+                              {r.actualLoad !== null
+                                ? ` @ ${r.actualLoad} ${unitLabel}`
+                                : ""}
+                              {r.actualRpe !== null
+                                ? ` @ RPE ${r.actualRpe}`
+                                : ""}
+                              {inProgress && gapSecondsById.has(r.id) ? (
+                                <span className={styles.setGap}>
+                                  {" "}
+                                  ({formatGap(gapSecondsById.get(r.id)!)} since last)
+                                </span>
+                              ) : null}
+                              {inProgress ? (
+                                <span className={styles.setControls}>
+                                  <button
+                                    type="button"
+                                    className={styles.iconButton}
+                                    aria-label={`Edit set ${i + 1}`}
+                                    onClick={() =>
+                                      setEditing({
+                                        id: r.id,
+                                        reps: r.actualReps === null ? "" : String(r.actualReps),
+                                        load: r.actualLoad === null ? "" : String(r.actualLoad),
+                                        rpe: r.actualRpe === null ? "" : String(r.actualRpe),
+                                      })
+                                    }
+                                  >
+                                    ✎
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={styles.iconButton}
+                                    aria-label={`Delete set ${i + 1}`}
+                                    onClick={() => handleDeleteSet(r.id)}
+                                    disabled={deleteSetMutation.isPending}
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ) : null}
+                            </li>
+                          ),
+                        )}
                       </ul>
                     ) : null}
 
@@ -497,14 +745,40 @@ function SessionClientInner({
             </ul>
           )}
 
+          {unloggedPrompt ? (
+            <div className={styles.confirmPanel} role="alertdialog" aria-labelledby="unlogged-prompt">
+              <p id="unlogged-prompt">
+                {unloggedPrompt.join(", ")} had no logged sets. Complete anyway?
+              </p>
+              <div className={styles.actionRow}>
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={() => {
+                    setUnloggedPrompt(null);
+                    markCompletedMutation.mutate({ sessionId: session.id });
+                  }}
+                  disabled={markCompletedMutation.isPending}
+                >
+                  Complete anyway
+                </button>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => setUnloggedPrompt(null)}
+                >
+                  Keep session open
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className={styles.sessionActions}>
             {session.status === "IN_PROGRESS" ? (
               <button
                 type="button"
                 className={styles.primaryButton}
-                onClick={() =>
-                  markCompletedMutation.mutate({ sessionId: session.id })
-                }
+                onClick={handleMarkComplete}
                 disabled={markCompletedMutation.isPending}
               >
                 {markCompletedMutation.isPending
@@ -564,5 +838,59 @@ function SessionClientInner({
         ) : null}
       </section>
     </>
+  );
+}
+
+/** G: a completed session's sets, read-only, with the time each was logged. */
+function CompletedLog({
+  prescriptions,
+  records,
+  exerciseNameById,
+  unitLabelFor,
+}: {
+  prescriptions: ClientPrescription[];
+  records: ClientPerformanceRecord[];
+  exerciseNameById: Map<string, string>;
+  unitLabelFor: (p: ClientPrescription) => string;
+}) {
+  const hhmm = (d: Date | string) =>
+    toDate(d).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return (
+    <ul className={styles.exerciseList} aria-label="Logged sets">
+      {prescriptions.map((p) => {
+        const sets = records
+          .filter((r) => r.exercisePrescriptionId === p.id)
+          .sort((a, b) => toDate(a.completedAt).getTime() - toDate(b.completedAt).getTime());
+        const unit = unitLabelFor(p);
+        return (
+          <li key={p.id} className={styles.exerciseCard}>
+            <div className={styles.exerciseHeader}>
+              <span className={styles.exerciseName}>
+                {exerciseNameById.get(p.exerciseId) ?? p.exerciseId}
+              </span>
+              <span className={styles.exercisePlan}>
+                {sets.length}/{p.targetSets} sets
+              </span>
+            </div>
+            {sets.length === 0 ? (
+              <p className={styles.muted}>No sets logged.</p>
+            ) : (
+              <ul className={styles.setList}>
+                {sets.map((r, i) => (
+                  <li key={r.id} className={styles.setItem}>
+                    Set {i + 1}: {r.actualReps !== null ? `${r.actualReps} reps` : "reps not recorded"}
+                    {r.actualLoad !== null ? ` @ ${r.actualLoad} ${unit}` : ""}
+                    {r.actualRpe !== null ? ` @ RPE ${r.actualRpe}` : ""}
+                    <span className={styles.setGap} suppressHydrationWarning>
+                      {" "}· {hhmm(r.completedAt)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

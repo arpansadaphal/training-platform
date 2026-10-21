@@ -23,6 +23,9 @@ import { TRPCError } from "@trpc/server";
 import {
   createPerformanceRecord,
   createPerformanceRecordsBatch,
+  deletePerformanceRecord,
+  findPerformanceRecordById,
+  updatePerformanceRecord,
   findTrainingBlockById,
   findVersionWithStructure,
   listPerformanceRecordsForSession,
@@ -168,4 +171,62 @@ export async function listMyRecordsForSession(
 ): Promise<PerformanceRecordRecord[]> {
   await loadOwnedSessionOrThrow(userId, sessionId);
   return listPerformanceRecordsForSession(sessionId);
+}
+
+// ---- ARCH-055: correcting a set while the Session is open ----------------
+
+/**
+ * Loads a record the caller may edit: the Session must be the caller's
+ * (NOT_FOUND otherwise, ARCH-040), the record must belong to that Session
+ * (NOT_FOUND otherwise, so a record id cannot be probed through someone
+ * else's Session), and the Session must be IN_PROGRESS. A COMPLETED or
+ * SKIPPED Session's records are frozen (PRECONDITION_FAILED).
+ */
+async function loadEditableRecordOrThrow(
+  userId: string,
+  sessionId: string,
+  recordId: string,
+): Promise<PerformanceRecordRecord> {
+  const session = await loadOwnedSessionOrThrow(userId, sessionId);
+  const record = await findPerformanceRecordById(recordId);
+  if (!record || record.sessionId !== session.id) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Logged set not found" });
+  }
+  if (session.status !== "IN_PROGRESS") {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Sets can only be changed while the session is in progress.",
+    });
+  }
+  return record;
+}
+
+export interface UpdateSetInput {
+  actualReps?: number | null;
+  actualLoad?: number | null;
+  actualRpe?: number | null;
+}
+
+/**
+ * Corrects a logged set. Same honesty rule as logSet: the values are stored
+ * as entered and never checked against the prescription.
+ */
+export async function updateSet(
+  userId: string,
+  sessionId: string,
+  recordId: string,
+  changes: UpdateSetInput,
+): Promise<PerformanceRecordRecord> {
+  await loadEditableRecordOrThrow(userId, sessionId, recordId);
+  return updatePerformanceRecord(recordId, changes);
+}
+
+export async function deleteSet(
+  userId: string,
+  sessionId: string,
+  recordId: string,
+): Promise<{ id: string }> {
+  await loadEditableRecordOrThrow(userId, sessionId, recordId);
+  await deletePerformanceRecord(recordId);
+  return { id: recordId };
 }

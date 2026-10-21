@@ -37,9 +37,25 @@ function nextId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * Phase A2: a starting load that matches the implement. Loaded equipment
+ * starts at a visible 20 kg fixed weight (a display default, not a
+ * prescription: the lifter edits it); bodyweight or unknown equipment starts
+ * as bodyweight. Previously every exercise, barbell included, defaulted to
+ * bodyweight.
+ */
+const LOADED_EQUIPMENT = new Set(["barbell", "dumbbell", "machine", "cable"]);
+
+export function defaultLoadScheme(equipment: string | null | undefined): LoadScheme {
+  return equipment && LOADED_EQUIPMENT.has(equipment)
+    ? { type: "FIXED_WEIGHT", weight: 20, unit: "kg" }
+    : { type: "BODYWEIGHT" };
+}
+
 function emptyPrescription(
   exerciseId: string,
   orderIndex: number,
+  equipment: string | null | undefined,
 ): ExercisePrescriptionStructure {
   return {
     id: nextId("rx"),
@@ -52,7 +68,7 @@ function emptyPrescription(
     // checks). New exercises start at a visible, editable 2 RIR rather than
     // "not set", which the engine would flag on every Builder-made program.
     targetRpe: DEFAULT_TARGET_RPE,
-    loadScheme: { type: "BODYWEIGHT" },
+    loadScheme: defaultLoadScheme(equipment),
   };
 }
 
@@ -104,7 +120,11 @@ export function StructureEditor({ structure, exercises, onChange }: Props) {
       ...day,
       prescriptions: [
         ...day.prescriptions,
-        emptyPrescription(exerciseId, day.prescriptions.length),
+        emptyPrescription(
+          exerciseId,
+          day.prescriptions.length,
+          exercises.find((e) => e.id === exerciseId)?.equipment,
+        ),
       ],
     }));
   }

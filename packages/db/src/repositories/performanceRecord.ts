@@ -140,6 +140,86 @@ export async function listPerformanceRecordsForSession(
   return rows.map(toRecord);
 }
 
+export async function findPerformanceRecordById(
+  id: string,
+): Promise<PerformanceRecordRecord | null> {
+  const row = await prisma.performanceRecord.findUnique({
+    where: { id },
+    select: PERFORMANCE_RECORD_SELECT,
+  });
+  return row === null ? null : toRecord(row);
+}
+
+/**
+ * ARCH-055: correcting a set while its Session is IN_PROGRESS. Only the
+ * fields present in `changes` are written; `null` clears a field.
+ */
+export async function updatePerformanceRecord(
+  id: string,
+  changes: {
+    actualReps?: number | null;
+    actualLoad?: number | null;
+    actualRpe?: number | null;
+  },
+): Promise<PerformanceRecordRecord> {
+  const data: Prisma.PerformanceRecordUpdateInput = {};
+  if (changes.actualReps !== undefined) data.actualReps = changes.actualReps;
+  if (changes.actualLoad !== undefined) data.actualLoad = changes.actualLoad;
+  if (changes.actualRpe !== undefined) data.actualRpe = changes.actualRpe;
+  const row = await prisma.performanceRecord.update({
+    where: { id },
+    data,
+    select: PERFORMANCE_RECORD_SELECT,
+  });
+  return toRecord(row);
+}
+
+/** ARCH-055: removing a mistaken set while its Session is IN_PROGRESS. */
+export async function deletePerformanceRecord(id: string): Promise<void> {
+  await prisma.performanceRecord.delete({ where: { id } });
+}
+
+/** A logged set with the exercise it was logged against and when its Session finished. */
+export interface ExercisePerformanceRecord extends PerformanceRecordRecord {
+  exerciseId: string;
+  /** The prescription's LoadScheme JSON, so a caller can read the unit the load was logged in. */
+  loadScheme: unknown;
+  sessionCompletedAt: Date | null;
+}
+
+/**
+ * "Last time" hints: every record for the given exercises in the user's
+ * COMPLETED Sessions (any block, any program), newest Session first,
+ * excluding one Session (the one being logged). The service picks the most
+ * recent Session per exercise and its top set.
+ */
+export async function listCompletedPerformancesForExercises(
+  userId: string,
+  exerciseIds: readonly string[],
+  excludeSessionId: string,
+): Promise<ExercisePerformanceRecord[]> {
+  if (exerciseIds.length === 0) return [];
+  const rows = await prisma.performanceRecord.findMany({
+    where: {
+      sessionId: { not: excludeSessionId },
+      session: { status: "COMPLETED", trainingBlock: { userId } },
+      exercisePrescription: { exerciseId: { in: [...exerciseIds] } },
+    },
+    orderBy: [{ session: { completedAt: "desc" } }, { completedAt: "desc" }],
+    select: {
+      ...PERFORMANCE_RECORD_SELECT,
+      exercisePrescription: { select: { exerciseId: true, loadScheme: true } },
+      session: { select: { completedAt: true } },
+    },
+  });
+  return rows.map((row) => ({
+    ...toRecord(row),
+    exerciseId: row.exercisePrescription.exerciseId,
+    loadScheme: row.exercisePrescription.loadScheme,
+    sessionCompletedAt: row.session.completedAt,
+  }));
+}
+
 /**
  * Phase 7 addition — /app landing screen's headline stat.
  *

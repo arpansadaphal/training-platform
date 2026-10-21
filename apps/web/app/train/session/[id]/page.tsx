@@ -19,6 +19,7 @@ import { appRouter } from "@training/api";
 import { auth } from "@/src/server/auth";
 import { SessionClient } from "./SessionClient";
 import styles from "../../train.module.css";
+import { AppNav } from "@/components/nav/AppNav";
 
 export const dynamic = "force-dynamic";
 
@@ -50,15 +51,18 @@ export default async function SessionDetailPage({ params }: PageProps) {
     throw err;
   }
 
-  const [exercises, records, observations] = await Promise.all([
+  const [exercises, records, observations, lastTimeHints] = await Promise.all([
     caller.exercise.listAll(),
     caller.performance.listForSession({ sessionId: id }),
     caller.observation.listForSession({ sessionId: id }),
+    caller.session.getLastTimeHints({ sessionId: id }),
   ]);
 
   return (
-    <main className={styles.page}>
-      <nav className={styles.nav}>
+    <>
+      <AppNav />
+      <main className={styles.page}>
+      <nav className={styles.nav} aria-label="Breadcrumb">
         <Link href="/train">&larr; Training</Link>
       </nav>
       <SessionClient
@@ -66,7 +70,9 @@ export default async function SessionDetailPage({ params }: PageProps) {
         exercises={exercises}
         initialRecords={records}
         initialObservations={observations}
+        lastTimeHints={lastTimeHints}
       />
     </main>
+    </>
   );
 }

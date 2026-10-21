@@ -18,6 +18,7 @@ import type {
 import type { ProgramStructure } from "@training/domain";
 import { auth } from "@/src/server/auth";
 import { BuilderClient } from "./BuilderClient";
+import { AppNav } from "@/components/nav/AppNav";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +68,9 @@ export default async function BuildPage({ params }: PageProps) {
   }
 
   return (
-    <main style={{ padding: "2rem", maxWidth: "72rem", margin: "0 auto" }}>
+    <>
+      <AppNav />
+      <main style={{ padding: "2rem", maxWidth: "72rem", margin: "0 auto" }}>
       <p style={{ opacity: 0.7 }}>
         <Link href={`/app/programs/${id}`}>&larr; {program.name}</Link>
       </p>
@@ -83,5 +86,6 @@ export default async function BuildPage({ params }: PageProps) {
         initialActiveVersionStructure={activeVersionStructure}
       />
     </main>
+    </>
   );
 }

@@ -1,0 +1,22 @@
+/* apps/web/components/review/SessionLog.module.css */
+
+.sessionLog {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sessionLogItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.muted {
+  color: var(--muted);
+}

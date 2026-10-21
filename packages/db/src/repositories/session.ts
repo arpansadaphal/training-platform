@@ -98,6 +98,11 @@ export interface CreateSessionInput {
   trainingBlockId: string;
   workoutDayId: string;
   sequenceIndex: number;
+  /**
+   * ARCH-056: the day picker records passed-over days as Sessions created
+   * directly in SKIPPED. Defaults to PLANNED; only createSessionInTx honours it.
+   */
+  status?: "PLANNED" | "SKIPPED";
 }
 
 /**
@@ -132,7 +137,7 @@ export async function createSessionInTx(
       trainingBlockId: input.trainingBlockId,
       workoutDayId: input.workoutDayId,
       sequenceIndex: input.sequenceIndex,
-      status: "PLANNED",
+      status: input.status ?? "PLANNED",
     },
     select: SESSION_SELECT,
   });
@@ -166,6 +171,47 @@ export async function updateSessionStatus(
   return prisma.session.update({
     where: { id },
     data,
+    select: SESSION_SELECT,
+  });
+}
+
+/** Transaction-aware variant of updateSessionStatus (ARCH-056 / ARCH-057 close paths). */
+export async function updateSessionStatusInTx(
+  tx: Prisma.TransactionClient,
+  id: string,
+  update: SessionStatusUpdate,
+): Promise<SessionRecord> {
+  const data: Prisma.SessionUpdateInput = { status: update.status };
+  if (update.startedAt !== undefined) data.startedAt = update.startedAt;
+  if (update.completedAt !== undefined) data.completedAt = update.completedAt;
+  return tx.session.update({ where: { id }, data, select: SESSION_SELECT });
+}
+
+/**
+ * ARCH-057: every IN_PROGRESS Session belonging to a user, across all of
+ * their TrainingBlocks (TrainingBlock.userId is denormalized for this).
+ */
+export async function listInProgressSessionsForUser(
+  userId: string,
+): Promise<SessionRecord[]> {
+  return prisma.session.findMany({
+    where: { status: "IN_PROGRESS", trainingBlock: { userId } },
+    orderBy: { startedAt: "asc" },
+    select: SESSION_SELECT,
+  });
+}
+
+/** The user's most recently completed Session (any block), or null. Feeds the /app welcome-back line. */
+export async function findLatestCompletedSessionForUser(
+  userId: string,
+): Promise<SessionRecord | null> {
+  return prisma.session.findFirst({
+    where: {
+      status: "COMPLETED",
+      completedAt: { not: null },
+      trainingBlock: { userId },
+    },
+    orderBy: { completedAt: "desc" },
     select: SESSION_SELECT,
   });
 }

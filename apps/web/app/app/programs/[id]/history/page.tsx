@@ -19,6 +19,7 @@ import type { StructureDiffEntry } from "@training/domain";
 import { auth } from "@/src/server/auth";
 import { HistoryClient, type ClientVersionEntry } from "./HistoryClient";
 import styles from "./history.module.css";
+import { AppNav } from "@/components/nav/AppNav";
 
 export const dynamic = "force-dynamic";
 
@@ -47,9 +48,13 @@ export default async function ProgramHistoryPage({ params }: PageProps) {
     throw err;
   }
 
-  const versions = await caller.programVersion.listForProgram({
-    programId: id,
-  });
+  const [versions, blocks] = await Promise.all([
+    caller.programVersion.listForProgram({ programId: id }),
+    // Phase A2: blocks, so a closed block's Review and Block Report stay
+    // reachable after a new commit replaces it.
+    caller.program.listBlocks({ id }),
+  ]);
+  const versionNumberById = new Map(versions.map((v) => [v.id, v.versionNumber]));
 
   // Order ascending by versionNumber to pair each version with its
   // predecessor. `listForProgram` returns them DESC (newest first); reverse
@@ -91,13 +96,55 @@ export default async function ProgramHistoryPage({ params }: PageProps) {
     .reverse();
 
   return (
-    <main className={styles.page}>
-      <nav className={styles.nav}>
+    <>
+      <AppNav />
+      <main className={styles.page}>
+      <nav className={styles.nav} aria-label="Breadcrumb">
         <Link href={`/app/programs/${program.id}`}>
           &larr; {program.name}
         </Link>
       </nav>
+      <section className={styles.blocks} aria-labelledby="blocks-heading">
+        <h2 id="blocks-heading" className={styles.blocksHeading}>
+          Training blocks
+        </h2>
+        {blocks.length === 0 ? (
+          <p className={styles.muted}>
+            No training blocks yet. Committing a version starts one.
+          </p>
+        ) : (
+          <ul className={styles.list}>
+            {blocks.map((b) => (
+              <li key={b.id} className={styles.item}>
+                <div className={styles.itemHeader}>
+                  <span className={styles.itemTitle}>
+                    Version {versionNumberById.get(b.programVersionId) ?? "?"} ·{" "}
+                    {b.status === "ACTIVE" ? "In progress" : b.status === "COMPLETED" ? "Completed" : "Abandoned"}
+                  </span>
+                  <span className={styles.date}>
+                    {formatDate(b.startedAt)} – {b.endedAt ? formatDate(b.endedAt) : "now"}
+                  </span>
+                </div>
+                <p className={styles.blockLinks}>
+                  <Link href={`/app/review/${b.id}`}>Review</Link>
+                  {b.status !== "ACTIVE" ? (
+                    <>
+                      {" · "}
+                      <Link href={`/app/blocks/${b.id}/report`}>Block Report</Link>
+                    </>
+                  ) : null}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       <HistoryClient programName={program.name} entries={entries} />
     </main>
+    </>
   );
+}
+
+function formatDate(d: Date): string {
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }

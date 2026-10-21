@@ -8,7 +8,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { appRouter } from "@training/api";
 import { auth } from "@/src/server/auth";
-import { createProgramAction } from "./actions";
+import { createProgramAction, unarchiveProgramAction } from "./actions";
+import { AppNav } from "@/components/nav/AppNav";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +22,15 @@ export default async function ProgramsPage() {
   const caller = appRouter.createCaller({
     user: { id: session.user.id, email: session.user.email },
   });
-  const programs = await caller.program.listMine({ includeArchived: false });
+  // Phase A2: archived programs are listed (with Unarchive) rather than vanishing.
+  const all = await caller.program.listMine({ includeArchived: true });
+  const programs = all.filter((p) => p.archivedAt === null);
+  const archived = all.filter((p) => p.archivedAt !== null);
 
   return (
-    <main style={{ padding: "2rem", maxWidth: "48rem", margin: "0 auto" }}>
+    <>
+      <AppNav />
+      <main style={{ padding: "2rem", maxWidth: "48rem", margin: "0 auto" }}>
       <h1>Your Programs</h1>
 
       <section style={{ marginTop: "1.5rem" }}>
@@ -66,6 +72,37 @@ export default async function ProgramsPage() {
           </ul>
         )}
       </section>
+
+      {archived.length > 0 ? (
+        <section style={{ marginTop: "2rem" }} aria-labelledby="archived-heading">
+          <h2 id="archived-heading">Archived</h2>
+          <ul style={{ listStyle: "none", padding: 0, marginTop: "0.5rem" }}>
+            {archived.map((p) => (
+              <li
+                key={p.id}
+                style={{
+                  padding: "0.75rem 0",
+                  borderBottom: "1px solid #eee",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "1rem",
+                }}
+              >
+                <Link href={`/app/programs/${p.id}`} style={{ flex: 1, opacity: 0.75 }}>
+                  {p.name}
+                </Link>
+                <form action={unarchiveProgramAction}>
+                  <input type="hidden" name="id" value={p.id} />
+                  <button type="submit" style={{ padding: "0.35rem 0.8rem" }}>
+                    Unarchive
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </main>
+    </>
   );
 }

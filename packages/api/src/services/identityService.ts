@@ -22,6 +22,16 @@
 // Derived from block.plannedLengthWeeks, the active version's workoutDay
 // count, and the count of COMPLETED Sessions in the block. No streaks, no
 // login counts, no loss-aversion framing.
+//
+// Phase A2 additions:
+//   - The current session's day name comes from the version's normalized
+//     WorkoutDay rows, whose ids Sessions reference (ARCH-058). The snapshot's
+//     ids never match, which is why the button always read "Workout".
+//   - A stale IN_PROGRESS Session (ARCH-057) is not offered as the current
+//     session: the next start auto-closes it.
+//   - recentClosedBlock: the newest non-ACTIVE block, for "Recent blocks".
+//   - lastCompletedSessionAt: across all of the user's Programs, for the
+//     informational "Welcome back" line.
 
 import {
   listProgramsByOwner,
@@ -32,10 +42,14 @@ import {
   countPerformanceRecordsForProgram,
   findActiveSessionForBlock,
   countCompletedSessionsInBlock,
+  findLatestCompletedSessionForUser,
+  findVersionWithStructure,
+  listTrainingBlocksForProgram,
   type TrainingBlockRecord,
   type ProgramRecord,
 } from "@training/db";
 import type { ProgramStructure } from "@training/domain";
+import { isStaleInProgress } from "./sessionService";
 import {
   buildAnticipationCue,
   type AnticipationCue,
@@ -76,8 +90,19 @@ export interface IdentitySummaryStats {
   versionsCommitted: number;
 }
 
+export interface IdentitySummaryClosedBlock {
+  id: string;
+  status: "ACTIVE" | "COMPLETED" | "ABANDONED";
+  startedAt: Date;
+  endedAt: Date | null;
+}
+
 export interface IdentitySummary {
   primaryProgram: IdentitySummaryProgram | null;
+  /** Phase A2: the primary Program's most recently started closed block, or null. */
+  recentClosedBlock: IdentitySummaryClosedBlock | null;
+  /** Phase A2: when the user last completed any Session, or null. */
+  lastCompletedSessionAt: Date | null;
   /** Read-only: an existing PLANNED / IN_PROGRESS Session, or null. Never creates one. */
   currentSession: IdentitySummaryCurrentSession | null;
   stats: IdentitySummaryStats;
@@ -92,9 +117,14 @@ export async function getMyIdentitySummary(
 
   const primary = await pickPrimaryProgram(programs);
 
+  const lastCompleted = await findLatestCompletedSessionForUser(userId);
+  const lastCompletedSessionAt = lastCompleted?.completedAt ?? null;
+
   if (!primary) {
     return {
       primaryProgram: null,
+      recentClosedBlock: null,
+      lastCompletedSessionAt,
       currentSession: null,
       stats: {
         sessionsCompleted: 0,
@@ -149,20 +179,25 @@ export async function getMyIdentitySummary(
   // session.getOrCreateNext is the MUTATING path and is called only from
   // /train. Rendering /app must not create a Session.
   let currentSession: IdentitySummaryCurrentSession | null = null;
-  if (block && activeVersionStructure) {
+  if (block) {
     const s = await findActiveSessionForBlock(block.id);
-    if (s) {
+    if (s && !(await isStaleInProgress(s, new Date()))) {
+      const rows = await findVersionWithStructure(block.programVersionId);
       currentSession = {
         id: s.id,
         status: s.status,
         sequenceIndex: s.sequenceIndex,
-        workoutDayName: resolveWorkoutDayName(
-          activeVersionStructure,
-          s.workoutDayId,
-        ),
+        workoutDayName:
+          rows?.workoutDays.find((d) => d.id === s.workoutDayId)?.name ?? "Workout",
       };
     }
   }
+
+  const blocks = await listTrainingBlocksForProgram(primary.id);
+  const closed = blocks.find((b) => b.status !== "ACTIVE") ?? null;
+  const recentClosedBlock: IdentitySummaryClosedBlock | null = closed
+    ? { id: closed.id, status: closed.status, startedAt: closed.startedAt, endedAt: closed.endedAt }
+    : null;
 
   // --- Stats (primary-Program scope, lifetime) -----------------------------
   const [sessionsCompleted, totalSetsLogged, versions] = await Promise.all([
@@ -178,6 +213,8 @@ export async function getMyIdentitySummary(
       activeVersion: activeVersionInfo,
       currentBlock,
     },
+    recentClosedBlock,
+    lastCompletedSessionAt,
     currentSession,
     stats: {
       sessionsCompleted,
@@ -239,12 +276,4 @@ async function pickPrimaryProgram(
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   );
   return sorted[0] ?? null;
-}
-
-function resolveWorkoutDayName(
-  structure: ProgramStructure,
-  workoutDayId: string,
-): string {
-  const day = structure.workoutDays.find((d) => d.id === workoutDayId);
-  return day?.name ?? "Workout";
 }

@@ -26,6 +26,12 @@ import type {
 import { AssessmentDisplay } from "@/components/assessment/AssessmentDisplay";
 import { TRPCProvider, trpc } from "@/src/lib/trpc";
 import styles from "./review.module.css";
+import {
+  SessionLogList,
+  summaryLine,
+  type ClientAdherenceSummary,
+  type ClientSessionLogEntry,
+} from "@/components/review/SessionLog";
 
 // ── Client types ─────────────────────────────────────────────────────────
 
@@ -34,7 +40,9 @@ export type DeviationKind =
   | "REPS_ABOVE"
   | "LOAD_BELOW"
   | "LOAD_ABOVE"
-  | "SETS_SKIPPED";
+  | "SETS_SKIPPED"
+  | "EXERCISES_NOT_DONE"
+  | "EXERCISES_UNLOGGED";
 
 export interface ClientDeviationSummary {
   exerciseId: string;
@@ -67,6 +75,8 @@ export interface ClientReviewData {
     plannedSessions: number;
     completedSessions: number;
     systematicDeviations: ClientDeviationSummary[];
+    summary: ClientAdherenceSummary;
+    sessionLog: ClientSessionLogEntry[];
   };
   observations: Array<{
     id: string;
@@ -105,8 +115,13 @@ function ReviewClientInner({ data }: Props) {
     },
   );
 
-  const { plannedSessions, completedSessions, systematicDeviations } =
-    data.adherence;
+  const {
+    plannedSessions,
+    completedSessions,
+    systematicDeviations,
+    summary,
+    sessionLog,
+  } = data.adherence;
 
   return (
     <>
@@ -125,6 +140,11 @@ function ReviewClientInner({ data }: Props) {
           continues.
         </p>
       ) : null}
+
+      {/* ── 0. Block summary (ARCH-058): always shown, below threshold too ── */}
+      <section className={styles.section} aria-label="Block summary">
+        <p className={styles.summaryLine}>{summaryLine(completedSessions, summary)}</p>
+      </section>
 
       {/* ── 1. Assessment at commit time (ARCH-015 default) ───────────── */}
       <section className={styles.section}>
@@ -193,7 +213,9 @@ function ReviewClientInner({ data }: Props) {
                     </span>
                   </div>
                   <p className={styles.deviationDetail}>
-                    {d.occurrences} of {d.totalSetsForExercise} sets
+                    {d.kind === "EXERCISES_NOT_DONE" || d.kind === "EXERCISES_UNLOGGED"
+                      ? `${d.occurrences} sessions`
+                      : `${d.occurrences} of ${d.totalSetsForExercise} sets`}
                   </p>
                   <p className={styles.deviationExample}>
                     Plan: <code>{d.example.prescribed}</code> · Logged:{" "}
@@ -205,6 +227,13 @@ function ReviewClientInner({ data }: Props) {
           </>
         )}
       </section>
+
+      {sessionLog.length > 0 ? (
+        <section className={styles.section}>
+          <h2 className={styles.sectionHeading}>Sessions</h2>
+          <SessionLogList entries={sessionLog} />
+        </section>
+      ) : null}
 
       {/* ── 3. Observations ──────────────────────────────────────────── */}
       <section className={styles.section}>
@@ -328,5 +357,9 @@ function formatKind(kind: DeviationKind): string {
       return "Load above plan";
     case "SETS_SKIPPED":
       return "Sets skipped";
+    case "EXERCISES_NOT_DONE":
+      return "Not done (session skipped)";
+    case "EXERCISES_UNLOGGED":
+      return "No sets logged";
   }
 }

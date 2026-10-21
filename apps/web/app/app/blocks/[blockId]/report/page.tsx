@@ -20,6 +20,7 @@ import {
   type ClientBlockReportData,
 } from "./BlockReportClient";
 import styles from "./blockReport.module.css";
+import { AppNav } from "@/components/nav/AppNav";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,8 @@ export default async function BlockReportPage({ params }: PageProps) {
 
   if (result.kind === "ACTIVE") {
     return (
+      <>
+      <AppNav />
       <div className={styles.fallback}>
         <h1 className={styles.fallbackTitle}>
           This block is still in progress
@@ -65,6 +68,7 @@ export default async function BlockReportPage({ params }: PageProps) {
           See Review
         </Link>
       </div>
+      </>
     );
   }
 
@@ -94,6 +98,16 @@ export default async function BlockReportPage({ params }: PageProps) {
         kind: d.kind,
         occurrences: d.occurrences,
       })),
+      summary: report.execution.summary,
+      sessionLog: report.execution.sessionLog.map((e) => ({
+        sessionId: e.sessionId,
+        sequenceIndex: e.sequenceIndex,
+        workoutDayName: e.workoutDayName,
+        status: e.status,
+        startedAtIso: e.startedAt ? e.startedAt.toISOString() : null,
+        completedAtIso: e.completedAt ? e.completedAt.toISOString() : null,
+        durationMinutes: e.durationMinutes,
+      })),
     },
     observations: report.observations.map((o) => ({
       id: o.id,
@@ -112,5 +126,10 @@ export default async function BlockReportPage({ params }: PageProps) {
     narrative: report.narrative,
   };
 
-  return <BlockReportClient report={clientReport} />;
+  return (
+    <>
+      <AppNav />
+      <BlockReportClient report={clientReport} />
+    </>
+  );
 }
