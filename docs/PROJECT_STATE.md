@@ -1,6 +1,6 @@
 ## Current phase
 
-**Phase A ("make it read as finished") is done on branch `phase-a-honest-surface`, not yet merged.** It follows Phase 10.4 (E11, breadth-aware Fit; merged to `main`) and is branched from `phase-10-5-scopekey-name` (scopeKey uses `MuscleGroup.name`; the hyphen-tolerant exercise search), which is **not yet merged**. Merge 10.5 first. Phase A came out of the founder walkthrough on 2026-10-21; Phase B (session/follow-along items) is explicitly **not started**.
+**Phase A ("make it read as finished") is done on branch `phase-a-honest-surface`, awaiting review and merge.** It follows Phase 10.4 (E11, breadth-aware Fit) and Phase 10.5 (scopeKey uses `MuscleGroup.name`; hyphen-tolerant exercise search), both merged to `main` (PRs #20, #21, #22). Phase A came out of the founder walkthrough on 2026-10-21; Phase B (session/follow-along items) is explicitly **not started**.
 
 Phase A shipped, in order:
 1. **Provisional Fit band visible** on every assessment surface: "Provisional fit: DECENT — based on evidence-graded thresholds. See evidence". It is read through `provisionalFitBand()` (domain), the same projection as `computeFitScore` over the same roll-up. `computeFitScore` still returns `UNVALIDATED`. See ARCH-054.
