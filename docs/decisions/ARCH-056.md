@@ -36,3 +36,23 @@ Sessions rotate through the active version's WorkoutDays in order (`sessionServi
 
 - Skipped days are visible in Review (ARCH-058) as sessions skipped and exercises not done.
 - No schema change: SKIPPED Sessions are ordinary Session rows with status SKIPPED.
+
+---
+
+## Addenda — 2026-10-21, cascade only forward
+
+*The original text above stands, except where this addendum clarifies the cascade.*
+
+The original text said picking a different day marks the skipped days and advances the rotation. That was ambiguous, and its "backwards picks wrap" paragraph is withdrawn. Clarified: **the cascade applies only when the picked day is AHEAD of the current rotation position** (a higher day index than the day the rotation would train next). Picking a day BEHIND the current position creates an extra session for that day and does NOT move the rotation pointer.
+
+**Rationale.** "I want to do Push today" when the rotation says Pull is not a decision to skip Pull and Legs. It is a decision to do Push today. The rotation stays where it was, and the next visit shows Pull again.
+
+**Consequence.**
+- To actually skip days (say, back from holiday and jumping from Pull to Legs), pick Legs while the rotation is at Pull; Pull is marked SKIPPED.
+- To do extra work or redo a day, pick an earlier day. It counts as a session, but the rotation does not change.
+
+**Mechanism (no schema change).** The rotation pointer is no longer "the day after the latest Session". It is replayed from the block's closed Sessions in sequence order:
+- a Session on the pointer's day, or ahead of it, moves the pointer past it;
+- a Session behind the pointer is an extra and leaves it unchanged.
+
+A pending PLANNED Session with no records that the picker supersedes is deleted rather than marked skipped (ARCH-057 addendum). The exception is when it sits on the pointer's day and the user picks ahead: then it is the day being skipped, and it is recorded as SKIPPED.

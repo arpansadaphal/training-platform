@@ -37,3 +37,17 @@ The 6-hour window is a product boundary, not a measurement. A normal session fit
 
 - Records in an auto-closed COMPLETED session are frozen (ARCH-055), as for a manually completed one.
 - No schema change and no migration.
+
+---
+
+## Addenda — 2026-10-21, correction to 0-record handling
+
+*The original text above stands, except for the 0-record rule, which this addendum amends.*
+
+The original text said a stale session with 0 records is marked SKIPPED. That is amended: **a superseded session with 0 records is DELETED.** Rationale: the user clicked "Start session" and walked away, or refreshed and lost the page. No training decision was made. Advancing the rotation for a no-op session punishes the user for a UI accident, and deleting the row is the honest record that nothing happened.
+
+**Consequence:** the rotation does not advance for a 0-record stale session. The next session generated is for the same workout day.
+
+**No schema change.** A Session row can be deleted safely when it has no PerformanceRecords, because records are the referencing side. The repository's `deleteSessionIfEmpty` checks the count inside the transaction before deleting. **Implementation note:** it also refuses when the Session has an Observation (a post-session note), since a written note means something happened. That rare case falls back to SKIPPED, the original behaviour.
+
+The same rule applies wherever ARCH-057 auto-closes: an empty IN_PROGRESS session in another block, and an empty pending session the day picker supersedes (see the ARCH-056 addendum).
