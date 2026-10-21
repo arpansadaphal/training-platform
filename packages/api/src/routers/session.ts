@@ -22,9 +22,12 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import {
+  getLastTimeHints,
   getOrCreateNext,
   getSessionContext,
   getCurrentSession,
+  getTrainingOptions,
+  startSpecificDay,
   markStarted,
   markCompleted,
   markSkipped,
@@ -40,6 +43,23 @@ export const sessionRouter = router({
     .mutation(({ ctx, input }) =>
       getOrCreateNext(ctx.user.id, input.programId),
     ),
+
+  // ARCH-056: train a chosen day; passed-over days are recorded as SKIPPED.
+  startSpecificDay: protectedProcedure
+    .input(z.object({ programId: programIdSchema, workoutDayId: z.string().min(1) }))
+    .mutation(({ ctx, input }) =>
+      startSpecificDay(ctx.user.id, input.programId, input.workoutDayId),
+    ),
+
+  // Read-only: the /train day picker's days, suggested day and pending session.
+  getTrainingOptions: protectedProcedure
+    .input(z.object({ programId: programIdSchema }))
+    .query(({ ctx, input }) => getTrainingOptions(ctx.user.id, input.programId)),
+
+  // Read-only, display-only "Last: 60 kg × 10" hints for a session's exercises.
+  getLastTimeHints: protectedProcedure
+    .input(z.object({ sessionId: sessionIdSchema }))
+    .query(({ ctx, input }) => getLastTimeHints(ctx.user.id, input.sessionId)),
 
   getContext: protectedProcedure
     .input(z.object({ sessionId: sessionIdSchema }))

@@ -39,9 +39,11 @@ export async function startTrainingAction(formData: FormData): Promise<void> {
   // a sentinel error that must propagate; catching it here would swallow
   // the redirect.
   let sessionId: string;
+  let autoSaved: string[] = [];
   try {
     const sessionRecord = await caller.session.getOrCreateNext({ programId });
     sessionId = sessionRecord.id;
+    autoSaved = sessionRecord.autoSaved.map((a) => a.sessionId);
   } catch (err) {
     if (err instanceof TRPCError && err.code === "PRECONDITION_FAILED") {
       // The user reached a Program with no active TrainingBlock. With
@@ -57,5 +59,42 @@ export async function startTrainingAction(formData: FormData): Promise<void> {
     throw err;
   }
 
-  redirect(`/train/session/${sessionId}`);
+  redirect(sessionHref(sessionId, autoSaved));
+}
+
+/**
+ * ARCH-057: when a start auto-saved earlier sessions, the session page shows
+ * "Your previous … session was auto-saved" so the user doesn't think it was lost.
+ */
+function sessionHref(sessionId: string, autoSaved: string[]): string {
+  return autoSaved.length > 0
+    ? `/train/session/${sessionId}?autosaved=${encodeURIComponent(autoSaved.join(","))}`
+    : `/train/session/${sessionId}`;
+}
+
+/**
+ * Phase A2 (ARCH-056): start the day chosen in /train's picker. Picking the
+ * rotation's suggested day behaves exactly like startTrainingAction; another
+ * day records the passed-over days as SKIPPED first. Superseded IN_PROGRESS
+ * sessions are auto-closed (ARCH-057).
+ */
+export async function startDayAction(formData: FormData): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id || !session.user.email) {
+    redirect("/login");
+  }
+
+  const programId = String(formData.get("programId") ?? "");
+  const workoutDayId = String(formData.get("workoutDayId") ?? "");
+  if (!programId || !workoutDayId) {
+    throw new Error("Missing programId or workoutDayId");
+  }
+
+  const caller = appRouter.createCaller({
+    user: { id: session.user.id, email: session.user.email },
+  });
+
+  // redirect() stays outside the try, as in startTrainingAction.
+  const started = await caller.session.startSpecificDay({ programId, workoutDayId });
+  redirect(sessionHref(started.id, started.autoSaved.map((a) => a.sessionId)));
 }

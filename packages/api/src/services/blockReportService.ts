@@ -47,11 +47,14 @@ import {
   type TrainingBlockRecord,
   type AssessmentSnapshotRecord,
 } from "@training/db";
-import type { Assessment, ProgramStructure } from "@training/domain";
+import type { Assessment } from "@training/domain";
 import { loadOwnedTrainingBlockOrThrow } from "./loadOwnedExecution";
+import { loadExecutionStructure } from "./executionStructure";
 import {
   computeAdherence,
+  type AdherenceSummary,
   type DeviationSummary,
+  type SessionLogEntry,
   type ReviewAssessmentSnapshot,
 } from "./reviewService";
 
@@ -72,6 +75,10 @@ export interface BlockReportExecutionSummary {
   sessionsCompleted: number;
   totalSetsLogged: number;
   systematicDeviations: DeviationSummary[];
+  /** ARCH-058. */
+  summary: AdherenceSummary;
+  /** ARCH-058: per-session status and duration. */
+  sessionLog: SessionLogEntry[];
 }
 
 export interface BlockReportNarrative {
@@ -167,7 +174,8 @@ export async function getBlockReport(
   const nameById = new Map<string, string>();
   for (const e of allExercises) nameById.set(e.id, e.name);
 
-  const structure = version.structureSnapshot as ProgramStructure;
+  // ARCH-058: execution data joins on row ids, not the snapshot's ids.
+  const structure = await loadExecutionStructure(version.id);
 
   const adherence = computeAdherence({
     block,
@@ -210,6 +218,8 @@ export async function getBlockReport(
         sessionsCompleted: adherence.completedSessions,
         totalSetsLogged,
         systematicDeviations: adherence.systematicDeviations,
+        summary: adherence.summary,
+        sessionLog: adherence.sessionLog,
       },
       observations,
       previousBlock,
@@ -330,6 +340,8 @@ const DEVIATION_LABELS: Record<DeviationSummary["kind"], string> = {
   LOAD_BELOW: "load below plan",
   LOAD_ABOVE: "load above plan",
   SETS_SKIPPED: "sets skipped",
+  EXERCISES_NOT_DONE: "not done (session skipped)",
+  EXERCISES_UNLOGGED: "no sets logged",
 };
 
 // ---- Previous-block comparison ------------------------------------------

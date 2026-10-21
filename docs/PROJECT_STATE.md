@@ -1,26 +1,41 @@
 ## Current phase
 
-**Phase A ("make it read as finished") is done on branch `phase-a-honest-surface`, awaiting review and merge.** It follows Phase 10.4 (E11, breadth-aware Fit) and Phase 10.5 (scopeKey uses `MuscleGroup.name`; hyphen-tolerant exercise search), both merged to `main` (PRs #20, #21, #22). Phase A came out of the founder walkthrough on 2026-10-21; Phase B (session/follow-along items) is explicitly **not started**.
+**Phase A2 ("lazy-lifter friction fixes") is done on branch `phase-a2-friction-fixes`, awaiting review and merge.** It follows Phase A (merged to `main`, PR #23) and implements the 2026-10-21 lazy-lifter diagnostic's recommendations 1–6, 9, 11 and 12, plus the founder's session timer and auto-close. Deferred: per-exercise progress (7), starter templates (8), back-dating sessions (10). Phase B is **not started**.
 
-Phase A shipped, in order:
-1. **Provisional Fit band visible** on every assessment surface: "Provisional fit: DECENT — based on evidence-graded thresholds. See evidence". It is read through `provisionalFitBand()` (domain), the same projection as `computeFitScore` over the same roll-up. `computeFitScore` still returns `UNVALIDATED`. See ARCH-054.
-2. **Evidence panel**: per axis it shows the tier, primary sources, what the tier means and is not, and the underlying claims. The data is `GoalProfileConfig.evidence` (new optional field), restated from the tier comments in `hypertrophy.ts`. Nothing is regraded, and `validated: false` and the launch gate are unchanged.
-3. **Drafts start from the active version**: the "Start from" choice defaults to the active version, the label defaults to "Edit of vN", Enter submits, and a note says committing creates vN+1 and closes the current block (ARCH-039).
-4. **Readable assessment**: labels like "Weekly volume · Chest", metrics with units ("6 hard sets / week"), a one-line "what this means" read from the config's band bounds, and Weight/Severity/Leverage behind "Details". The root-cause key is no longer shown. The banner copy is now "evidence-graded, not human-validated", with the tier span (ARCH-054).
-5. **Effort (RIR) input in the Builder**, which sets `targetRpe`. New exercises default to a visible 2 RIR, in the simulate panel too. Before this, no Builder input produced effort, so every Builder-made program failed EFFORT_DEFINED.
-6. **Units everywhere**: "kg per dumbbell" for dumbbell exercises (`apps/web/src/lib/loadLabels.ts`), planned weight shown in the session plan line and as the Weight placeholder, units on logged sets and on Review deviation text. Logged weights are read in the plan's unit (lb if the plan says lb, else kg); only the number is stored.
-7. **Copy**: the landing page no longer says "Phase 0 shell", and the commit message no longer says "versioning UI arrives in a later phase".
+Phase A2 shipped:
+- **A. Navigation:** one shared `AppNav` (`apps/web/components/nav/AppNav.tsx`: Dashboard, Programs, Train, Sign out) on every authenticated page, including Builder, program detail and history, session, Review, Block Report, Coach and Constraints. Page-local back links remain as `aria-label="Breadcrumb"` navs.
+- **B. Safe archive:** a confirm dialog on "Archive this Program"; `program.unarchive`. Archived programs are listed under "Archived" on `/app/programs` with Unarchive. Unarchiving re-activates the program's active version (ARCH-039 path) so it can be trained again; without that, the version showed "(active)" with no Activate button and no block.
+- **C. Blocks reachable:** the history page lists every TrainingBlock (version, status, dates) with Review and Block Report links (`program.listBlocks`). `/app` shows "Recent blocks" for the newest closed block.
+- **D/E. Session labels:** the dashboard button reads "Start Push" or "Continue Pull", never "Workout". A PLANNED session is "Next up: Push", never "in progress". The day name comes from WorkoutDay rows (ARCH-058).
+- **F. Load default by equipment:** barbell, dumbbell, machine and cable start at a visible 20 kg fixed weight; bodyweight or unknown equipment starts as bodyweight (Builder and simulate panel).
+- **G. Completed sessions show their logs:** sets with HH:MM times, read-only.
+- **H. Review counts skipped work (ARCH-058):** `EXERCISES_NOT_DONE` (SKIPPED sessions) and `EXERCISES_UNLOGGED` (completed sessions); an always-shown summary line; a session log with durations on Review and Block Report. **Root cause found:** adherence joined logged sets to the version snapshot's client-local ids, which never equal the row ids, so Review had detected no deviation for any Builder-made program. It now joins on row ids (`services/executionStructure.ts`).
+- **I. Unlogged prompt:** "Mark complete" names exercises with no logged sets and offers "Complete anyway" or "Keep session open".
+- **J. "Last time" hints:** "Last: 60 kg × 10 (Mar 15)", the top set of the most recent completed session with that exercise, any block. Display-only; the Phase 6 no-prefill rule stands.
+- **K. Welcome back:** "Welcome back. Last trained X days ago." when the last completed session is more than 3 days old and a block is active.
+- **L. Set edit/delete (ARCH-055):** `performance.updateSet` / `deleteSet`, only while IN_PROGRESS; frozen once COMPLETED; NOT_FOUND across users (ARCH-040).
+- **M. Day picker (ARCH-056):** `/train` defaults to the rotation's day and shows which days a different pick marks SKIPPED; `session.startSpecificDay`, `session.getTrainingOptions`.
+- **N. Timer:** "Session time: MM:SS" and "(Xm YYs since last)" per set while IN_PROGRESS (client-side), and durations on Review and Block Report.
+- **O. Auto-close (ARCH-057):** starting a session auto-closes superseded IN_PROGRESS sessions: COMPLETED at the last set's time if any sets exist, else SKIPPED. Superseded means another block, or this block when stale (6 h without activity) or when a different day is picked. A fresh in-progress session is resumed.
+
+**Phase A2 patch (same branch, after the verification pass):**
+- **ARCH-057 addendum:** a superseded session with 0 records is **deleted**, not SKIPPED, so the rotation does not advance for a no-op. `deleteSessionIfEmptyInTx` refuses if the session has records or a note (falls back to SKIPPED).
+- **ARCH-056 addendum:** only a pick **ahead** of the rotation cascades skips. A pick behind it is an extra session, and the rotation stays. The pointer is now replayed from the block's closed sessions (`replayRotationPointer`), not "the day after the latest". The picker says "Push will be an extra session. Your rotation stays at Pull."
+- "Recent blocks" lists only closed blocks with ≥1 completed session. The history page still lists every block, including empty ones from archive/unarchive cycles.
+- Auto-saved banner on the next session ("Your previous Legs session was auto-saved 7 hours ago. View log", dismissible), via `?autosaved=` on the redirect.
+- Session header reads "Session 8 (4 completed) · In progress".
+- The plan line shows "—" for the legacy bodyweight default on loaded equipment.
+- A completed session explains why its sets can't be edited.
+- Dashboard stats row fits at 375px.
 
 **Cross-references for what comes next:**
-- **Phase B is the next candidate** (founder report, 2026-10-21): day picker on `/train`, exercise swap mid-session (`PerformanceRecord.performedExerciseId`), per-exercise cues, per-exercise "tried something different" notes. The walkthrough report recommends showing the app to ~5 lifters before choosing B or C (faster building).
-- **Mid-block correction semantics are deferred** (see Unresolved decisions).
-- **Register:** ARCH-053 (breadth-aware Fit, E11) was backfilled in the Phase A PR; Phase 10.4 had shipped without it. Next free ID is **ARCH-055**.
+- **Register:** ARCH-055 to ARCH-058 added in this batch. ARCH-058 was not in the original brief: the ReviewData contract comment requires a decision entry for the shape change, and the row-id bug needed recording. **Next free ID is ARCH-059.**
+- **Deferred from the diagnostic:** per-exercise progress trend (7), novice starter templates (8), back-dating a session (10).
+- **Mid-block correction semantics remain deferred** (see Unresolved decisions). Phase A2 makes the old block reachable after a correction commit, which removes most of the "progress wiped" cost.
+- **Phase B candidates still open:** exercise swap mid-session (`PerformanceRecord.performedExerciseId`), per-exercise cues, per-exercise "tried something different" notes. The day picker shipped here.
+- **Not fixed:** favicon 404; Coach and Constraints are reachable by URL and from Review, but not from the main nav.
+- **`commitFromMutation`'s two call sites** are still the complete write-path surface. Phase A2 adds Session status writes (picker, auto-close) and PerformanceRecord update/delete; no ProgramVersion writes.
 - **FREQUENCY `minExposureSets` = 2.0** is a tuning question, not a bug.
-- **Recovery bands** were not recalibrated after E9's weight change. Builder-made programs now state effort (2 RIR default), so they no longer sit in the "unstated, about 20% lower" regime.
-- **`commitFromMutation`'s two call sites** are still the complete write-path surface. Phase A added no write path; `draft.create` already accepted `baseVersionId`.
-- **Fixed in the Phase A PR:** the Sign-out button rendered as an empty box (white text on a transparent background); now `color: var(--fg)`.
-- **Not fixed, seen in the walkthrough:** there is no top nav inside Programs/Builder; the Coach and Constraints pages aren't in the nav; favicon 404; Review's adherence reads "0 planned so far".
-- **Exercise library:** `packages/db/prisma/seed.ts` grew from 43 to 110 exercises. It is committed as its own commit on the Phase A branch, with the content unchanged.
 
 ## Completed phases
 
@@ -34,7 +49,7 @@ Phase A shipped, in order:
 - **Phase 7 — Review, Revision Loop & History.** Read-only aggregation over Phase 6 execution data plus the persisted COMMIT-time AssessmentSnapshot (ARCH-015). `reviewService.getReview()` (default view — COMMIT snapshot) and `recomputeAssessment()` (opt-in, persists nothing). `identityService.getMyIdentitySummary()` — the `/app` landing's single aggregation read. `programVersion.diff()` — structural diff via `diffStructures` (ARCH-037). New tRPC procedures: `review.{get, recomputeAssessment}`, `program.getIdentitySummary`, `session.getCurrentSession`, `programVersion.diff`. **Bug fix:** `sessionService.getSessionContext` resolves exercise display names via `listExercises` instead of leaking cuids; regression test in `sessionService.test.ts`. UI: `/app` redesigned as Identity/Progress surface; `/app/review/[blockId]` with `AssessmentDisplay` reused for both the COMMIT snapshot and the opt-in recompute; `/app/programs/[id]/history` version history with on-demand diffs. **BLOCK_END snapshots deferred past Phase 9 per ARCH-041.** No migration.
 - **Phase 8 — AI Coach L0/L1.** `packages/ai` ships in full: `ModelProvider` interface + `AnthropicProvider` + `MockProvider`; six tools (`lookup_exercises`, `simulate_program_change`, `prepare_apply_confirmation`, `note_constraint`, `note_temporary_constraint`, `query_training_history` — the last gated behind `L2_ENABLED = false`); bounded `buildCoachContext`; `runCoachTurn` with structured-output validation, grounding check, and a shared one-retry budget (ARCH-042); a system prompt with embedded JSON Schema; `AIMessageSegment` as a six-variant discriminated union (ARCH-043). `packages/api` adds `routers/coach.ts` (`postMessage` subscription + four other procedures including `openConversation`, `openConversationForBlock` per ARCH-044), `routers/constraint.ts`, `services/coachConversationService.ts`, `services/constraintService.ts`. `packages/db` adds `repositories/aiConversation.ts` and `repositories/constraint.ts`. UI: `CoachPanel.tsx` (six-segment renderer; Apply button fires `commitFromSimulation` on click only), `/app/coach` (conversation sidebar), `/app/constraints` (CRUD), embedded Coach on Review. `trpc.tsx` adds `httpSubscriptionLink`. **Confirmation boundary holds structurally:** no `packages/ai` import of `@training/api`; `CoachToolDeps` has exactly six methods, none commit-shaped; the network-inspection Playwright spec asserts zero `commitFromSimulation` calls before the Apply click.
 - **Phase 9 — Production Hardening & Launch Readiness.** See `PROJECT_STATE.md`'s "Phase 9 close-out" and `docs/LAUNCH_CHECKLIST.md`. Ships: edge rate limiting via Upstash Redis (ARCH-048) with route-aware policy (coach 10/min, other tRPC 120/min, `/api/auth/*` 20/min; fail-open when unconfigured); authorization audit across every owner-scoped procedure (ARCH-049 — found and fixed one gap in `coach.openConversation`); launch gate `apps/web/scripts/launch-gate.ts` chained into `apps/web`'s build script **and** a standalone CI step, with `LAUNCH_OVERRIDE_TOKEN` bypass (constant-time compare, structural validation, whitespace-trimmed) and a manual rehearsal workflow (`.github/workflows/launch-gate-rehearsal.yml`); `ProvisionalBanner.tsx` mounted inside `AssessmentDisplay.tsx` (ARCH-046) plus a CI grep (`check-provisional-banner.sh`) allow-listing the two component files; full Playwright regression suite (`apps/web/e2e/regression.spec.ts` — continuous signup→commit→train→review→simulate→apply flow) running in CI with `MODEL_PROVIDER=mock` (ARCH-050); a11y pass via `@axe-core/playwright` on Builder / Session / Review (two contrast violations fixed); `docs/LAUNCH_CHECKLIST.md` (Vercel/Neon/Upstash/Sentry setup, token rotation, launch rehearsal, rate-limit verification, backups, a11y manual checklist, pre-launch product decisions). Also delivered as **Phase 9 pre-work:** GeminiProvider (ARCH-045) — second `ModelProvider` via `@google/genai`, selected by `MODEL_PROVIDER`; `thoughtSignature` threaded as an optional field on the generic interface; Coach auto-scoping fix (ARCH-047 — `coach.openConversation` auto-scopes to primary Program; `forceNew` bypasses get-or-create). **Bugs fixed during Phase 9:** `.gitignore` bare `build/` had silently excluded `apps/web/app/app/programs/[id]/build/` from every commit since Phase 4 (fixed to `/build/`); Playwright cold-compile contention fixed by `webServer.command: "pnpm build && pnpm start"`; `LAUNCH_OVERRIDE_TOKEN` trailing-whitespace bug fixed by trimming before validation. **No new product surface. No migration.** `docs/DECISIONS_FULL.md` deleted (was a duplicate register).
-
+- **Phase A — Make it read as finished (PR #23).** Provisional Fit band and evidence panel (ARCH-054; ARCH-053 backfilled), drafts start from the active version, readable assessment, effort (RIR) input, units and "kg per dumbbell", landing and commit copy, Sign-out button colour, exercise library 43 → 110.
 
 ## Current architecture
 
@@ -51,6 +66,13 @@ Phase 8 additions now in effect: ARCH-042 (grounding failures → bounded regene
 **Phase 10.3 additions now in effect:** `hardSetCredit.ts` is the single place effort-to-credit is computed. `computeAnalysis` accepts a `recoveryCostCalculator` option. `GoalProfileConfig` gained four optional fields (`requiredMovementPatterns`, `hardSetCredit`, `frequencyDistribution`, `progressionRules`) — absent means code defaults apply, so no fixture churn. The FREQUENCY axis root-cause key is `frequency:split-<scope>`, no longer sharing with `volume:add-<scope>` — the dedup loop no longer collapses them. `commitFromMutation`'s two call sites are unchanged. The `packages/ai` boundary holds. The `errorFormatter` allow-list is unchanged.
 
 ## Project conventions
+
+- **Join execution data on row ids, never snapshot ids (ARCH-058).** Sessions reference `WorkoutDay` row ids and PerformanceRecords reference `ExercisePrescription` row ids; `structureSnapshot` keeps the Builder's client-local ids. Anything that joins logged data to a structure uses `loadExecutionStructure(versionId)` (or `findVersionWithStructure`). The snapshot stays the source for the assessment.
+- **All session starts go through `sessionService.startDay`.** `getOrCreateNext` is the "suggested day" case of `startSpecificDay`. Rotation, ARCH-056 skip-marking and ARCH-057 auto-close live in one place; `resolveRotation` is the read-only view `/train` and `/app` display, so what is shown is what a start does.
+- **Staleness is `STALE_SESSION_AFTER_MS` (6 h)** in `sessionService.ts`. Display code asks `isStaleInProgress`; never re-derive the window.
+- **Logged sets are editable only while the Session is IN_PROGRESS (ARCH-055).** Do not add an edit path for COMPLETED sessions without superseding ARCH-055.
+- **"Last time" hints are display-only.** The Phase 6 no-prefill rule stands: hints and placeholders, never pre-filled input values.
+- **Locale-formatted dates and clocks in client components** carry `suppressHydrationWarning` on the element that renders them (server and browser locales differ).
 
 - **Review's default view reads the COMMIT snapshot, never a live recompute** (ARCH-015). `reviewService.getReview` filters defensively on `snapshot.reason === "COMMIT"`; if a future phase writes a non-COMMIT snapshot that becomes the latest for a version, the service throws `PRECONDITION_FAILED` with a clear message rather than silently rendering the wrong snapshot. Fix the read (add a `reason` argument to `findLatestAssessmentSnapshotForVersion`) before changing the default.
 - **`findLatestAssessmentSnapshotForVersion` takes one argument today** (no `reason` filter). Its docstring says a future variant can take one. When Phase 9 wires BLOCK_END snapshots, that argument is the first thing to add.
@@ -144,6 +166,9 @@ tRPC 11, mounted at `/api/trpc/[trpc]` via `fetchRequestHandler`. Routers and pr
 
 ## Unresolved decisions
 
+- **ARCH-057's 6-hour staleness window is a product boundary.** If real users routinely split a session across a long break (or two gyms a day), tune `STALE_SESSION_AFTER_MS`; a config change, not a redesign.
+- **ARCH-056 extra sessions (addendum).** Picking an earlier day is an extra session and leaves the rotation alone. At the last day of the cycle every other day is "behind", so skipping the last day is only possible with "Skip session". Watch whether that matters in practice.
+
 - **Mid-block correction semantics deferred.** Phase A ships with a warning under the Edit flow ('committing will end your current block'). The question of whether a correction commit should keep the block open is deferred until real usage shows whether users make corrections mid-block often enough to warrant a separate flow. If it matters, ARCH-039 gets an addendum. Not a Phase B blocker.
 
 Phase-1 through Phase-7 items are preserved from the previous state of this file. **Phase-8-specific items:**
@@ -176,24 +201,24 @@ Phase-1 through Phase-7 items are preserved from the previous state of this file
   - `packages/config` — 1 file, 3 tests
   - `packages/ai` — 8 files, 61 tests
   - `packages/db` — 4 files, 9 tests
-  - `packages/api` — **16 files, 142 tests**
+  - `packages/api` — **17 files, 163 tests** (Phase A2 added `phaseA2.test.ts` (21, including the patch): day picker, auto-close, set edit/delete, hints, Review row-id join and new kinds, unarchive/blocks, identity)
   - `packages/domain` — **30 files, 302 tests** (Phase A added `assessment/__tests__/provisional-fit.test.ts` (5) and `goal-profiles/__tests__/evidence.test.ts` (10), which pins the evidence tiers)
-  - **Total Vitest**: **59 files, 517 tests**
+  - **Total Vitest**: **60 files, 538 tests**
 - **Playwright** (all passing where runnable):
   - `e2e/landing.spec.ts`, `e2e/builder.spec.ts`, `e2e/builder-simulate.spec.ts`, `e2e/training.spec.ts`, `e2e/landing-dashboard.spec.ts`, `e2e/review.spec.ts`, `e2e/coach.spec.ts`
 - `pnpm turbo run typecheck` → clean; `pnpm lint` → 0 errors (1 pre-existing warning in `invariant.test.ts`); `check:provisional-banner` → PASS
 - Playwright (Phase A): all 12 specs pass (1 skipped as designed) when run against a dev server with CI's `MODEL_PROVIDER=mock MOCK_SCENARIO=coach-regression`. Spec changes: the draft-label selector moved from `getByPlaceholder("Option B")` to `getByLabel("New draft label")` (9 call sites; the placeholder is now the default label); `review.spec` `commitV2` targets the new day's picker (drafts now start from v1); `regression.spec` asserts the ARCH-054 banner copy. With the local `.env.local` (`MODEL_PROVIDER=gemini`), the Coach regression step fails because a live model does not reliably propose a change; that step is CI-mock-only by design.
-- `pnpm turbo run test` → all packages pass
-- `calibration.test.ts` → 20/20; Program G band flip (`Sound` → `Issue found`) confirms E8; `G-pct(0.75) = G-pct(75) = 67.2` confirms E9
+- `pnpm turbo run test` → all packages pass. Known pre-existing flake: under `--force`, `@training/db`'s own tests can race `@training/db#build` (`prisma generate`), because other packages' `test` depends on `^build` and db's does not; a rerun passes.
+- `calibration.test.ts` → 22/22, `calibration-before.txt` unchanged by Phase A2; Program G band flip (`Sound` → `Issue found`) confirms E8; `G-pct(0.75) = G-pct(75) = 67.2` confirms E9
 - `web#build` → clean; route table unchanged
 
 **No Phase 11.** Further work unlocks on evidence (`17-roadmap-overview.md`).
 
 **Candidate next work, in order of user-facing impact:**
 
-1. **Show to ~5 lifters** now that Phase A makes the app read as finished. Their answer picks Phase B (train the day you're in) or Phase C (build a split in two minutes).
-2. **Phase B** (if chosen): day picker, exercise swap, cues, per-exercise notes. Needs 2–3 migrations plus cue content.
+1. **Show to ~5 lifters** now that Phases A and A2 remove the diagnostic's give-up points. Their answer picks Phase B (exercise swap, cues, notes) or Phase C (templates, faster building).
+2. **Phase B** (if chosen): exercise swap, cues, per-exercise notes. Needs migrations plus cue content.
 3. **Phase 9 operational items** (`docs/LAUNCH_CHECKLIST.md`): Sentry alert rules, Upstash verification, Neon backups.
 4. **Deferred:** E4 (band-level severity), E10 (UI-enforced classification gate).
 
-**Register:** ARCH-001 through ARCH-054; next free ID is **ARCH-055**.
+**Register:** ARCH-001 through ARCH-058; next free ID is **ARCH-059**.

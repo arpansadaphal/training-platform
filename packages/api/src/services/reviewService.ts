@@ -53,6 +53,7 @@ import {
   type FitScoreResult,
 } from "@training/domain";
 import { loadOwnedTrainingBlockOrThrow } from "./loadOwnedExecution";
+import { loadExecutionStructure } from "./executionStructure";
 import { loadExerciseReferenceData } from "./referenceDataService";
 
 // ---- ReviewData contract -------------------------------------------------
@@ -66,7 +67,11 @@ export type DeviationKind =
   | "REPS_ABOVE"
   | "LOAD_BELOW"
   | "LOAD_ABOVE"
-  | "SETS_SKIPPED";
+  | "SETS_SKIPPED"
+  // ARCH-058: every planned exercise of a SKIPPED session.
+  | "EXERCISES_NOT_DONE"
+  // ARCH-058: an exercise with zero logged sets in a COMPLETED session.
+  | "EXERCISES_UNLOGGED";
 
 export interface DeviationSummary {
   exerciseId: string;
@@ -82,10 +87,31 @@ export interface DeviationSummary {
   };
 }
 
+/** ARCH-058: always shown at the top of Review, even below the systematic threshold. */
+export interface AdherenceSummary {
+  sessionsSkipped: number;
+  exercisesNotDone: number;
+  exercisesUnlogged: number;
+}
+
+/** ARCH-058: one row per Session in the block, for durations on Review and the Block Report. */
+export interface SessionLogEntry {
+  sessionId: string;
+  sequenceIndex: number;
+  workoutDayName: string;
+  status: SessionRecord["status"];
+  startedAt: Date | null;
+  completedAt: Date | null;
+  /** completedAt - startedAt in whole minutes, when both exist. */
+  durationMinutes: number | null;
+}
+
 export interface ReviewAdherence {
   plannedSessions: number;
   completedSessions: number;
   systematicDeviations: DeviationSummary[];
+  summary: AdherenceSummary;
+  sessionLog: SessionLogEntry[];
 }
 
 // db-layer record; over the wire dates arrive as strings and Json columns
@@ -185,7 +211,8 @@ export async function getReview(
   const nameById = new Map<string, string>();
   for (const e of allExercises) nameById.set(e.id, e.name);
 
-  const structure = version.structureSnapshot as ProgramStructure;
+  // ARCH-058: execution data joins on row ids, not the snapshot's ids.
+  const structure = await loadExecutionStructure(version.id);
 
   const adherence = computeAdherence({
     block,
@@ -301,9 +328,9 @@ export function computeAdherence(input: AdherenceInput): ReviewAdherence {
   ).length;
 
   // --- Prescription lookup -------------------------------------------------
-  // Presupposes normalized WorkoutDay / ExercisePrescription row ids match
-  // the ids embedded in structureSnapshot (ARCH-012: rows are a
-  // regenerated-never-edited projection of the snapshot).
+  // `structure` must carry the ids Sessions and PerformanceRecords reference:
+  // the normalized row ids (loadExecutionStructure), NOT the snapshot's
+  // client-local ids, which never match (ARCH-058).
   const prescriptionsById = new Map<string, ExercisePrescriptionStructure>();
   const exerciseIdOfPrescription = new Map<string, string>();
   for (const day of structure.workoutDays) {
@@ -321,6 +348,12 @@ export function computeAdherence(input: AdherenceInput): ReviewAdherence {
   };
   const buckets = new Map<string, Bucket>();
   const totalSetsForExercise = new Map<string, number>();
+  const summary: AdherenceSummary = {
+    sessionsSkipped: 0,
+    exercisesNotDone: 0,
+    exercisesUnlogged: 0,
+  };
+  const sessionLog: SessionLogEntry[] = [];
 
   for (let i = 0; i < sessions.length; i++) {
     const session = sessions[i];
@@ -393,25 +426,74 @@ export function computeAdherence(input: AdherenceInput): ReviewAdherence {
       }
     }
 
-    // SETS_SKIPPED — only for COMPLETED sessions. A still-in-progress
-    // session hasn't "skipped" anything; the user just hasn't finished.
+    const day = findWorkoutDayById(structure, session.workoutDayId);
+
+    sessionLog.push({
+      sessionId: session.id,
+      sequenceIndex: session.sequenceIndex,
+      workoutDayName: day?.name ?? "Workout",
+      status: session.status,
+      startedAt: session.startedAt,
+      completedAt: session.completedAt,
+      durationMinutes:
+        session.startedAt && session.completedAt
+          ? Math.max(
+              0,
+              Math.round(
+                (session.completedAt.getTime() - session.startedAt.getTime()) / 60000,
+              ),
+            )
+          : null,
+    });
+
+    // ARCH-058: a SKIPPED session's planned exercises were not done.
+    if (session.status === "SKIPPED") {
+      summary.sessionsSkipped += 1;
+      for (const p of day?.prescriptions ?? []) {
+        summary.exercisesNotDone += 1;
+        addDeviation(buckets, {
+          exerciseId: p.exerciseId,
+          kind: "EXERCISES_NOT_DONE",
+          example: {
+            sessionId: session.id,
+            prescriptionId: p.id,
+            prescribed: `${p.targetSets} sets`,
+            actual: "session skipped",
+          },
+        });
+      }
+    }
+
+    // Only for COMPLETED sessions. A still-in-progress session hasn't
+    // "skipped" anything; the user just hasn't finished. An exercise with no
+    // logged sets is EXERCISES_UNLOGGED; one with some but fewer than planned
+    // is SETS_SKIPPED, so a fully unlogged exercise is not counted twice.
     if (session.status === "COMPLETED") {
-      const day = findWorkoutDayById(structure, session.workoutDayId);
-      if (day) {
-        for (const p of day.prescriptions) {
-          const logged = loggedCountByPrescription.get(p.id) ?? 0;
-          if (logged < p.targetSets) {
-            addDeviation(buckets, {
-              exerciseId: p.exerciseId,
-              kind: "SETS_SKIPPED",
-              example: {
-                sessionId: session.id,
-                prescriptionId: p.id,
-                prescribed: `${p.targetSets} sets`,
-                actual: `${logged} ${logged === 1 ? "set" : "sets"} logged`,
-              },
-            });
-          }
+      for (const p of day?.prescriptions ?? []) {
+        const logged = loggedCountByPrescription.get(p.id) ?? 0;
+        if (logged === 0) {
+          summary.exercisesUnlogged += 1;
+          addDeviation(buckets, {
+            exerciseId: p.exerciseId,
+            kind: "EXERCISES_UNLOGGED",
+            example: {
+              sessionId: session.id,
+              prescriptionId: p.id,
+              prescribed: `${p.targetSets} sets`,
+              actual: "no sets logged",
+            },
+          });
+        } else if (logged < p.targetSets) {
+          addDeviation(buckets, {
+            exerciseId: p.exerciseId,
+            kind: "SETS_SKIPPED",
+            example: {
+              sessionId: session.id,
+              prescriptionId: p.id,
+              prescribed: `${p.targetSets} sets`,
+              actual: `${logged} ${logged === 1 ? "set" : "sets"} logged`,
+            },
+          });
         }
       }
     }
@@ -439,7 +521,13 @@ export function computeAdherence(input: AdherenceInput): ReviewAdherence {
     return a.kind < b.kind ? -1 : 1;
   });
 
-  return { plannedSessions, completedSessions, systematicDeviations };
+  return {
+    plannedSessions,
+    completedSessions,
+    systematicDeviations,
+    summary,
+    sessionLog,
+  };
 }
 
 // ---- Helpers -------------------------------------------------------------

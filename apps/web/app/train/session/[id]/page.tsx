@@ -19,14 +19,16 @@ import { appRouter } from "@training/api";
 import { auth } from "@/src/server/auth";
 import { SessionClient } from "./SessionClient";
 import styles from "../../train.module.css";
+import { AppNav } from "@/components/nav/AppNav";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ autosaved?: string }>;
 }
 
-export default async function SessionDetailPage({ params }: PageProps) {
+export default async function SessionDetailPage({ params, searchParams }: PageProps) {
   const session = await auth();
   if (!session?.user?.id || !session.user.email) {
     redirect("/login");
@@ -50,15 +52,42 @@ export default async function SessionDetailPage({ params }: PageProps) {
     throw err;
   }
 
-  const [exercises, records, observations] = await Promise.all([
+  // ARCH-057: sessions the start that led here auto-saved. Each is loaded
+  // through getContext, so only the caller's own sessions are ever named.
+  const autosavedIds = ((await searchParams).autosaved ?? "")
+    .split(",")
+    .filter((x) => x.length > 0)
+    .slice(0, 5);
+  const autoSaved = (
+    await Promise.all(
+      autosavedIds.map(async (sessionId) => {
+        try {
+          const ctx = await caller.session.getContext({ sessionId });
+          if (ctx.session.status !== "COMPLETED" || !ctx.session.completedAt) return null;
+          return {
+            sessionId,
+            dayName: ctx.workoutDay.name,
+            completedAtIso: ctx.session.completedAt.toISOString(),
+          };
+        } catch {
+          return null;
+        }
+      }),
+    )
+  ).filter((x): x is NonNullable<typeof x> => x !== null);
+
+  const [exercises, records, observations, lastTimeHints] = await Promise.all([
     caller.exercise.listAll(),
     caller.performance.listForSession({ sessionId: id }),
     caller.observation.listForSession({ sessionId: id }),
+    caller.session.getLastTimeHints({ sessionId: id }),
   ]);
 
   return (
-    <main className={styles.page}>
-      <nav className={styles.nav}>
+    <>
+      <AppNav />
+      <main className={styles.page}>
+      <nav className={styles.nav} aria-label="Breadcrumb">
         <Link href="/train">&larr; Training</Link>
       </nav>
       <SessionClient
@@ -66,7 +95,10 @@ export default async function SessionDetailPage({ params }: PageProps) {
         exercises={exercises}
         initialRecords={records}
         initialObservations={observations}
+        lastTimeHints={lastTimeHints}
+        autoSaved={autoSaved}
       />
     </main>
+    </>
   );
 }

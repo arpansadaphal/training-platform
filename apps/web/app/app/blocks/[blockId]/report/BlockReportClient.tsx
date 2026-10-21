@@ -11,6 +11,12 @@ import Link from "next/link";
 import type { AssessmentResult, FitScoreResult } from "@training/domain";
 import { AssessmentDisplay } from "@/components/assessment/AssessmentDisplay";
 import styles from "./blockReport.module.css";
+import {
+  SessionLogList,
+  summaryLine,
+  type ClientAdherenceSummary,
+  type ClientSessionLogEntry,
+} from "@/components/review/SessionLog";
 
 export interface ClientBlockReportData {
   blockId: string;
@@ -39,6 +45,9 @@ export interface ClientBlockReportData {
       kind: string;
       occurrences: number;
     }>;
+    /** ARCH-058. */
+    summary: ClientAdherenceSummary;
+    sessionLog: ClientSessionLogEntry[];
   };
   observations: Array<{
     id: string;
@@ -87,7 +96,13 @@ export function BlockReportClient({ report }: Props) {
               {report.narrative.deviationsLine}
             </p>
           )}
+          <p className={styles.narrativeLine}>
+            {summaryLine(report.execution.sessionsCompleted, report.execution.summary)}
+          </p>
         </div>
+        {report.execution.sessionLog.length > 0 ? (
+          <SessionLogList entries={report.execution.sessionLog} />
+        ) : null}
       </section>
 
       {report.execution.systematicDeviations.length > 0 && (
@@ -187,6 +202,10 @@ function humanizeKind(kind: string): string {
       return "load above plan";
     case "SETS_SKIPPED":
       return "sets skipped";
+    case "EXERCISES_NOT_DONE":
+      return "not done (session skipped)";
+    case "EXERCISES_UNLOGGED":
+      return "no sets logged";
     default:
       return kind.toLowerCase().replace(/_/g, " ");
   }

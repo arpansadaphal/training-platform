@@ -17,7 +17,13 @@
 
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
-import { logSet, logBatch, listMyRecordsForSession } from "../services/performanceService";
+import {
+  deleteSet,
+  listMyRecordsForSession,
+  logBatch,
+  logSet,
+  updateSet,
+} from "../services/performanceService";
 
 const sessionIdSchema = z.string().min(1);
 const prescriptionIdSchema = z.string().min(1);
@@ -58,6 +64,30 @@ export const performanceRouter = router({
     )
     .mutation(({ ctx, input }) =>
       logBatch(ctx.user.id, input.sessionId, { entries: input.entries }),
+    ),
+
+  // ARCH-055: only while the Session is IN_PROGRESS. Same field rules as
+  // logSet; omitted fields are left untouched, null clears.
+  updateSet: protectedProcedure
+    .input(
+      z.object({
+        sessionId: sessionIdSchema,
+        recordId: z.string().min(1),
+        changes: z.object({
+          actualReps: z.number().int().nonnegative().nullable().optional(),
+          actualLoad: z.number().nonnegative().nullable().optional(),
+          actualRpe: z.number().nullable().optional(),
+        }),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      updateSet(ctx.user.id, input.sessionId, input.recordId, input.changes),
+    ),
+
+  deleteSet: protectedProcedure
+    .input(z.object({ sessionId: sessionIdSchema, recordId: z.string().min(1) }))
+    .mutation(({ ctx, input }) =>
+      deleteSet(ctx.user.id, input.sessionId, input.recordId),
     ),
 
   listForSession: protectedProcedure

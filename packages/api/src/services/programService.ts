@@ -26,12 +26,16 @@ import {
   findActiveTrainingBlockForProgramInTx,
   findGoalProfileByKey,
   listProgramsByOwner,
+  listTrainingBlocksForProgram,
   prisma,
+  unarchiveProgram,
   renameProgram as renameProgramRepo,
   TRANSACTION_OPTIONS,
   type ProgramRecord,
+  type TrainingBlockRecord,
 } from "@training/db";
 import { loadOwnedProgramOrThrow } from "./loadOwnedProgram";
+import { activateVersion } from "./trainingService";
 
 import {
   getMyIdentitySummary,
@@ -146,6 +150,35 @@ export async function archiveMyProgram(
     }
     return archiveProgramInTx(tx, programId);
   }, TRANSACTION_OPTIONS);
+}
+
+/**
+ * Phase A2: reverses archiveMyProgram (archivedAt = null). Archiving closed
+ * the Program's block, and the version stays "active", so the program page
+ * offers no Activate button for it. Unarchiving therefore re-activates the
+ * active version through the normal ARCH-039 path, which opens a fresh
+ * block, so the Program is trainable again. The closed block stays closed.
+ * Idempotent: re-activating while a block is open is a no-op.
+ */
+export async function unarchiveMyProgram(
+  userId: string,
+  programId: string,
+): Promise<ProgramRecord> {
+  await loadOwnedProgramOrThrow(userId, programId);
+  const program = await unarchiveProgram(programId);
+  if (program.activeVersionId !== null) {
+    await activateVersion(userId, program.activeVersionId);
+  }
+  return program;
+}
+
+/** Phase A2: every TrainingBlock of a Program, newest first, for the history page. */
+export async function listMyProgramBlocks(
+  userId: string,
+  programId: string,
+): Promise<TrainingBlockRecord[]> {
+  await loadOwnedProgramOrThrow(userId, programId);
+  return listTrainingBlocksForProgram(programId);
 }
 
 // === PHASE 7 ADDITION ===

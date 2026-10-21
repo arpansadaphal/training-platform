@@ -262,3 +262,118 @@
   text-align: center;
   opacity: 0.7;
 }
+/* Phase A2: /train day picker (ARCH-056). */
+.dayPicker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: none;
+  margin-top: 0.5rem;
+}
+
+.dayPickerLabel select {
+  min-height: 44px;
+  padding: 0.5rem;
+  font: inherit;
+}
+
+/* Phase A2: session clock, last-time hints, set edit/delete, unlogged prompt. */
+.sessionTimer {
+  margin: 0.25rem 0 0.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.lastTimeHint {
+  margin: 0.15rem 0 0.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.setGap {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.setControls {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-left: 0.5rem;
+}
+
+.iconButton {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 0.4rem;
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.setEditRow {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.setEditInput {
+  width: 4.5rem;
+  min-height: 36px;
+  padding: 0.25rem 0.4rem;
+}
+
+.smallButton,
+.smallSecondaryButton {
+  min-height: 36px;
+  padding: 0.25rem 0.7rem;
+}
+
+.smallSecondaryButton {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+.confirmPanel {
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--warning-border, #b45309);
+  border-radius: 6px;
+  background: var(--warning-bg, #fef3c7);
+  color: var(--warning-fg, #78350f);
+}
+
+.confirmPanel p {
+  margin: 0 0 0.6rem;
+}
+
+/* Phase A2 patch: auto-saved banner (ARCH-057) and the frozen-record note (ARCH-055). */
+.autoSavedBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0.5rem 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+}
+
+.autoSavedBanner p {
+  margin: 0;
+}
+
+.frozenNote {
+  margin: -0.25rem 0 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.frozenNote summary {
+  cursor: pointer;
+}

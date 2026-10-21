@@ -14,6 +14,7 @@ import { appRouter } from "@training/api";
 import { auth } from "@/src/server/auth";
 import { CoachClient, type ClientConversationSummary } from "./CoachClient";
 import styles from "./coach.module.css";
+import { AppNav } from "@/components/nav/AppNav";
 
 export const dynamic = "force-dynamic";
 
@@ -42,11 +43,14 @@ export default async function CoachPage() {
   );
 
   return (
-    <main className={styles.page}>
-      <nav className={styles.nav}>
+    <>
+      <AppNav />
+      <main className={styles.page}>
+      <nav className={styles.nav} aria-label="Breadcrumb">
         <Link href="/app">&larr; Dashboard</Link>
       </nav>
       <CoachClient initialConversations={initialConversations} />
     </main>
+    </>
   );
 }

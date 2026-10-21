@@ -13,8 +13,14 @@ import { notFound, redirect } from "next/navigation";
 import { TRPCError } from "@trpc/server";
 import { appRouter } from "@training/api";
 import { auth } from "@/src/server/auth";
-import { renameProgramAction, archiveProgramAction } from "../actions";
+import {
+  renameProgramAction,
+  archiveProgramAction,
+  unarchiveProgramAction,
+} from "../actions";
+import { ConfirmSubmitButton } from "@/components/ui/ConfirmSubmitButton";
 import { activateVersionAction } from "./activate-action";
+import { AppNav } from "@/components/nav/AppNav";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +57,9 @@ export default async function ProgramDetailPage({ params }: PageProps) {
   const activeVersion = versions.find((v) => v.id === program.activeVersionId);
 
   return (
-    <main style={{ padding: "2rem", maxWidth: "48rem", margin: "0 auto" }}>
+    <>
+      <AppNav />
+      <main style={{ padding: "2rem", maxWidth: "48rem", margin: "0 auto" }}>
       <p style={{ opacity: 0.7 }}>
         <Link href="/app/programs">&larr; All programs</Link>
       </p>
@@ -116,7 +124,7 @@ export default async function ProgramDetailPage({ params }: PageProps) {
               href={`/app/programs/${program.id}/history`}
               style={{ fontSize: "0.9rem", opacity: 0.8 }}
             >
-              View history &rarr;
+              History &amp; training blocks &rarr;
             </Link>
           ) : null}
         </div>
@@ -208,14 +216,32 @@ export default async function ProgramDetailPage({ params }: PageProps) {
       {!program.archivedAt ? (
         <section style={{ marginTop: "2rem" }}>
           <h2>Archive</h2>
+          <p style={{ opacity: 0.7, marginTop: "0.25rem" }}>
+            Archiving hides this program and ends its current training block.
+            Nothing is deleted: you can unarchive it from Programs.
+          </p>
           <form action={archiveProgramAction} style={{ marginTop: "0.5rem" }}>
             <input type="hidden" name="id" value={program.id} />
-            <button type="submit" style={{ padding: "0.5rem 1rem" }}>
+            <ConfirmSubmitButton
+              message={`Archive "${program.name}"? Its current training block ends. You can unarchive it later from Programs.`}
+              style={{ padding: "0.5rem 1rem" }}
+            >
               Archive this Program
+            </ConfirmSubmitButton>
+          </form>
+        </section>
+      ) : (
+        <section style={{ marginTop: "2rem" }}>
+          <h2>Archived</h2>
+          <form action={unarchiveProgramAction} style={{ marginTop: "0.5rem" }}>
+            <input type="hidden" name="id" value={program.id} />
+            <button type="submit" style={{ padding: "0.5rem 1rem" }}>
+              Unarchive this Program
             </button>
           </form>
         </section>
-      ) : null}
+      )}
     </main>
+    </>
   );
 }

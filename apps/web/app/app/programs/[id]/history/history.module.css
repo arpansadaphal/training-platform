@@ -121,3 +121,17 @@
   margin-right: 0.5rem;
   opacity: 0.5;
 }
+/* Phase A2: training blocks with links to their Review and Block Report. */
+.blocks {
+  margin: 1.5rem 0 2rem;
+}
+
+.blocksHeading {
+  font-size: 1.1rem;
+  margin: 0 0 0.75rem;
+}
+
+.blockLinks {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+}

@@ -91,3 +91,7 @@ MODEL_PROVIDER=mock
 - [ARCH-052](./ARCH-052.md) — Axis rebuild E5–E9: effort-aware counting, frequency as distribution, config-driven selection patterns, progression rule set, injectable recovery calculator
 - [ARCH-053](./ARCH-053.md) — Breadth-aware Fit projection (E11): worst single leverage plus breadth floors; 3 findings at LOW or worse → no better than DECENT (backfilled)
 - [ARCH-054](./ARCH-054.md) — Evidence-graded thresholds: provisional Fit band shown, per-axis evidence tiers and sources as config data, banner wording revised (supersedes ARCH-046 wording only)
+- [ARCH-055](./ARCH-055.md) — Set editing scope: logged sets editable/deletable only while the Session is IN_PROGRESS; frozen once COMPLETED
+- [ARCH-056](./ARCH-056.md) — Day picker rotation semantics: passed-over days become SKIPPED, rotation advances from the picked day (addendum 2026-10-21: cascade only forward; earlier days are extra sessions)
+- [ARCH-057](./ARCH-057.md) — Session auto-close on stale start: superseded IN_PROGRESS sessions close as COMPLETED (with records); 6-hour staleness window (addendum 2026-10-21: 0-record sessions are deleted, not skipped)
+- [ARCH-058](./ARCH-058.md) — Review adherence joins on row ids; EXERCISES_NOT_DONE / EXERCISES_UNLOGGED; always-shown summary and session log

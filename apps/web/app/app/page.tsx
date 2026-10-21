@@ -17,7 +17,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { appRouter } from "@training/api";
-import { auth, signOut } from "@/src/server/auth";
+import { auth } from "@/src/server/auth";
+import { AppNav } from "@/components/nav/AppNav";
 import styles from "./dashboard.module.css";
 
 export const dynamic = "force-dynamic";
@@ -39,30 +40,12 @@ export default async function DashboardPage() {
     caller.program.getIdentitySummary(),
   ]);
 
-  const { primaryProgram, currentSession, stats } = identity;
+  const { primaryProgram, currentSession, stats, recentClosedBlock, lastCompletedSessionAt } =
+    identity;
 
   return (
     <>
-      <nav className={styles.nav}>
-        <strong>Training Platform</strong>
-        <span className={styles.spacer} />
-        <Link href="/app/programs" className={styles.navLink}>
-          Programs
-        </Link>
-        <Link href="/train" className={styles.navLink}>
-          Train
-        </Link>
-        <form
-          action={async () => {
-            "use server";
-            await signOut({ redirectTo: "/" });
-          }}
-        >
-          <button type="submit" className={styles.signOutButton}>
-            Sign out
-          </button>
-        </form>
-      </nav>
+      <AppNav />
 
       <main className={styles.page}>
         <h1 className={styles.heading}>
@@ -85,6 +68,10 @@ export default async function DashboardPage() {
             />
 
             {primaryProgram.currentBlock ? (
+              <WelcomeBack lastCompletedSessionAt={lastCompletedSessionAt} />
+            ) : null}
+
+            {primaryProgram.currentBlock ? (
             <BlockStrip
   blockId={primaryProgram.currentBlock.id}
   status={primaryProgram.currentBlock.status}
@@ -93,6 +80,8 @@ export default async function DashboardPage() {
   anticipationCueText={primaryProgram.currentBlock.anticipationCue.text}
 />
             ) : null}
+
+            {recentClosedBlock ? <RecentBlock block={recentClosedBlock} /> : null}
 
             <p className={styles.footerLink}>
               <Link href="/app/programs">All programs →</Link>
@@ -153,6 +142,9 @@ function ProgramHero({ program, currentSession }: ProgramHeroProps) {
   // Choose the primary call to action in priority order.
   let cta: { href: string; label: string } | null = null;
 
+  // Phase A2: a PLANNED session is "next up", never "in progress"; only an
+  // IN_PROGRESS one is continued. A stale IN_PROGRESS session never reaches
+  // here (identityService drops it; the next start auto-closes it, ARCH-057).
   if (currentSession !== null) {
     cta = {
       href: `/train/session/${currentSession.id}`,
@@ -183,9 +175,11 @@ function ProgramHero({ program, currentSession }: ProgramHeroProps) {
       {hasActiveVersion && program.activeVersion ? (
         <p className={styles.heroMeta}>
           Version {program.activeVersion.versionNumber} active
-          {currentSession !== null
-            ? ` · Session ${currentSession.sequenceIndex + 1} in progress`
-            : ""}
+          {currentSession === null
+            ? ""
+            : currentSession.status === "IN_PROGRESS"
+              ? ` · ${currentSession.workoutDayName} in progress`
+              : ` · Next up: ${currentSession.workoutDayName}`}
         </p>
       ) : (
         <p className={styles.heroMeta}>
@@ -279,6 +273,46 @@ function BlockStrip({
       >
         Review block
       </Link>
+    </section>
+  );
+}
+
+/**
+ * Phase A2: an informational line when the last completed session is more
+ * than 3 days old. Not a streak and not a nag (Final Freeze §26): a fact,
+ * shown only while a block is active.
+ */
+function WelcomeBack({ lastCompletedSessionAt }: { lastCompletedSessionAt: Date | null }) {
+  if (lastCompletedSessionAt === null) return null;
+  const days = Math.floor((Date.now() - lastCompletedSessionAt.getTime()) / MS_PER_DAY);
+  if (days <= 3) return null;
+  return (
+    <p className={styles.welcomeBack}>
+      Welcome back. Last trained {days} days ago.
+    </p>
+  );
+}
+
+function RecentBlock({
+  block,
+}: {
+  block: { id: string; status: "ACTIVE" | "COMPLETED" | "ABANDONED"; startedAt: Date; endedAt: Date | null };
+}) {
+  const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return (
+    <section className={styles.recentBlocks} aria-labelledby="recent-blocks-heading">
+      <p id="recent-blocks-heading" className={styles.blockStripTitle}>
+        Recent blocks
+      </p>
+      <p className={styles.muted}>
+        {block.status === "COMPLETED" ? "Completed" : "Abandoned"} · {fmt(block.startedAt)} –{" "}
+        {block.endedAt ? fmt(block.endedAt) : "?"}
+      </p>
+      <p className={styles.recentBlockLinks}>
+        <Link href={`/app/review/${block.id}`}>Review</Link>
+        {" · "}
+        <Link href={`/app/blocks/${block.id}/report`}>Block Report</Link>
+      </p>
     </section>
   );
 }

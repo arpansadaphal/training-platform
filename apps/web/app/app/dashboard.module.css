@@ -6,39 +6,10 @@
  * takes the user somewhere they will actually go next.
  */
 
-.nav {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.9rem 1.5rem;
-  border-bottom: 1px solid var(--border, #e5e5e5);
-}
 
-.spacer {
-  flex: 1;
-}
 
-.navLink {
-  text-decoration: none;
-  color: inherit;
-  opacity: 0.8;
-  font-size: 0.95rem;
-}
 
-.navLink:hover {
-  opacity: 1;
-}
 
-.signOutButton {
-  background: transparent;
-  /* The global button colour is white (for accent-filled buttons); on a transparent background the label vanished. */
-  color: var(--fg);
-  border: 1px solid var(--border, #ccc);
-  border-radius: 4px;
-  padding: 0.35rem 0.7rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
 
 .page {
   padding: 2rem;
@@ -122,7 +93,9 @@
 
 .statsRow {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* minmax(0, 1fr): a plain 1fr track will not shrink below its longest
+     label, which pushed the third stat off a 375px screen. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
   margin-bottom: 1.5rem;
 }
@@ -194,4 +167,46 @@
   margin-top: 2rem;
   font-size: 0.9rem;
   opacity: 0.85;
+}
+/* Phase A2: informational welcome-back line and the most recent closed block. */
+.welcomeBack {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+}
+
+.recentBlocks {
+  margin-top: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 6px;
+}
+
+.recentBlocks p {
+  margin: 0;
+}
+
+.recentBlockLinks {
+  margin-top: 0.35rem !important;
+}
+
+/* Phase A2 patch: the stats row fits a phone. */
+@media (max-width: 480px) {
+  .statsRow {
+    gap: 0.5rem;
+  }
+
+  .stat {
+    padding: 0.75rem 0.6rem;
+    min-width: 0;
+  }
+
+  .statValue {
+    font-size: 1.4rem;
+  }
+
+  /* Wrap only between words: "Sessions / completed", never "COMPLET / ED". */
+  .statLabel {
+    font-size: 0.65rem;
+    letter-spacing: 0.02em;
+  }
 }

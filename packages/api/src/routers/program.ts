@@ -17,6 +17,8 @@ import {
   renameMyProgram,
   archiveMyProgram,
   getMyIdentitySummaryForUser,
+  listMyProgramBlocks,
+  unarchiveMyProgram,
 } from "../services/programService";
 
 const programNameSchema = z.string().trim().min(1).max(120);
@@ -50,6 +52,14 @@ export const programRouter = router({
   archive: protectedProcedure
     .input(z.object({ id: programIdSchema }))
     .mutation(({ ctx, input }) => archiveMyProgram(ctx.user.id, input.id)),
+
+  unarchive: protectedProcedure
+    .input(z.object({ id: programIdSchema }))
+    .mutation(({ ctx, input }) => unarchiveMyProgram(ctx.user.id, input.id)),
+
+  listBlocks: protectedProcedure
+    .input(z.object({ id: programIdSchema }))
+    .query(({ ctx, input }) => listMyProgramBlocks(ctx.user.id, input.id)),
 
   // === PHASE 7 ADDITION ===
   /**

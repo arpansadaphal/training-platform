@@ -55,3 +55,19 @@ export async function archiveProgramAction(formData: FormData): Promise<void> {
   revalidatePath("/app/programs");
   redirect("/app/programs");
 }
+
+/**
+ * Phase A2: reverses archive. The block archiving closed stays closed; the
+ * user activates a version on the program page to train it again.
+ */
+export async function unarchiveProgramAction(formData: FormData): Promise<void> {
+  const caller = await requireCaller();
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) {
+    throw new Error("Program id is required");
+  }
+  await caller.program.unarchive({ id });
+  revalidatePath("/app/programs");
+  revalidatePath(`/app/programs/${id}`);
+  revalidatePath("/app");
+}

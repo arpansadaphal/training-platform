@@ -25,6 +25,7 @@ import { auth } from "@/src/server/auth";
 import { CoachPanel } from "@/src/components/coach/CoachPanel";
 import { ReviewClient, type ClientReviewData } from "./ReviewClient";
 import styles from "./review.module.css";
+import { AppNav } from "@/components/nav/AppNav";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +85,16 @@ export default async function ReviewPage({ params }: PageProps) {
         totalSetsForExercise: d.totalSetsForExercise,
         example: d.example,
       })),
+      summary: review.adherence.summary,
+      sessionLog: review.adherence.sessionLog.map((e) => ({
+        sessionId: e.sessionId,
+        sequenceIndex: e.sequenceIndex,
+        workoutDayName: e.workoutDayName,
+        status: e.status,
+        startedAtIso: e.startedAt ? e.startedAt.toISOString() : null,
+        completedAtIso: e.completedAt ? e.completedAt.toISOString() : null,
+        durationMinutes: e.durationMinutes,
+      })),
     },
     observations: review.observations.map((o) => ({
       id: o.id,
@@ -93,8 +104,10 @@ export default async function ReviewPage({ params }: PageProps) {
   };
 
   return (
-    <main className={styles.page}>
-      <nav className={styles.nav}>
+    <>
+      <AppNav />
+      <main className={styles.page}>
+      <nav className={styles.nav} aria-label="Breadcrumb">
         <Link href="/app">&larr; Dashboard</Link>
       </nav>
       <div className={styles.layout}>
@@ -119,5 +132,6 @@ export default async function ReviewPage({ params }: PageProps) {
         </aside>
       </div>
     </main>
+    </>
   );
 }
