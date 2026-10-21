@@ -95,6 +95,21 @@ export {
   InMemoryGoalProfileRegistry,
 } from "./goal-profiles/registry";
 export { HYPERTROPHY_CONFIG, hypertrophyProfile } from "./goal-profiles/hypertrophy";
+export {
+  EVIDENCE_TIER_DEFINITIONS,
+  formatTierRange,
+  primarySources,
+  thresholdTierSpan,
+  tiersIn,
+} from "./goal-profiles/evidence";
+export type { EvidenceTierDefinition } from "./goal-profiles/evidence";
+export type {
+  AxisEvidence,
+  EvidenceClaim,
+  EvidenceTier,
+  EvidenceTierRange,
+  GoalProfileEvidence,
+} from "./analysis/types";
 
 // --- Assessment-layer types ---
 
@@ -111,7 +126,9 @@ export type {
 // --- Assessment engine ---
 
 export { computeAssessment } from "./assessment/computeAssessment";
-export { computeFitScore } from "./assessment/computeFitScore";
+export { computeFitScore, projectFitBand } from "./assessment/computeFitScore";
+export type { FitBandProjection } from "./assessment/computeFitScore";
+export { isClassified, provisionalFitBand } from "./assessment/provisionalFit";
 export { rollUpLeverage } from "./assessment/rollup";
 export type { RollUpOutcome, RollUpOk, RollUpBlocked } from "./assessment/rollup";
 export { actionTemplateFor } from "./assessment/actionTemplates";

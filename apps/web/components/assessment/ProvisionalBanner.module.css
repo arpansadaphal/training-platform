@@ -44,3 +44,13 @@
     color: var(--warning-fg, #fef3c7);
   }
 }
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}

@@ -28,6 +28,7 @@ import type {
   AxisType,
   FitScoreProjection,
   GoalProfileConfig,
+  GoalProfileEvidence,
   SeverityMap,
   SeverityWeightTable,
 } from "../analysis/types";
@@ -233,6 +234,169 @@ const RELEVANT_AXES: readonly AxisType[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Evidence (ARCH-054). A display restatement of the tier comments above: every tier and citation here
+// is copied from a comment in this file (or, for Epley, progressionSoundness.ts). Nothing is regraded.
+// When a comment above changes, change the matching claim here. No engine code reads this block.
+// ---------------------------------------------------------------------------
+const PELLAND_2026 = "Pelland et al., Sports Med 2026";
+const ACSM_2026 = "ACSM 2026";
+const ROBINSON_2024 = "Robinson 2024";
+const REFALO_2023 = "Refalo 2023";
+
+const HYPERTROPHY_EVIDENCE: GoalProfileEvidence = {
+  axes: {
+    VOLUME: {
+      thresholdTier: { from: 2, to: 3 },
+      claims: [
+        {
+          claim: "Weekly volume is the best-supported structural driver of hypertrophy.",
+          tier: { from: 1, to: 2 },
+          sources: [ACSM_2026, PELLAND_2026],
+        },
+        {
+          claim:
+            "Below 6 hard sets per muscle per week is under the range where growth is reliable for a trained lifter; 6 to 20 reads Adequate.",
+          tier: { from: 2, to: 2 },
+          sources: [],
+        },
+        {
+          claim: "20 to 30 sets reads High: diminishing returns that stay positive. Information, not a defect.",
+          tier: { from: 2, to: 2 },
+          sources: [],
+        },
+        {
+          claim: "30 or more sets reads Excessive: the edge of the well-characterised range, not a harm threshold.",
+          tier: { from: 3, to: 3 },
+          sources: [],
+        },
+        {
+          claim:
+            "A set counts in full at RIR 3 or less, half at RIR 4, and not at all at RIR 5 or more: growth rises as sets approach failure, but failure itself is unnecessary.",
+          tier: { from: 3, to: 4 },
+          sources: [ROBINSON_2024, REFALO_2023, ACSM_2026],
+        },
+        {
+          claim: "An exercise with no stated effort is assumed to be at RIR 2.",
+          tier: { from: 4, to: 4 },
+          sources: [],
+        },
+      ],
+    },
+    FREQUENCY: {
+      thresholdTier: { from: 4, to: 4 },
+      claims: [
+        {
+          claim: "Frequency has no independent effect on hypertrophy once weekly volume is controlled.",
+          tier: { from: 1, to: 2 },
+          sources: ["Schoenfeld 2019", PELLAND_2026],
+        },
+        {
+          claim: "One session carries at most about 10 productive sets for one muscle.",
+          tier: { from: 3, to: 3 },
+          sources: ["Remmert 2025 (preprint, not peer reviewed)"],
+        },
+        {
+          claim:
+            "A session counts as an exposure at 2 or more hard sets; fewer exposures than the weekly dose needs reads Low.",
+          tier: { from: 4, to: 4 },
+          sources: [],
+        },
+      ],
+    },
+    EXERCISE_SELECTION_BALANCE: {
+      thresholdTier: { from: 3, to: 4 },
+      claims: [
+        {
+          claim:
+            "Six movement patterns are required: squat, hinge, horizontal and vertical push, horizontal and vertical pull. No hypertrophy evidence requires loaded carries.",
+          tier: { from: 3, to: 3 },
+          sources: [],
+        },
+        {
+          claim: "One missing pattern is tolerated; two or more reads Gaps present.",
+          tier: { from: 3, to: 4 },
+          sources: [],
+        },
+      ],
+    },
+    PROGRESSION_SOUNDNESS: {
+      thresholdTier: { from: 3, to: 4 },
+      claims: [
+        {
+          claim: "Growth rises as sets approach failure, but failure itself is unnecessary.",
+          tier: { from: 3, to: 4 },
+          sources: [ROBINSON_2024, REFALO_2023, ACSM_2026],
+        },
+        {
+          claim:
+            "Effort (RPE or RIR) should be stated on at least 80% of exercises, and at most 25% of sets should sit at RIR 5 or more.",
+          tier: { from: 3, to: 4 },
+          sources: [],
+        },
+        {
+          claim:
+            "Reps from 5 to 30 grow muscle similarly when sets are taken near failure; at least 80% of sets should fall in that range.",
+          tier: { from: 3, to: 4 },
+          sources: [`${ROBINSON_2024} (and the load literature it cites; not independently re-verified)`],
+        },
+        {
+          claim:
+            "A %1RM prescription is checked for feasibility with the Epley equation, allowing 1 rep of slack.",
+          tier: { from: 4, to: 4 },
+          sources: ["Epley equation (interim; Nuzzo et al. 2023 is the intended source)"],
+        },
+        {
+          claim:
+            "Effort and overload matter, but the current rules are a weak proxy for a sound progression; no single overload scheme is required.",
+          tier: { from: 4, to: 4 },
+          sources: [ROBINSON_2024, "Plotkin 2022"],
+        },
+      ],
+    },
+    RECOVERY_COST: {
+      thresholdTier: { from: 4, to: 4 },
+      claims: [
+        {
+          claim:
+            "Recovery cost is sets × (RPE ÷ 10) summed across the week: a model index, not a measurement.",
+          tier: { from: 4, to: 4 },
+          sources: [],
+        },
+        {
+          claim:
+            "The 40 / 90 / 130 cutpoints were not recalibrated after effort weighting; programs with no stated effort read about 20% lower.",
+          tier: { from: 4, to: 4 },
+          sources: [],
+        },
+      ],
+    },
+  },
+  fitScoreProjection: {
+    thresholdTier: { from: 4, to: 4 },
+    claims: [
+      {
+        claim:
+          "The most important finding sets the band: none or low reads Strong, moderate reads Decent, high reads Needs work.",
+        tier: { from: 4, to: 4 },
+        sources: [],
+      },
+      {
+        claim:
+          "Three or more findings stop the band reading Strong. 3 is an engine boundary the calibration programs bracket but cannot pin.",
+        tier: { from: 4, to: 4 },
+        sources: [],
+      },
+      {
+        claim:
+          "Axis weights follow evidence strength: Volume high; Progression and Recovery medium; Frequency and Exercise selection low.",
+        tier: { from: 4, to: 4 },
+        sources: [ACSM_2026, PELLAND_2026, "Schoenfeld 2019"],
+      },
+    ],
+  },
+};
+
+// ---------------------------------------------------------------------------
 // The config
 // ---------------------------------------------------------------------------
 export const HYPERTROPHY_CONFIG: GoalProfileConfig = {
@@ -287,6 +451,7 @@ export const HYPERTROPHY_CONFIG: GoalProfileConfig = {
   validated: false,
   sourceNote:
     "provisional thresholds — bands populated from candidate config, pending expert review",
+  evidence: HYPERTROPHY_EVIDENCE,
 };
 
 export const hypertrophyProfile: GoalProfileDefinition = {

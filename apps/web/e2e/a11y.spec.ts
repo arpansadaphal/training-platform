@@ -123,7 +123,7 @@ test.describe("Accessibility pass — Builder, Session logging, Review", () => {
 
     // Build a draft enough to commit — the Session and Review screens
     // require an active version.
-    await page.getByPlaceholder("Option B").fill("A11y draft");
+    await page.getByLabel("New draft label").fill("A11y draft");
     await page.getByRole("button", { name: "Create draft" }).click();
     await expect(
       page.getByRole("heading", { name: /A11y draft/ }),

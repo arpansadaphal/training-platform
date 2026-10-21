@@ -377,3 +377,43 @@
 .muted {
   color: var(--muted);
 }
+/* Phase A: "start from" choice for a new draft. */
+.startFrom {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.startFrom legend {
+  padding: 0;
+  margin-bottom: 0.25rem;
+}
+
+.startFrom label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.newDraftBlock .startFrom input {
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+
+.commitNote {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.editorHint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}

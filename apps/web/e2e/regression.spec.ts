@@ -81,7 +81,7 @@ async function buildAndCommitV1(page: Page, programHref: string): Promise<void> 
   await page.getByRole("link", { name: "Open Builder" }).click();
   await expect(page).toHaveURL(/\/app\/programs\/[^/]+\/build$/);
 
-  await page.getByPlaceholder("Option B").fill("Regression draft");
+  await page.getByLabel("New draft label").fill("Regression draft");
   await page.getByRole("button", { name: "Create draft" }).click();
   await expect(page.getByRole("heading", { name: /Regression draft/ })).toBeVisible();
 
@@ -182,7 +182,8 @@ async function openReviewAndRecompute(page: Page): Promise<void> {
       name: /provisional thresholds disclaimer/i,
     }),
   ).toBeVisible();
-  await expect(page.getByText(/not yet scientifically validated/i)).toBeVisible();
+  // ARCH-054 copy: evidence-graded, never "validated" in the positive.
+  await expect(page.getByText(/evidence-graded, not human-validated/i)).toBeVisible();
 
   await expect(page.getByRole("heading", { name: /assessment at commit time/i })).toBeVisible();
 

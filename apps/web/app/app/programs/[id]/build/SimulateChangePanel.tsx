@@ -36,6 +36,7 @@ import type {
 import type { ExerciseRecord } from "@training/db";
 import { trpc } from "@/src/lib/trpc";
 import { GainCostNetDisplay } from "@/components/simulation/GainCostNetDisplay";
+import { DEFAULT_TARGET_RPE } from "@/src/lib/loadLabels";
 import styles from "@/components/simulation/simulation.module.css";
 
 type PanelOp =
@@ -179,6 +180,8 @@ export function SimulateChangePanel({
           targetSets,
           targetRepsLow: 5,
           targetRepsHigh: 8,
+          // Same visible default as the Builder (Phase A): 2 RIR.
+          targetRpe: DEFAULT_TARGET_RPE,
           loadScheme: { type: "BODYWEIGHT" },
         };
         return {

@@ -1,0 +1,91 @@
+// packages/domain/src/goal-profiles/__tests__/evidence.test.ts
+//
+// ARCH-054: the shipped hypertrophy evidence block is complete, well-formed, and pinned. A change to any
+// tier here is a regrade, which needs its own decision entry, so the snapshot of tiers is asserted.
+
+import { describe, expect, it } from "vitest";
+import type { AxisType, EvidenceTier } from "../../analysis/types";
+import { HYPERTROPHY_CONFIG, hypertrophyProfile } from "../hypertrophy";
+import {
+  EVIDENCE_TIER_DEFINITIONS,
+  formatTierRange,
+  primarySources,
+  thresholdTierSpan,
+  tiersIn,
+} from "../evidence";
+
+const evidence = HYPERTROPHY_CONFIG.evidence;
+
+describe("HYPERTROPHY evidence block", () => {
+  it("exists and covers every relevant axis", () => {
+    expect(evidence).toBeDefined();
+    for (const axis of hypertrophyProfile.relevantAxes) {
+      expect(evidence?.axes[axis].claims.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("uses well-formed tier ranges on every axis and claim", () => {
+    const all = [...Object.values(evidence!.axes), evidence!.fitScoreProjection];
+    for (const axis of all) {
+      expect(axis.thresholdTier.from).toBeLessThanOrEqual(axis.thresholdTier.to);
+      for (const claim of axis.claims) {
+        expect(claim.tier.from).toBeLessThanOrEqual(claim.tier.to);
+        expect([1, 2, 3, 4]).toContain(claim.tier.from);
+        expect([1, 2, 3, 4]).toContain(claim.tier.to);
+      }
+    }
+  });
+
+  it("pins the threshold tiers restated from the config comments (no regrading)", () => {
+    const tiers: Record<AxisType, string> = {
+      VOLUME: "Tier 2–3",
+      FREQUENCY: "Tier 4",
+      EXERCISE_SELECTION_BALANCE: "Tier 3–4",
+      PROGRESSION_SOUNDNESS: "Tier 3–4",
+      RECOVERY_COST: "Tier 4",
+    };
+    for (const [axis, expected] of Object.entries(tiers) as [AxisType, string][]) {
+      expect(formatTierRange(evidence!.axes[axis].thresholdTier)).toBe(expected);
+    }
+    expect(formatTierRange(evidence!.fitScoreProjection.thresholdTier)).toBe("Tier 4");
+  });
+
+  it("has no threshold at Tier 1: the strongest cutpoints are Tier 2", () => {
+    expect(thresholdTierSpan(evidence!)).toEqual({ from: 2, to: 4 });
+  });
+
+  it("never describes itself as validated", () => {
+    const text = JSON.stringify(evidence);
+    expect(text).not.toMatch(/\bvalidated\b/i);
+  });
+
+  it("does not change the validated flag", () => {
+    expect(HYPERTROPHY_CONFIG.validated).toBe(false);
+  });
+});
+
+describe("evidence helpers", () => {
+  it("formats single tiers and ranges", () => {
+    expect(formatTierRange({ from: 2, to: 2 })).toBe("Tier 2");
+    expect(formatTierRange({ from: 3, to: 4 })).toBe("Tier 3–4");
+  });
+
+  it("lists every tier in a range", () => {
+    expect(tiersIn({ from: 2, to: 4 })).toEqual([2, 3, 4]);
+  });
+
+  it("collects distinct sources in first-cited order", () => {
+    expect(primarySources(evidence!.axes.FREQUENCY)).toEqual([
+      "Schoenfeld 2019",
+      "Pelland et al., Sports Med 2026",
+      "Remmert 2025 (preprint, not peer reviewed)",
+    ]);
+  });
+
+  it("defines all four tiers, each with a meaning and a not-this", () => {
+    for (const tier of [1, 2, 3, 4] as EvidenceTier[]) {
+      expect(EVIDENCE_TIER_DEFINITIONS[tier].meaning.length).toBeGreaterThan(0);
+      expect(EVIDENCE_TIER_DEFINITIONS[tier].notThis.length).toBeGreaterThan(0);
+    }
+  });
+});
