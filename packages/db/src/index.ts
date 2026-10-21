@@ -111,6 +111,7 @@ export {
   createSessionInTx,
   updateSessionStatus,
   updateSessionStatusInTx,
+  deleteSessionIfEmptyInTx,
   listInProgressSessionsForUser,
   findLatestCompletedSessionForUser,
   countCompletedSessionsForProgram,

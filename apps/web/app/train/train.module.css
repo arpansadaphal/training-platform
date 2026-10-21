@@ -349,3 +349,31 @@
 .confirmPanel p {
   margin: 0 0 0.6rem;
 }
+
+/* Phase A2 patch: auto-saved banner (ARCH-057) and the frozen-record note (ARCH-055). */
+.autoSavedBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0.5rem 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+}
+
+.autoSavedBanner p {
+  margin: 0;
+}
+
+.frozenNote {
+  margin: -0.25rem 0 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.frozenNote summary {
+  cursor: pointer;
+}

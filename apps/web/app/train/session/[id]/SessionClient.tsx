@@ -45,6 +45,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ExerciseRecord } from "@training/db";
 import { TRPCProvider, trpc } from "@/src/lib/trpc";
@@ -72,6 +73,8 @@ interface ClientWorkoutDay {
 }
 
 interface ClientSessionContext {
+  /** COMPLETED sessions in the block up to and including this one. */
+  completedInBlockThrough: number;
   session: {
     id: string;
     trainingBlockId: string;
@@ -117,6 +120,23 @@ interface Props {
   initialRecords: ClientPerformanceRecord[];
   initialObservations: ClientObservation[];
   lastTimeHints: ClientLastTimeHint[];
+  /** ARCH-057: sessions the start that led here auto-saved (COMPLETED), for the banner. */
+  autoSaved: { sessionId: string; dayName: string; completedAtIso: string }[];
+}
+
+/** Display text for a session status ("In progress", not "IN_PROGRESS"). */
+const STATUS_LABEL: Record<SessionStatus, string> = {
+  PLANNED: "Not started",
+  IN_PROGRESS: "In progress",
+  COMPLETED: "Completed",
+  SKIPPED: "Skipped",
+};
+
+/** "3 hours ago", "1 hour ago", "under an hour ago". */
+function hoursAgo(iso: string): string {
+  const hours = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000);
+  if (hours < 1) return "under an hour ago";
+  return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
 }
 
 type InputValues = { reps: string; load: string; rpe: string };
@@ -165,7 +185,12 @@ function describePlan(p: ClientPrescription, equipment: string | null): string {
   const weightPart = planned
     ? ` · ${planned.weight} ${loadUnitLabel(planned.unit, equipment)}`
     : scheme?.type === "BODYWEIGHT"
-      ? " · bodyweight"
+      ? // Before Phase A2 every exercise defaulted to bodyweight; on loaded
+        // equipment that default was never the lifter's choice, so show it
+        // as unspecified rather than as a claim.
+        equipment && equipment !== "bodyweight"
+        ? " · —"
+        : " · bodyweight"
       : scheme?.type === "PERCENT_1RM" && typeof scheme.percent === "number"
         ? ` · ${scheme.percent > 1 ? scheme.percent : Math.round(scheme.percent * 100)}% 1RM`
         : "";
@@ -238,6 +263,7 @@ function SessionClientInner({
   initialRecords,
   initialObservations,
   lastTimeHints,
+  autoSaved,
 }: Props) {
   const router = useRouter();
   const hintByExercise = new Map(lastTimeHints.map((h) => [h.exerciseId, h]));
@@ -263,6 +289,7 @@ function SessionClientInner({
   const [editing, setEditing] = useState<{ id: string } & InputValues | null>(null);
   // "Mark complete" with unlogged exercises asks first; this holds their names.
   const [unloggedPrompt, setUnloggedPrompt] = useState<string[] | null>(null);
+  const [autoSavedDismissed, setAutoSavedDismissed] = useState(false);
 
   const exerciseNameById = new Map(exercises.map((e) => [e.id, e.name]));
   const equipmentById = new Map(exercises.map((e) => [e.id, e.equipment]));
@@ -483,8 +510,26 @@ function SessionClientInner({
         {program.name} — {workoutDay.name}
       </h1>
       <p className={styles.muted}>
-        Session {session.sequenceIndex + 1} · {session.status}
+        Session {session.sequenceIndex + 1} ({context.completedInBlockThrough} completed) ·{" "}
+        {STATUS_LABEL[session.status]}
       </p>
+      {autoSaved.length > 0 && !autoSavedDismissed ? (
+        <div className={styles.autoSavedBanner} role="status">
+          {autoSaved.map((a) => (
+            <p key={a.sessionId} suppressHydrationWarning>
+              Your previous {a.dayName} session was auto-saved {hoursAgo(a.completedAtIso)}.{" "}
+              <Link href={`/train/session/${a.sessionId}`}>View log</Link>
+            </p>
+          ))}
+          <button
+            type="button"
+            className={styles.smallSecondaryButton}
+            onClick={() => setAutoSavedDismissed(true)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       {inProgress && startedAt ? <SessionTimer startedAt={startedAt} /> : null}
 
       {errorMessage ? (
@@ -499,6 +544,11 @@ function SessionClientInner({
           <p className={styles.statusBanner}>
             This session is complete. Logs below are final.
           </p>
+          <details className={styles.frozenNote}>
+            <summary>Sets from completed sessions can&apos;t be edited. Why?</summary>
+            The record of what you did is frozen once the session is complete, so
+            future progress reflects what actually happened.
+          </details>
           <CompletedLog
             prescriptions={workoutDay.prescriptions}
             records={records}

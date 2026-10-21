@@ -188,6 +188,26 @@ export async function updateSessionStatusInTx(
 }
 
 /**
+ * ARCH-057 addendum: deletes a Session only if nothing happened in it — no
+ * PerformanceRecords and no Observation. The counts are taken inside the
+ * caller's transaction, immediately before the delete. Returns false (and
+ * deletes nothing) when the Session has either; the caller then records it
+ * as SKIPPED instead.
+ */
+export async function deleteSessionIfEmptyInTx(
+  tx: Prisma.TransactionClient,
+  id: string,
+): Promise<boolean> {
+  const [records, observations] = await Promise.all([
+    tx.performanceRecord.count({ where: { sessionId: id } }),
+    tx.observation.count({ where: { sessionId: id } }),
+  ]);
+  if (records !== 0 || observations !== 0) return false;
+  await tx.session.delete({ where: { id } });
+  return true;
+}
+
+/**
  * ARCH-057: every IN_PROGRESS Session belonging to a user, across all of
  * their TrainingBlocks (TrainingBlock.userId is denormalized for this).
  */

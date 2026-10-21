@@ -35,9 +35,9 @@
 import { TRPCError } from "@trpc/server";
 import {
   createSessionInTx,
+  deleteSessionIfEmptyInTx,
   findActiveSessionForBlock,
   findActiveTrainingBlockForProgram,
-  findLatestSessionForBlock,
   findProgramById,
   findTrainingBlockById,
   findVersionWithStructure,
@@ -45,6 +45,7 @@ import {
   listExercises,
   listInProgressSessionsForUser,
   listPerformanceRecordsForSession,
+  listSessionsForBlock,
   prisma,
   TRANSACTION_OPTIONS,
   updateSessionStatus,
@@ -82,6 +83,8 @@ interface WorkoutDayContext {
 
 export interface SessionContext {
   session: SessionRecord;
+  /** COMPLETED Sessions in the block up to and including this one ("Session 8 (4 completed)"). */
+  completedInBlockThrough: number;
   block: TrainingBlockRecord;
   workoutDay: WorkoutDayContext;
   program: { id: string; name: string };
@@ -120,25 +123,48 @@ export async function isStaleInProgress(
   return activity !== null && now.getTime() - activity.getTime() >= STALE_SESSION_AFTER_MS;
 }
 
-/** A status write planned before the transaction that performs it. */
+/**
+ * A write planned before the transaction that performs it. DELETE is the
+ * ARCH-057 addendum's "nothing happened" case; it falls back to SKIPPED if the
+ * Session turns out to have records or a note (deleteSessionIfEmptyInTx).
+ */
 interface ClosePlan {
-  sessionId: string;
-  status: "COMPLETED" | "SKIPPED";
+  session: SessionRecord;
+  action: "COMPLETED" | "SKIPPED" | "DELETE";
   completedAt?: Date;
 }
 
 /**
  * ARCH-057 auto-close: COMPLETED at the last logged set's time when the
- * Session has records, otherwise SKIPPED at `now`.
+ * Session has records; otherwise deleted (addendum: no training decision was
+ * made, so the rotation must not advance).
  */
 async function planAutoClose(session: SessionRecord, now: Date): Promise<ClosePlan> {
   const records = await listPerformanceRecordsForSession(session.id);
   if (records.length === 0) {
-    return { sessionId: session.id, status: "SKIPPED", completedAt: now };
+    return { session, action: "DELETE", completedAt: now };
   }
   let last = records[0]!.completedAt;
   for (const r of records) if (r.completedAt > last) last = r.completedAt;
-  return { sessionId: session.id, status: "COMPLETED", completedAt: last };
+  return { session, action: "COMPLETED", completedAt: last };
+}
+
+/**
+ * ARCH-056 addendum: the rotation pointer, replayed from a block's closed
+ * Sessions (day indices, in sequence order). A Session on the pointer's day or
+ * ahead of it moves the pointer past it; one behind the pointer is an extra
+ * session and leaves it alone. Returns the index of the day trained next.
+ */
+export function replayRotationPointer(
+  dayCount: number,
+  closedDayIndices: readonly number[],
+): number {
+  let pointer = 0;
+  for (const d of closedDayIndices) {
+    if (d < 0 || d >= dayCount) continue;
+    if (d >= pointer) pointer = (d + 1) % dayCount;
+  }
+  return pointer;
 }
 
 export interface RotationDay {
@@ -158,9 +184,13 @@ export interface RotationState {
   pending: SessionRecord | null;
   /** A stale IN_PROGRESS Session in this block that the next start will auto-close. */
   staleInBlock: SessionRecord | null;
-  /** Highest-sequence Session in the block (pending, stale, or closed). */
-  latest: SessionRecord | null;
-  /** Index into `days` of the day a plain "Start training" would train. */
+  /** Whether staleInBlock has logged sets (it will close COMPLETED) or not (it will be deleted). */
+  staleHasRecords: boolean;
+  /** Every Session in the block, in sequence order. */
+  sessions: SessionRecord[];
+  /** ARCH-056 addendum: the day the rotation trains next, ignoring the pending Session. */
+  pointerIndex: number;
+  /** Index into `days` of the day a plain "Start training" trains: the pending Session's, else the pointer. */
   suggestedIndex: number;
 }
 
@@ -190,44 +220,68 @@ export async function resolveRotation(
   const days = version.workoutDays.map((d) => ({ id: d.id, name: d.name }));
   const indexOf = (dayId: string) => days.findIndex((d) => d.id === dayId);
 
-  const [active, latest] = await Promise.all([
+  const [active, sessions] = await Promise.all([
     findActiveSessionForBlock(block.id),
-    findLatestSessionForBlock(block.id),
+    listSessionsForBlock(block.id),
   ]);
 
   let pending: SessionRecord | null = active;
   let staleInBlock: SessionRecord | null = null;
+  let staleHasRecords = false;
   if (active !== null && (await isStaleInProgress(active, now))) {
     staleInBlock = active;
+    staleHasRecords = (await listPerformanceRecordsForSession(active.id)).length > 0;
     pending = null;
   }
 
-  // Rotation: the pending Session's day, else the day after the latest
-  // Session's day (wrapping), else the first day.
-  let suggestedIndex = 0;
-  if (pending !== null) {
-    suggestedIndex = Math.max(0, indexOf(pending.workoutDayId));
-  } else if (latest !== null) {
-    const position = indexOf(latest.workoutDayId);
-    if (position >= 0) suggestedIndex = (position + 1) % days.length;
-  }
+  // Closed history, plus a stale session that will close COMPLETED.
+  const closed = sessions
+    .filter(
+      (s) =>
+        s.status === "COMPLETED" ||
+        s.status === "SKIPPED" ||
+        (s.id === staleInBlock?.id && staleHasRecords),
+    )
+    .map((s) => indexOf(s.workoutDayId));
+  const pointerIndex = replayRotationPointer(days.length, closed);
+  const suggestedIndex =
+    pending !== null ? Math.max(0, indexOf(pending.workoutDayId)) : pointerIndex;
 
-  return { block, days, pending, staleInBlock, latest, suggestedIndex };
+  return {
+    block,
+    days,
+    pending,
+    staleInBlock,
+    staleHasRecords,
+    sessions,
+    pointerIndex,
+    suggestedIndex,
+  };
 }
+
+/** A Session ARCH-057 closed as COMPLETED during a start, for the "auto-saved" banner. */
+export interface AutoSavedSession {
+  sessionId: string;
+  completedAt: Date;
+}
+
+export type StartedSession = SessionRecord & { autoSaved: AutoSavedSession[] };
 
 /**
  * The one start path behind getOrCreateNext (picks the suggested day) and
  * startSpecificDay (picks any day).
  *
  *   1. ARCH-057: IN_PROGRESS Sessions in the user's other blocks, and a stale
- *      one in this block, are auto-closed.
- *   2. Picking the suggested day resumes the pending Session if there is one.
- *   3. ARCH-056: otherwise every day from the suggested day up to (not
- *      including) the picked day, in rotation order and wrapping, is recorded
- *      as SKIPPED: the pending Session if it covers that day (PLANNED becomes
- *      SKIPPED; IN_PROGRESS is auto-closed), else a new SKIPPED Session.
- *   4. A PLANNED Session is created for the picked day, so the rotation
- *      advances from it.
+ *      one in this block, are auto-closed (COMPLETED with records, else
+ *      deleted).
+ *   2. Picking the pending Session's day resumes it.
+ *   3. Otherwise the pending Session is superseded: on the pointer's day with
+ *      nothing logged and an AHEAD pick, it is the day being skipped
+ *      (SKIPPED); otherwise it is auto-closed like a stale one.
+ *   4. ARCH-056 addendum: only an AHEAD pick cascades. Days from the pointer
+ *      up to (not including) the picked day become SKIPPED Sessions. A pick
+ *      BEHIND the pointer is an extra session; the rotation is untouched.
+ *   5. A PLANNED Session is created for the picked day.
  *
  * All writes happen in one transaction; the reads that plan them happen
  * first.
@@ -236,13 +290,13 @@ async function startDay(
   userId: string,
   programId: string,
   pickDayId: string | null,
-): Promise<SessionRecord> {
+): Promise<StartedSession> {
   const now = new Date();
   const rotation = await resolveRotation(userId, programId, now);
-  const { block, days, pending, staleInBlock, latest, suggestedIndex } = rotation;
+  const { block, days, pending, staleInBlock, sessions, suggestedIndex } = rotation;
+  const indexOf = (dayId: string) => days.findIndex((d) => d.id === dayId);
 
-  const pickedIndex =
-    pickDayId === null ? suggestedIndex : days.findIndex((d) => d.id === pickDayId);
+  const pickedIndex = pickDayId === null ? suggestedIndex : indexOf(pickDayId);
   if (pickedIndex < 0) {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -256,38 +310,52 @@ async function startDay(
   }
   if (staleInBlock !== null) closes.push(await planAutoClose(staleInBlock, now));
 
-  if (pickedIndex === suggestedIndex && pending !== null) {
-    if (closes.length > 0) await applyCloses(closes);
-    return pending;
+  if (pending !== null && indexOf(pending.workoutDayId) === pickedIndex) {
+    const autoSaved = await applyCloses(closes);
+    return { ...pending, autoSaved };
   }
 
+  // Closed history as it will stand after the planned closes.
+  const closedIndices = (extra: ClosePlan[]) => {
+    const closing = new Map(extra.map((c) => [c.session.id, c.action]));
+    return sessions
+      .filter((s) => {
+        const action = closing.get(s.id);
+        if (action !== undefined) return action !== "DELETE";
+        return s.status === "COMPLETED" || s.status === "SKIPPED";
+      })
+      .map((s) => indexOf(s.workoutDayId));
+  };
+
+  if (pending !== null) {
+    const pendingIndex = indexOf(pending.workoutDayId);
+    const pointerBefore = replayRotationPointer(days.length, closedIndices(closes));
+    const records = await listPerformanceRecordsForSession(pending.id);
+    if (
+      pending.status === "PLANNED" &&
+      records.length === 0 &&
+      pendingIndex === pointerBefore &&
+      pickedIndex > pointerBefore
+    ) {
+      closes.push({ session: pending, action: "SKIPPED" });
+    } else {
+      closes.push(await planAutoClose(pending, now));
+    }
+  }
+
+  const pointer = replayRotationPointer(days.length, closedIndices(closes));
   const skippedDayIds: string[] = [];
-  if (pickedIndex !== suggestedIndex) {
-    let i = suggestedIndex;
-    if (pending !== null) {
-      closes.push(
-        pending.status === "IN_PROGRESS"
-          ? await planAutoClose(pending, now)
-          : { sessionId: pending.id, status: "SKIPPED" },
-      );
-      i = (i + 1) % days.length;
-    }
-    while (i !== pickedIndex) {
-      skippedDayIds.push(days[i]!.id);
-      i = (i + 1) % days.length;
-    }
+  if (pickedIndex > pointer) {
+    for (let i = pointer; i < pickedIndex; i++) skippedDayIds.push(days[i]!.id);
   }
 
+  const deleted = new Set(closes.filter((c) => c.action === "DELETE").map((c) => c.session.id));
+  let sequenceIndex =
+    sessions.reduce((max, s) => (deleted.has(s.id) ? max : Math.max(max, s.sequenceIndex)), -1) + 1;
   const pickedDay = days[pickedIndex]!;
-  let sequenceIndex = (latest?.sequenceIndex ?? -1) + 1;
 
   return prisma.$transaction(async (tx) => {
-    for (const c of closes) {
-      await updateSessionStatusInTx(tx, c.sessionId, {
-        status: c.status,
-        ...(c.completedAt ? { completedAt: c.completedAt } : {}),
-      });
-    }
+    const autoSaved = await applyClosesInTx(tx, closes);
     for (const dayId of skippedDayIds) {
       await createSessionInTx(tx, {
         trainingBlockId: block.id,
@@ -296,23 +364,40 @@ async function startDay(
         status: "SKIPPED",
       });
     }
-    return createSessionInTx(tx, {
+    const created = await createSessionInTx(tx, {
       trainingBlockId: block.id,
       workoutDayId: pickedDay.id,
       sequenceIndex,
     });
+    return { ...created, autoSaved };
   }, TRANSACTION_OPTIONS);
 }
 
-async function applyCloses(closes: readonly ClosePlan[]): Promise<void> {
-  await prisma.$transaction(async (tx) => {
-    for (const c of closes) {
-      await updateSessionStatusInTx(tx, c.sessionId, {
-        status: c.status,
-        ...(c.completedAt ? { completedAt: c.completedAt } : {}),
-      });
+/** The db package's transaction client, without naming a Prisma type here (ARCH-005). */
+type Tx = Parameters<typeof updateSessionStatusInTx>[0];
+
+async function applyClosesInTx(
+  tx: Tx,
+  closes: readonly ClosePlan[],
+): Promise<AutoSavedSession[]> {
+  const autoSaved: AutoSavedSession[] = [];
+  for (const c of closes) {
+    if (c.action === "DELETE" && (await deleteSessionIfEmptyInTx(tx, c.session.id))) continue;
+    const status = c.action === "COMPLETED" ? "COMPLETED" : "SKIPPED";
+    await updateSessionStatusInTx(tx, c.session.id, {
+      status,
+      ...(c.completedAt ? { completedAt: c.completedAt } : {}),
+    });
+    if (status === "COMPLETED" && c.completedAt) {
+      autoSaved.push({ sessionId: c.session.id, completedAt: c.completedAt });
     }
-  }, TRANSACTION_OPTIONS);
+  }
+  return autoSaved;
+}
+
+async function applyCloses(closes: readonly ClosePlan[]): Promise<AutoSavedSession[]> {
+  if (closes.length === 0) return [];
+  return prisma.$transaction((tx) => applyClosesInTx(tx, closes), TRANSACTION_OPTIONS);
 }
 
 /**
@@ -336,7 +421,7 @@ async function applyCloses(closes: readonly ClosePlan[]): Promise<void> {
 export async function getOrCreateNext(
   userId: string,
   programId: string,
-): Promise<SessionRecord> {
+): Promise<StartedSession> {
   return startDay(userId, programId, null);
 }
 
@@ -352,7 +437,7 @@ export async function startSpecificDay(
   userId: string,
   programId: string,
   workoutDayId: string,
-): Promise<SessionRecord> {
+): Promise<StartedSession> {
   return startDay(userId, programId, workoutDayId);
 }
 
@@ -360,8 +445,15 @@ export interface TrainingOptions {
   programId: string;
   days: RotationDay[];
   suggestedDayId: string;
+  /** ARCH-056 addendum: the day the rotation trains next; picks ahead of it skip days, picks behind are extras. */
+  pointerDayId: string;
   /** The Session a plain start resumes, when there is one. */
-  pending: { sessionId: string; status: SessionStatus; workoutDayId: string } | null;
+  pending: {
+    sessionId: string;
+    status: SessionStatus;
+    workoutDayId: string;
+    hasRecords: boolean;
+  } | null;
 }
 
 /** Read-only: what /train's day picker shows. Never creates or closes anything. */
@@ -369,7 +461,7 @@ export async function getTrainingOptions(
   userId: string,
   programId: string,
 ): Promise<TrainingOptions> {
-  const { days, pending, suggestedIndex } = await resolveRotation(
+  const { days, pending, suggestedIndex, pointerIndex } = await resolveRotation(
     userId,
     programId,
     new Date(),
@@ -378,10 +470,16 @@ export async function getTrainingOptions(
     programId,
     days,
     suggestedDayId: days[suggestedIndex]!.id,
+    pointerDayId: days[pointerIndex]!.id,
     pending:
       pending === null
         ? null
-        : { sessionId: pending.id, status: pending.status, workoutDayId: pending.workoutDayId },
+        : {
+            sessionId: pending.id,
+            status: pending.status,
+            workoutDayId: pending.workoutDayId,
+            hasRecords: (await listPerformanceRecordsForSession(pending.id)).length > 0,
+          },
   };
 }
 
@@ -505,8 +603,14 @@ export async function getSessionContext(
     })),
   };
 
+  const blockSessions = await listSessionsForBlock(block.id);
+  const completedInBlockThrough = blockSessions.filter(
+    (s) => s.status === "COMPLETED" && s.sequenceIndex <= session.sequenceIndex,
+  ).length;
+
   return {
     session,
+    completedInBlockThrough,
     block,
     workoutDay,
     program: { id: program.id, name: program.name },

@@ -160,6 +160,55 @@ describe("Phase A2", () => {
       expect(again.id).toBe(pending.id);
     });
 
+    it("an earlier day is an extra session: nothing skipped, rotation unchanged (ARCH-056 addendum)", async () => {
+      const programId = await setupProgram(user);
+      const push = await getOrCreateNext(user.id, programId);
+      await markStarted(user.id, push.id);
+      await markCompleted(user.id, push.id);
+      // Rotation is at Pull; pick Push (earlier).
+      const { days, pointerDayId } = await getTrainingOptions(user.id, programId);
+      expect(days.find((d) => d.id === pointerDayId)?.name).toBe("Pull");
+      const extra = await startSpecificDay(user.id, programId, days[0]!.id);
+      expect(await dayName(user.id, extra.id)).toBe("Push");
+      expect(await prisma.session.count({ where: { trainingBlockId: push.trainingBlockId, status: "SKIPPED" } })).toBe(0);
+      await markStarted(user.id, extra.id);
+      await markCompleted(user.id, extra.id);
+      const next = await getOrCreateNext(user.id, programId);
+      expect(await dayName(user.id, next.id)).toBe("Pull");
+    });
+
+    it("an earlier pick replaces an untouched pending session instead of skipping it", async () => {
+      const programId = await setupProgram(user);
+      const push = await getOrCreateNext(user.id, programId);
+      await markStarted(user.id, push.id);
+      await markCompleted(user.id, push.id);
+      const pull = await getOrCreateNext(user.id, programId); // pending PLANNED Pull
+      const { days } = await getTrainingOptions(user.id, programId);
+      const extra = await startSpecificDay(user.id, programId, days[0]!.id);
+      expect(await findSessionById(pull.id)).toBeNull();
+      expect(await dayName(user.id, extra.id)).toBe("Push");
+      expect(await prisma.session.count({ where: { trainingBlockId: push.trainingBlockId, status: "SKIPPED" } })).toBe(0);
+    });
+
+    it("a later day skips the days in between and advances the rotation", async () => {
+      const programId = await setupProgram(user);
+      const push = await getOrCreateNext(user.id, programId);
+      await markStarted(user.id, push.id);
+      await markCompleted(user.id, push.id);
+      const { days } = await getTrainingOptions(user.id, programId); // at Pull
+      const legs = await startSpecificDay(user.id, programId, days[2]!.id);
+      const statuses = await prisma.session.findMany({
+        where: { trainingBlockId: push.trainingBlockId },
+        orderBy: { sequenceIndex: "asc" },
+        select: { status: true },
+      });
+      expect(statuses.map((x) => x.status)).toEqual(["COMPLETED", "SKIPPED", "PLANNED"]);
+      await markStarted(user.id, legs.id);
+      await markCompleted(user.id, legs.id);
+      const next = await getOrCreateNext(user.id, programId);
+      expect(await dayName(user.id, next.id)).toBe("Push");
+    });
+
     it("rejects a day outside the active version, and another user's program", async () => {
       const programId = await setupProgram(user);
       await expect(startSpecificDay(user.id, programId, "not-a-day")).rejects.toMatchObject({
@@ -206,15 +255,38 @@ describe("Phase A2", () => {
       expect(closed?.completedAt?.getTime()).toBe(lastSet.completedAt.getTime());
     });
 
-    it("closes a stale IN_PROGRESS Session without records as SKIPPED", async () => {
+    it("deletes a stale IN_PROGRESS Session without records and keeps the rotation (ARCH-057 addendum)", async () => {
+      const programId = await setupProgram(user);
+      const s = await getOrCreateNext(user.id, programId); // Push
+      await markStarted(user.id, s.id);
+      await ageSession(s.id, STALE);
+      const next = await getOrCreateNext(user.id, programId);
+      expect(await findSessionById(s.id)).toBeNull();
+      expect(await dayName(user.id, next.id)).toBe("Push");
+      expect(next.autoSaved).toEqual([]);
+    });
+
+    it("keeps an empty stale session that has a note, recording it as SKIPPED", async () => {
       const programId = await setupProgram(user);
       const s = await getOrCreateNext(user.id, programId);
       await markStarted(user.id, s.id);
+      await prisma.observation.create({
+        data: { userId: user.id, sessionId: s.id, trainingBlockId: s.trainingBlockId, content: "felt off" },
+      });
       await ageSession(s.id, STALE);
       await getOrCreateNext(user.id, programId);
-      const closed = await findSessionById(s.id);
-      expect(closed?.status).toBe("SKIPPED");
-      expect(closed?.completedAt).not.toBeNull();
+      expect((await findSessionById(s.id))?.status).toBe("SKIPPED");
+    });
+
+    it("reports a stale session with records as auto-saved", async () => {
+      const programId = await setupProgram(user);
+      const s = await getOrCreateNext(user.id, programId);
+      await markStarted(user.id, s.id);
+      const [rx] = await prescriptionIds(user.id, s.id);
+      await logSet(user.id, s.id, { exercisePrescriptionId: rx!, setIndex: 0, actualReps: 8 });
+      await ageSession(s.id, STALE);
+      const next = await getOrCreateNext(user.id, programId);
+      expect(next.autoSaved.map((a) => a.sessionId)).toEqual([s.id]);
     });
 
     it("closes an IN_PROGRESS Session in another block when training starts elsewhere", async () => {
@@ -380,6 +452,20 @@ describe("Phase A2", () => {
     const other = await makeTestUser("Phase A2 other");
     await expect(unarchiveMyProgram(other.id, programId)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(listMyProgramBlocks(other.id, programId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("Recent blocks skips empty closed blocks from archive/unarchive cycles", async () => {
+    const programId = await setupProgram(user);
+    const s = await getOrCreateNext(user.id, programId);
+    await markStarted(user.id, s.id);
+    await markCompleted(user.id, s.id);
+    for (let i = 0; i < 2; i++) {
+      await archiveMyProgram(user.id, programId);
+      await unarchiveMyProgram(user.id, programId);
+    }
+    const identity = await getMyIdentitySummary(user.id);
+    expect(identity.recentClosedBlock?.id).toBe(s.trainingBlockId);
+    expect(identity.recentClosedBlock?.status).toBe("COMPLETED");
   });
 
   // ── Identity summary ──────────────────────────────────────────────────

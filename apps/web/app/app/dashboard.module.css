@@ -93,7 +93,9 @@
 
 .statsRow {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* minmax(0, 1fr): a plain 1fr track will not shrink below its longest
+     label, which pushed the third stat off a 375px screen. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
   margin-bottom: 1.5rem;
 }
@@ -185,4 +187,26 @@
 
 .recentBlockLinks {
   margin-top: 0.35rem !important;
+}
+
+/* Phase A2 patch: the stats row fits a phone. */
+@media (max-width: 480px) {
+  .statsRow {
+    gap: 0.5rem;
+  }
+
+  .stat {
+    padding: 0.75rem 0.6rem;
+    min-width: 0;
+  }
+
+  .statValue {
+    font-size: 1.4rem;
+  }
+
+  /* Wrap only between words: "Sessions / completed", never "COMPLET / ED". */
+  .statLabel {
+    font-size: 0.65rem;
+    letter-spacing: 0.02em;
+  }
 }

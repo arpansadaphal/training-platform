@@ -142,6 +142,7 @@ export default async function TrainPage() {
                         programId={p.id}
                         days={o.days}
                         suggestedDayId={o.suggestedDayId}
+                        pointerDayId={o.pointerDayId}
                         pending={o.pending}
                       />
                     </>

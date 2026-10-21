@@ -29,7 +29,8 @@
 //     ids never match, which is why the button always read "Workout".
 //   - A stale IN_PROGRESS Session (ARCH-057) is not offered as the current
 //     session: the next start auto-closes it.
-//   - recentClosedBlock: the newest non-ACTIVE block, for "Recent blocks".
+//   - recentClosedBlock: the newest closed block with ≥1 completed session,
+//     for "Recent blocks" (empty archive/unarchive blocks never appear).
 //   - lastCompletedSessionAt: across all of the user's Programs, for the
 //     informational "Welcome back" line.
 
@@ -193,8 +194,18 @@ export async function getMyIdentitySummary(
     }
   }
 
+  // Newest closed block with at least one completed session. Empty blocks
+  // (e.g. opened by unarchive and closed again by the next archive, or a
+  // version activated and replaced without training) are never "recent".
   const blocks = await listTrainingBlocksForProgram(primary.id);
-  const closed = blocks.find((b) => b.status !== "ACTIVE") ?? null;
+  let closed: TrainingBlockRecord | null = null;
+  for (const b of blocks) {
+    if (b.status === "ACTIVE") continue;
+    if ((await countCompletedSessionsInBlock(b.id)) > 0) {
+      closed = b;
+      break;
+    }
+  }
   const recentClosedBlock: IdentitySummaryClosedBlock | null = closed
     ? { id: closed.id, status: closed.status, startedAt: closed.startedAt, endedAt: closed.endedAt }
     : null;

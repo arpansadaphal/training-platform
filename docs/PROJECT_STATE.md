@@ -18,6 +18,16 @@ Phase A2 shipped:
 - **N. Timer:** "Session time: MM:SS" and "(Xm YYs since last)" per set while IN_PROGRESS (client-side), and durations on Review and Block Report.
 - **O. Auto-close (ARCH-057):** starting a session auto-closes superseded IN_PROGRESS sessions: COMPLETED at the last set's time if any sets exist, else SKIPPED. Superseded means another block, or this block when stale (6 h without activity) or when a different day is picked. A fresh in-progress session is resumed.
 
+**Phase A2 patch (same branch, after the verification pass):**
+- **ARCH-057 addendum:** a superseded session with 0 records is **deleted**, not SKIPPED, so the rotation does not advance for a no-op. `deleteSessionIfEmptyInTx` refuses if the session has records or a note (falls back to SKIPPED).
+- **ARCH-056 addendum:** only a pick **ahead** of the rotation cascades skips. A pick behind it is an extra session, and the rotation stays. The pointer is now replayed from the block's closed sessions (`replayRotationPointer`), not "the day after the latest". The picker says "Push will be an extra session. Your rotation stays at Pull."
+- "Recent blocks" lists only closed blocks with ≥1 completed session. The history page still lists every block, including empty ones from archive/unarchive cycles.
+- Auto-saved banner on the next session ("Your previous Legs session was auto-saved 7 hours ago. View log", dismissible), via `?autosaved=` on the redirect.
+- Session header reads "Session 8 (4 completed) · In progress".
+- The plan line shows "—" for the legacy bodyweight default on loaded equipment.
+- A completed session explains why its sets can't be edited.
+- Dashboard stats row fits at 375px.
+
 **Cross-references for what comes next:**
 - **Register:** ARCH-055 to ARCH-058 added in this batch. ARCH-058 was not in the original brief: the ReviewData contract comment requires a decision entry for the shape change, and the row-id bug needed recording. **Next free ID is ARCH-059.**
 - **Deferred from the diagnostic:** per-exercise progress trend (7), novice starter templates (8), back-dating a session (10).
@@ -157,7 +167,7 @@ tRPC 11, mounted at `/api/trpc/[trpc]` via `fetchRequestHandler`. Routers and pr
 ## Unresolved decisions
 
 - **ARCH-057's 6-hour staleness window is a product boundary.** If real users routinely split a session across a long break (or two gyms a day), tune `STALE_SESSION_AFTER_MS`; a config change, not a redesign.
-- **ARCH-056 "backwards" picks wrap.** Picking an earlier day in the rotation marks the rest of the cycle skipped (the picker says so before starting). Watch whether users find this surprising; the alternative (picked day restarts the rotation) was rejected for MVP.
+- **ARCH-056 extra sessions (addendum).** Picking an earlier day is an extra session and leaves the rotation alone. At the last day of the cycle every other day is "behind", so skipping the last day is only possible with "Skip session". Watch whether that matters in practice.
 
 - **Mid-block correction semantics deferred.** Phase A ships with a warning under the Edit flow ('committing will end your current block'). The question of whether a correction commit should keep the block open is deferred until real usage shows whether users make corrections mid-block often enough to warrant a separate flow. If it matters, ARCH-039 gets an addendum. Not a Phase B blocker.
 
@@ -191,9 +201,9 @@ Phase-1 through Phase-7 items are preserved from the previous state of this file
   - `packages/config` — 1 file, 3 tests
   - `packages/ai` — 8 files, 61 tests
   - `packages/db` — 4 files, 9 tests
-  - `packages/api` — **17 files, 157 tests** (Phase A2 added `phaseA2.test.ts` (15): day picker, auto-close, set edit/delete, hints, Review row-id join and new kinds, unarchive/blocks, identity)
+  - `packages/api` — **17 files, 163 tests** (Phase A2 added `phaseA2.test.ts` (21, including the patch): day picker, auto-close, set edit/delete, hints, Review row-id join and new kinds, unarchive/blocks, identity)
   - `packages/domain` — **30 files, 302 tests** (Phase A added `assessment/__tests__/provisional-fit.test.ts` (5) and `goal-profiles/__tests__/evidence.test.ts` (10), which pins the evidence tiers)
-  - **Total Vitest**: **60 files, 532 tests**
+  - **Total Vitest**: **60 files, 538 tests**
 - **Playwright** (all passing where runnable):
   - `e2e/landing.spec.ts`, `e2e/builder.spec.ts`, `e2e/builder-simulate.spec.ts`, `e2e/training.spec.ts`, `e2e/landing-dashboard.spec.ts`, `e2e/review.spec.ts`, `e2e/coach.spec.ts`
 - `pnpm turbo run typecheck` → clean; `pnpm lint` → 0 errors (1 pre-existing warning in `invariant.test.ts`); `check:provisional-banner` → PASS

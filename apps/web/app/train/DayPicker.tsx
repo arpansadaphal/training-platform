@@ -14,26 +14,51 @@ export interface DayPickerProps {
   programId: string;
   days: { id: string; name: string }[];
   suggestedDayId: string;
-  pending: { status: "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED"; workoutDayId: string } | null;
+  /** ARCH-056 addendum: the day the rotation trains next. */
+  pointerDayId: string;
+  pending: {
+    status: "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED";
+    workoutDayId: string;
+    hasRecords: boolean;
+  } | null;
 }
 
-/** Days passed over when jumping from `fromIndex` to `toIndex`, in rotation order (ARCH-056). */
-export function daysPassedOver<T>(days: T[], fromIndex: number, toIndex: number): T[] {
-  const passed: T[] = [];
-  if (fromIndex === toIndex || days.length === 0) return passed;
-  for (let i = fromIndex; i !== toIndex; i = (i + 1) % days.length) {
-    const day = days[i];
-    if (day !== undefined) passed.push(day);
+export type PickOutcome =
+  | { kind: "SAME" }
+  | { kind: "SKIP"; skipped: string[] }
+  | { kind: "EXTRA"; rotationDay: string };
+
+/**
+ * What picking a day will do, mirroring sessionService.startDay (ARCH-056
+ * addendum): days ahead of the rotation pointer skip the days in between;
+ * days behind it are extra sessions that leave the rotation alone.
+ */
+export function pickOutcome(
+  days: { id: string; name: string }[],
+  pointerDayId: string,
+  pending: DayPickerProps["pending"],
+  pickedDayId: string,
+): PickOutcome {
+  if (pending && pending.workoutDayId === pickedDayId) return { kind: "SAME" };
+  const index = (id: string) => days.findIndex((d) => d.id === id);
+  let pointer = index(pointerDayId);
+  const picked = index(pickedDayId);
+  // A pending session on the pointer's day that has sets will close as
+  // COMPLETED, which moves the pointer past it before the pick applies.
+  if (pending && index(pending.workoutDayId) === pointer && pending.hasRecords) {
+    pointer = (pointer + 1) % days.length;
   }
-  return passed;
+  if (picked === pointer) return { kind: "SAME" };
+  if (picked > pointer) {
+    return { kind: "SKIP", skipped: days.slice(pointer, picked).map((d) => d.name) };
+  }
+  return { kind: "EXTRA", rotationDay: days[pointer]?.name ?? "" };
 }
 
-export function DayPicker({ programId, days, suggestedDayId, pending }: DayPickerProps) {
+export function DayPicker({ programId, days, suggestedDayId, pointerDayId, pending }: DayPickerProps) {
   const [picked, setPicked] = useState(suggestedDayId);
-  const suggestedIndex = days.findIndex((d) => d.id === suggestedDayId);
-  const pickedIndex = days.findIndex((d) => d.id === picked);
-  const pickedName = days[pickedIndex]?.name ?? "session";
-  const skipped = daysPassedOver(days, suggestedIndex, pickedIndex);
+  const pickedName = days.find((d) => d.id === picked)?.name ?? "session";
+  const outcome = pickOutcome(days, pointerDayId, pending, picked);
   const resuming = picked === suggestedDayId && pending?.status === "IN_PROGRESS";
 
   return (
@@ -54,10 +79,15 @@ export function DayPicker({ programId, days, suggestedDayId, pending }: DayPicke
           ))}
         </select>
       </label>
-      {skipped.length > 0 ? (
+      {outcome.kind === "SKIP" ? (
         <p className={styles.muted}>
-          {skipped.map((d) => d.name).join(", ")} will be marked as skipped, and the
-          rotation continues from {pickedName}.
+          {outcome.skipped.join(", ")} will be marked as skipped, and the rotation
+          continues from {pickedName}.
+        </p>
+      ) : outcome.kind === "EXTRA" ? (
+        <p className={styles.muted}>
+          {pickedName} will be an extra session. Your rotation stays at{" "}
+          {outcome.rotationDay}.
         </p>
       ) : null}
       <button type="submit" className={styles.primaryButton}>
