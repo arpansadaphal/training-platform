@@ -356,7 +356,7 @@ export function computeAdherence(input: AdherenceInput): ReviewAdherence {
               sessionId: session.id,
               prescriptionId: p.id,
               prescribed: formatPrescribedReps(p),
-              actual: formatActual(r.actualReps, r.actualLoad),
+              actual: formatActual(r.actualReps, r.actualLoad, p.loadScheme),
             },
           });
         } else if (r.actualReps > p.targetRepsHigh) {
@@ -367,7 +367,7 @@ export function computeAdherence(input: AdherenceInput): ReviewAdherence {
               sessionId: session.id,
               prescriptionId: p.id,
               prescribed: formatPrescribedReps(p),
-              actual: formatActual(r.actualReps, r.actualLoad),
+              actual: formatActual(r.actualReps, r.actualLoad, p.loadScheme),
             },
           });
         }
@@ -387,7 +387,7 @@ export function computeAdherence(input: AdherenceInput): ReviewAdherence {
             sessionId: session.id,
             prescriptionId: p.id,
             prescribed: formatLoad(p.loadScheme),
-            actual: formatActual(r.actualReps, r.actualLoad),
+            actual: formatActual(r.actualReps, r.actualLoad, p.loadScheme),
           },
         });
       }
@@ -495,16 +495,21 @@ function formatLoad(scheme: LoadScheme): string {
     case "RPE_BASED":
       return `RPE ${scheme.rpe}`;
     case "FIXED_WEIGHT":
-      return `${scheme.weight}${scheme.unit}`;
+      return `${scheme.weight} ${scheme.unit}`;
     case "BODYWEIGHT":
       return "bodyweight";
   }
 }
 
-function formatActual(reps: number | null, load: number | null): string {
+/**
+ * Logged weights carry no unit of their own; the session logger reads them in the plan's unit (lb when
+ * the plan says lb, kg otherwise), so the same rule applies here (Phase A).
+ */
+function formatActual(reps: number | null, load: number | null, scheme: LoadScheme): string {
   const repsPart = reps != null ? `${reps} reps` : "— reps";
   if (load == null) return repsPart;
-  return `${repsPart} @ ${load}`;
+  const unit = scheme.type === "FIXED_WEIGHT" ? scheme.unit : "kg";
+  return `${repsPart} @ ${load} ${unit}`;
 }
 
 /**

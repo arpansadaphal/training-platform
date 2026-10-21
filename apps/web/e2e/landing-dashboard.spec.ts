@@ -61,7 +61,7 @@ async function commitV1(page: Page, programHref: string): Promise<void> {
   await page.getByRole("link", { name: "Open Builder" }).click();
   await expect(page).toHaveURL(/\/app\/programs\/[^/]+\/build$/);
 
-  await page.getByPlaceholder("Option B").fill("Option A");
+  await page.getByLabel("New draft label").fill("Option A");
   await page.getByRole("button", { name: "Create draft" }).click();
   await expect(page.getByRole("heading", { name: /Option A/ })).toBeVisible();
 

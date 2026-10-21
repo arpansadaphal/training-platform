@@ -15,7 +15,7 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";                          // NEW
 import type { ProgramStructure } from "@training/domain";
 import type { ExerciseRecord } from "@training/db";
@@ -65,8 +65,10 @@ interface Props {
   programId: string;
   initialDrafts: ClientDraft[];
   initialExercises: ExerciseRecord[];
-  initialActiveVersionId: string | null;                              // NEW
-  initialActiveVersionStructure: ProgramStructure | null;             // NEW
+  initialActiveVersionId: string | null;
+  /** Phase A: labels the "start from" choice and the default draft label. */
+  initialActiveVersionNumber: number | null;
+  initialActiveVersionStructure: ProgramStructure | null;
 }
 
 /**
@@ -107,6 +109,7 @@ function BuilderClientInner({
   initialDrafts,
   initialExercises,
   initialActiveVersionId,
+  initialActiveVersionNumber,
   initialActiveVersionStructure,
 }: Props) {
   const utils = trpc.useUtils();
@@ -129,6 +132,15 @@ function BuilderClientInner({
     currentVersionId: string | null;
   } | null>(null);
   const [newDraftLabel, setNewDraftLabel] = useState("");
+  // Phase A: a new draft starts from the active version by default, so fixing
+  // a committed mistake is an edit, not a rebuild. draftService already
+  // copies the base version's structure; the Builder just never asked.
+  const [startFromActive, setStartFromActive] = useState(true);
+  const canStartFromActive = initialActiveVersionId !== null;
+  const defaultDraftLabel =
+    canStartFromActive && startFromActive && initialActiveVersionNumber !== null
+      ? `Edit of v${initialActiveVersionNumber}`
+      : `Draft ${drafts.length + 1}`;
 
   // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -182,7 +194,7 @@ function BuilderClientInner({
       setIsDirty(false);
       setErrorMessage(
         `Committed as version ${version.versionNumber}. ` +
-          `The versioning UI arrives in a later phase.`,
+          `It is now the version you train.`,
       );
       void utils.draft.listForProgram.invalidate({ programId });
       router.refresh(); 
@@ -268,13 +280,12 @@ function BuilderClientInner({
     commitMutation.mutate({ draftId: selectedDraftId });
   }
 
-  function handleCreateDraft() {
-    const label = newDraftLabel.trim();
-    if (!label) {
-      setErrorMessage("Give the new draft a label first.");
-      return;
-    }
-    createDraftMutation.mutate({ programId, label });
+  function handleCreateDraft(e?: FormEvent) {
+    e?.preventDefault();
+    const label = newDraftLabel.trim() || defaultDraftLabel;
+    const baseVersionId =
+      canStartFromActive && startFromActive ? initialActiveVersionId : null;
+    createDraftMutation.mutate({ programId, label, baseVersionId });
   }
 
   function handleDiscard() {
@@ -315,24 +326,43 @@ function BuilderClientInner({
           </ul>
         )}
 
-        <div className={styles.newDraftBlock}>
+        <form className={styles.newDraftBlock} onSubmit={handleCreateDraft}>
+          {canStartFromActive ? (
+            <fieldset className={styles.startFrom}>
+              <legend>Start from</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="startFrom"
+                  checked={startFromActive}
+                  onChange={() => setStartFromActive(true)}
+                />
+                Version {initialActiveVersionNumber} (active)
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="startFrom"
+                  checked={!startFromActive}
+                  onChange={() => setStartFromActive(false)}
+                />
+                Blank
+              </label>
+            </fieldset>
+          ) : null}
           <label>
             New draft label
             <input
               value={newDraftLabel}
               onChange={(e) => setNewDraftLabel(e.target.value)}
               maxLength={120}
-              placeholder="Option B"
+              placeholder={defaultDraftLabel}
             />
           </label>
-          <button
-            type="button"
-            onClick={handleCreateDraft}
-            disabled={createDraftMutation.isPending}
-          >
+          <button type="submit" disabled={createDraftMutation.isPending}>
             {createDraftMutation.isPending ? "Creating…" : "Create draft"}
           </button>
-        </div>
+        </form>
       </aside>
 
       <section className={styles.editor}>
@@ -349,8 +379,8 @@ function BuilderClientInner({
               {staleInfo.currentVersionId
                 ? ` (active: ${staleInfo.currentVersionId.slice(0, 8)}…)`
                 : ""}
-              . Cloning the current version to re-apply your edits arrives in
-              a later phase.
+              . Start a new draft from the active version and re-apply your
+              edits there.
             </p>
             <button
               type="button"
@@ -409,6 +439,15 @@ function BuilderClientInner({
                 </button>
               </div>
             </div>
+
+            {initialActiveVersionNumber !== null ? (
+              <p className={styles.commitNote}>
+                Committing saves this as version {initialActiveVersionNumber + 1}{" "}
+                and leaves version {initialActiveVersionNumber} unchanged. If
+                you are mid-block, your current training block closes and a
+                new one starts.
+              </p>
+            ) : null}
 
             <StructureEditor
               structure={localStructure}

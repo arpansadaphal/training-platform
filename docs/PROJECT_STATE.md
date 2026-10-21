@@ -1,18 +1,26 @@
-cd /Users/arpan/Documents/code/training-platform
-
-cat > docs/PROJECT_STATE.md << 'PROJECT_STATE_EOF'
 ## Current phase
 
-**Phase 10.3 shipped and merged.** E5–E9 rebuilt the five axis calculators so each measures what its name implies. Phase 10.2 shipped the first real classification; 10.3 makes it defensible.
+**Phase A ("make it read as finished") is done on branch `phase-a-honest-surface`, awaiting review and merge.** It follows Phase 10.4 (E11, breadth-aware Fit) and Phase 10.5 (scopeKey uses `MuscleGroup.name`; hyphen-tolerant exercise search), both merged to `main` (PRs #20, #21, #22). Phase A came out of the founder walkthrough on 2026-10-21; Phase B (session/follow-along items) is explicitly **not started**.
 
-**There is no Phase 11.** Per `17-roadmap-overview.md`, further work unlocks on evidence, not on a calendar. The next candidate batch is E4/E10/E11 (roll-up and output layer), followed by the Phase 9 operational items (`docs/LAUNCH_CHECKLIST.md`), followed by showing to real lifters.
+Phase A shipped, in order:
+1. **Provisional Fit band visible** on every assessment surface: "Provisional fit: DECENT — based on evidence-graded thresholds. See evidence". It is read through `provisionalFitBand()` (domain), the same projection as `computeFitScore` over the same roll-up. `computeFitScore` still returns `UNVALIDATED`. See ARCH-054.
+2. **Evidence panel**: per axis it shows the tier, primary sources, what the tier means and is not, and the underlying claims. The data is `GoalProfileConfig.evidence` (new optional field), restated from the tier comments in `hypertrophy.ts`. Nothing is regraded, and `validated: false` and the launch gate are unchanged.
+3. **Drafts start from the active version**: the "Start from" choice defaults to the active version, the label defaults to "Edit of vN", Enter submits, and a note says committing creates vN+1 and closes the current block (ARCH-039).
+4. **Readable assessment**: labels like "Weekly volume · Chest", metrics with units ("6 hard sets / week"), a one-line "what this means" read from the config's band bounds, and Weight/Severity/Leverage behind "Details". The root-cause key is no longer shown. The banner copy is now "evidence-graded, not human-validated", with the tier span (ARCH-054).
+5. **Effort (RIR) input in the Builder**, which sets `targetRpe`. New exercises default to a visible 2 RIR, in the simulate panel too. Before this, no Builder input produced effort, so every Builder-made program failed EFFORT_DEFINED.
+6. **Units everywhere**: "kg per dumbbell" for dumbbell exercises (`apps/web/src/lib/loadLabels.ts`), planned weight shown in the session plan line and as the Weight placeholder, units on logged sets and on Review deviation text. Logged weights are read in the plan's unit (lb if the plan says lb, else kg); only the number is stored.
+7. **Copy**: the landing page no longer says "Phase 0 shell", and the commit message no longer says "versioning UI arrives in a later phase".
 
 **Cross-references for what comes next:**
-- **E11 (breadth-aware Fit)** is the biggest remaining user-facing incoherence: a program with 5 attention areas can still read STRONG, because Fit is "worst single leverage" and every new finding sits at LOW leverage. Making the Fit band reflect the axis output is its own batch.
-- **FREQUENCY `minExposureSets` = 2.0** is a tuning question, not a bug. Indirect work below that threshold per session reads Low rather than Adequate.
-- **Recovery bands** were not recalibrated after E9's weight change (1.0 → 0.8 for unstated effort). Programs written without RPE read ~20% lower. No calibration program is in the affected range.
-- **`commitFromMutation`'s two call sites** are still the complete write-path surface.
-- **Register:** 51 entries (ARCH-001 through ARCH-051), next free ID is **ARCH-052**. Phase 10.3 needs it.
+- **Phase B is the next candidate** (founder report, 2026-10-21): day picker on `/train`, exercise swap mid-session (`PerformanceRecord.performedExerciseId`), per-exercise cues, per-exercise "tried something different" notes. The walkthrough report recommends showing the app to ~5 lifters before choosing B or C (faster building).
+- **Mid-block correction semantics are deferred** (see Unresolved decisions).
+- **Register:** ARCH-053 (breadth-aware Fit, E11) was backfilled in the Phase A PR; Phase 10.4 had shipped without it. Next free ID is **ARCH-055**.
+- **FREQUENCY `minExposureSets` = 2.0** is a tuning question, not a bug.
+- **Recovery bands** were not recalibrated after E9's weight change. Builder-made programs now state effort (2 RIR default), so they no longer sit in the "unstated, about 20% lower" regime.
+- **`commitFromMutation`'s two call sites** are still the complete write-path surface. Phase A added no write path; `draft.create` already accepted `baseVersionId`.
+- **Fixed in the Phase A PR:** the Sign-out button rendered as an empty box (white text on a transparent background); now `color: var(--fg)`.
+- **Not fixed, seen in the walkthrough:** there is no top nav inside Programs/Builder; the Coach and Constraints pages aren't in the nav; favicon 404; Review's adherence reads "0 planned so far".
+- **Exercise library:** `packages/db/prisma/seed.ts` grew from 43 to 110 exercises. It is committed as its own commit on the Phase A branch, with the content unchanged.
 
 ## Completed phases
 
@@ -136,6 +144,8 @@ tRPC 11, mounted at `/api/trpc/[trpc]` via `fetchRequestHandler`. Routers and pr
 
 ## Unresolved decisions
 
+- **Mid-block correction semantics deferred.** Phase A ships with a warning under the Edit flow ('committing will end your current block'). The question of whether a correction commit should keep the block open is deferred until real usage shows whether users make corrections mid-block often enough to warrant a separate flow. If it matters, ARCH-039 gets an addendum. Not a Phase B blocker.
+
 Phase-1 through Phase-7 items are preserved from the previous state of this file. **Phase-8-specific items:**
 
 - **The `packages/ai` boundary test is substring-based.** `packages/ai/src/__tests__/boundary.test.ts` scans for the literal string `commitFrom`, which is coarse — comments describing the boundary trip it. The correct long-term fix is an AST-based scan using the TypeScript compiler API that inspects actual import statements and call expressions. Deferred; the substring check has caught every real violation so far and errs toward over-blocking.
@@ -166,27 +176,24 @@ Phase-1 through Phase-7 items are preserved from the previous state of this file
   - `packages/config` — 1 file, 3 tests
   - `packages/ai` — 8 files, 61 tests
   - `packages/db` — 4 files, 9 tests
-  - `packages/api` — **16 files, 140 tests** (Phase 10.3 added `calibration.test.ts` — 20 tests)
-  - `packages/domain` — **30 files, 185 tests** (Phase 10.3 added `hardSetCredit.test.ts`, `volume.effort.test.ts`, `exerciseSelectionBalance.requiredPatterns.test.ts`, `computeAnalysis.injection.test.ts`; rewrote `frequency.test.ts`, `progressionSoundness.test.ts`, `recoveryCost.test.ts`, `dedup.test.ts`)
-  - **Total Vitest**: **59 files, 398 tests**
+  - `packages/api` — **16 files, 142 tests**
+  - `packages/domain` — **30 files, 302 tests** (Phase A added `assessment/__tests__/provisional-fit.test.ts` (5) and `goal-profiles/__tests__/evidence.test.ts` (10), which pins the evidence tiers)
+  - **Total Vitest**: **59 files, 517 tests**
 - **Playwright** (all passing where runnable):
   - `e2e/landing.spec.ts`, `e2e/builder.spec.ts`, `e2e/builder-simulate.spec.ts`, `e2e/training.spec.ts`, `e2e/landing-dashboard.spec.ts`, `e2e/review.spec.ts`, `e2e/coach.spec.ts`
-- `pnpm turbo run typecheck` → clean
+- `pnpm turbo run typecheck` → clean; `pnpm lint` → 0 errors (1 pre-existing warning in `invariant.test.ts`); `check:provisional-banner` → PASS
+- Playwright (Phase A): all 12 specs pass (1 skipped as designed) when run against a dev server with CI's `MODEL_PROVIDER=mock MOCK_SCENARIO=coach-regression`. Spec changes: the draft-label selector moved from `getByPlaceholder("Option B")` to `getByLabel("New draft label")` (9 call sites; the placeholder is now the default label); `review.spec` `commitV2` targets the new day's picker (drafts now start from v1); `regression.spec` asserts the ARCH-054 banner copy. With the local `.env.local` (`MODEL_PROVIDER=gemini`), the Coach regression step fails because a live model does not reliably propose a change; that step is CI-mock-only by design.
 - `pnpm turbo run test` → all packages pass
 - `calibration.test.ts` → 20/20; Program G band flip (`Sound` → `Issue found`) confirms E8; `G-pct(0.75) = G-pct(75) = 67.2` confirms E9
 - `web#build` → clean; route table unchanged
 
-**No Phase 11.** Phase 10.3 is the last scheduled phase.
+**No Phase 11.** Further work unlocks on evidence (`17-roadmap-overview.md`).
 
 **Candidate next work, in order of user-facing impact:**
 
-1. **E11 — breadth-aware Fit.** Makes the headline Fit band reflect the axis output. Currently a program with 5 attention areas can read STRONG; this is the biggest coherence gap in the app today.
-2. **Phase 9 operational items** (`docs/LAUNCH_CHECKLIST.md`) — Sentry alert rules, Upstash verification, Neon backups. Real-world consequences, no engineering risk.
-3. **Show to lifters.** The engine produces defensible classifications. Real usage is the roadmap's gate.
-4. **Deferred:** E4 (band-level severity), E10 (UI-enforced classification gate), Phase 7 Revise gap, the stale "arrives in a later phase" message.
+1. **Show to ~5 lifters** now that Phase A makes the app read as finished. Their answer picks Phase B (train the day you're in) or Phase C (build a split in two minutes).
+2. **Phase B** (if chosen): day picker, exercise swap, cues, per-exercise notes. Needs 2–3 migrations plus cue content.
+3. **Phase 9 operational items** (`docs/LAUNCH_CHECKLIST.md`): Sentry alert rules, Upstash verification, Neon backups.
+4. **Deferred:** E4 (band-level severity), E10 (UI-enforced classification gate).
 
-**Register:** 51 entries; next free ID is **ARCH-052**.
-
-
-echo "PROJECT_STATE.md rewritten. Lines:"
-wc -l docs/PROJECT_STATE.md
+**Register:** ARCH-001 through ARCH-054; next free ID is **ARCH-055**.

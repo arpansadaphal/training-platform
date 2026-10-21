@@ -56,12 +56,14 @@ export default async function BuildPage({ params }: PageProps) {
   // populate its pickers. A null activeVersionId is legal (a program with no
   // committed version yet); the panel renders a "commit first" hint.
   let activeVersionStructure: ProgramStructure | null = null;
+  let activeVersionNumber: number | null = null;
   if (program.activeVersionId) {
     const active = await caller.programVersion.get({
       versionId: program.activeVersionId,
     });
     activeVersionStructure =
       active.version.structureSnapshot as ProgramStructure;
+    activeVersionNumber = active.version.versionNumber;
   }
 
   return (
@@ -77,6 +79,7 @@ export default async function BuildPage({ params }: PageProps) {
         initialDrafts={drafts}
         initialExercises={exercises}
         initialActiveVersionId={program.activeVersionId}
+        initialActiveVersionNumber={activeVersionNumber}
         initialActiveVersionStructure={activeVersionStructure}
       />
     </main>

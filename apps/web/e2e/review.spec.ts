@@ -69,7 +69,7 @@ async function commitV1(page: Page, programHref: string): Promise<void> {
   await page.getByRole("link", { name: "Open Builder" }).click();
   await expect(page).toHaveURL(/\/app\/programs\/[^/]+\/build$/);
 
-  await page.getByPlaceholder("Option B").fill("Option A");
+  await page.getByLabel("New draft label").fill("Option A");
   await page.getByRole("button", { name: "Create draft" }).click();
   await expect(page.getByRole("heading", { name: /Option A/ })).toBeVisible();
 
@@ -102,15 +102,16 @@ async function commitV2(page: Page, programHref: string): Promise<void> {
   await page.getByRole("link", { name: "Open Builder" }).click();
   await expect(page).toHaveURL(/\/app\/programs\/[^/]+\/build$/);
 
-  await page.getByPlaceholder("Option B").fill("Option A v2");
+  await page.getByLabel("New draft label").fill("Option A v2");
   await page.getByRole("button", { name: "Create draft" }).click();
   await expect(page.getByRole("heading", { name: /Option A v2/ })).toBeVisible();
 
   await page.getByRole("button", { name: "+ Add workout day" }).click();
   // Anchored: once v1 exists, SimulateChangePanel's <select> is also on the
-  // page and substring-matches the same label.
-  await page.getByLabel("Choose an exercise", { exact: true }).selectOption({ index: 1 });
-  await page.getByRole("button", { name: "Add exercise" }).click();
+  // page and substring-matches the same label. Phase A: the draft starts
+  // from v1, so v1's day already has a picker; target the new day's (last).
+  await page.getByLabel("Choose an exercise", { exact: true }).last().selectOption({ index: 1 });
+  await page.getByRole("button", { name: "Add exercise" }).last().click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
 
   const assessmentPanel = page.locator("section").filter({

@@ -16,6 +16,11 @@ import type {
   WorkoutDayStructure,
 } from "@training/domain";
 import type { ExerciseRecord } from "@training/db";
+import {
+  DEFAULT_TARGET_RPE,
+  EFFORT_OPTIONS,
+  loadUnitLabel,
+} from "@/src/lib/loadLabels";
 import { ExercisePicker } from "./ExercisePicker";
 import styles from "./build.module.css";
 
@@ -43,6 +48,10 @@ function emptyPrescription(
     targetSets: 3,
     targetRepsLow: 8,
     targetRepsHigh: 12,
+    // Phase A: effort is what the analysis reads (hard-set credit, progression
+    // checks). New exercises start at a visible, editable 2 RIR rather than
+    // "not set", which the engine would flag on every Builder-made program.
+    targetRpe: DEFAULT_TARGET_RPE,
     loadScheme: { type: "BODYWEIGHT" },
   };
 }
@@ -143,6 +152,11 @@ export function StructureEditor({ structure, exercises, onChange }: Props) {
 
   return (
     <div className={styles.structureEditor}>
+      <p className={styles.editorHint}>
+        <strong>Effort</strong> (reps in reserve, RIR) is what the analysis
+        reads. <strong>Planned weight</strong> is for your log: the analysis
+        does not judge it.
+      </p>
       {structure.workoutDays.length === 0 ? (
         <p className={styles.muted}>
           No workout days yet. Add one to start.
@@ -192,12 +206,13 @@ export function StructureEditor({ structure, exercises, onChange }: Props) {
           </div>
 
           <ul className={styles.prescriptionList}>
-            {day.prescriptions.map((p, pIdx) => (
+            {day.prescriptions.map((p, pIdx) => {
+              const exercise = exercises.find((e) => e.id === p.exerciseId);
+              return (
               <li key={p.id} className={styles.prescriptionRow}>
                 <div className={styles.prescriptionMain}>
                   <span className={styles.prescriptionExercise}>
-                    {exercises.find((e) => e.id === p.exerciseId)?.name ??
-                      p.exerciseId}
+                    {exercise?.name ?? p.exerciseId}
                   </span>
                   <label className={styles.inlineField}>
                     Sets
@@ -239,8 +254,28 @@ export function StructureEditor({ structure, exercises, onChange }: Props) {
                     />
                   </label>
                   <label className={styles.inlineField}>
-                    Load
+                    Effort
+                    <select
+                      value={p.targetRpe ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        updatePrescription(day.id, p.id, {
+                          targetRpe: v === "" ? undefined : Number(v),
+                        });
+                      }}
+                    >
+                      <option value="">Not set</option>
+                      {EFFORT_OPTIONS.map((o) => (
+                        <option key={o.rpe} value={o.rpe}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className={styles.inlineField}>
+                    Planned weight
                     <LoadSchemeInput
+                      equipment={exercise?.equipment ?? null}
                       value={p.loadScheme}
                       onChange={(scheme) =>
                         updatePrescription(day.id, p.id, {
@@ -279,7 +314,8 @@ export function StructureEditor({ structure, exercises, onChange }: Props) {
                   </div>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
 
           <ExercisePicker
@@ -307,9 +343,11 @@ export function StructureEditor({ structure, exercises, onChange }: Props) {
  */
 function LoadSchemeInput({
   value,
+  equipment,
   onChange,
 }: {
   value: LoadScheme;
+  equipment: string | null;
   onChange: (v: LoadScheme) => void;
 }) {
   if (value.type === "BODYWEIGHT") {
@@ -354,8 +392,8 @@ function LoadSchemeInput({
             })
           }
         >
-          <option value="kg">kg</option>
-          <option value="lb">lb</option>
+          <option value="kg">{loadUnitLabel("kg", equipment)}</option>
+          <option value="lb">{loadUnitLabel("lb", equipment)}</option>
         </select>
       </span>
     );

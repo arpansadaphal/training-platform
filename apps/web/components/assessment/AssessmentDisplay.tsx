@@ -30,18 +30,31 @@
 // the classification under the provisional banner when there is content to
 // show, and falls back to the UnvalidatedState message only when the
 // classification is genuinely empty (the roll-up-blocked case).
+//
+// PHASE A (ARCH-054): a provisional result now shows its Fit band, read via
+// the domain's provisionalFitBand (the same projection computeFitScore uses,
+// over the same roll-up — invariant 8), always labelled "Provisional fit".
+// "See evidence" on the banner or the fit line opens the EvidencePanel. The
+// engine's overallSummary string and root-cause keys are no longer shown;
+// the summary is rebuilt from the same classification in plain words.
 
 "use client";
 
-import type {
-  AssessedAxis,
-  Assessment,
-  AssessmentResult,
-  FitScoreResult,
+import { useState } from "react";
+import {
+  isClassified,
+  provisionalFitBand,
+  type AssessedAxis,
+  type Assessment,
+  type AssessmentResult,
+  type FitScoreBand,
+  type FitScoreResult,
 } from "@training/domain";
 import { AxisCard } from "./AxisCard";
+import { EvidencePanel } from "./EvidencePanel";
 import { ProvisionalBanner } from "./ProvisionalBanner";
 import { UnvalidatedState } from "./UnvalidatedState";
+import { axisLabel, fitBandLabel } from "./labels";
 import { useProvisionalBanner } from "@/src/lib/provisionalBanner";
 import styles from "./assessment.module.css";
 
@@ -54,30 +67,16 @@ function axisKey(axis: AssessedAxis): string {
   return `${axis.axisType}:${axis.scopeKey ?? ""}`;
 }
 
-/**
- * Whether the inner Assessment has any content worth rendering.
- *
- * The discriminator between two very different states that both carry
- * `kind: "UNVALIDATED"`:
- *   - Populated-but-provisional (roll-up succeeded, config validated false):
- *     strengths / attentionAreas / biggestOpportunity / actions carry real
- *     content. Render it under the banner.
- *   - Genuinely blocked (roll-up failed): those four fields are empty/null
- *     by domain contract. Show the reason string instead.
- *
- * Known limitation: a program that legitimately has no findings at all
- * would take the fallback path. At MVP this does not occur — every
- * assessable program carries at least one strength (Adequate VOLUME axes
- * are strengths via strengthEligibleAxes). If it appears in practice,
- * refine the discriminator.
- */
-function hasRenderableContent(a: Assessment): boolean {
-  return (
-    a.strengths.length > 0 ||
-    a.attentionAreas.length > 0 ||
-    a.biggestOpportunity !== null ||
-    a.actions.length > 0
-  );
+/** What the Fit line shows: the real band, a provisional one, or nothing. */
+type FitLine =
+  | { kind: "FINAL"; band: FitScoreBand }
+  | { kind: "PROVISIONAL"; band: FitScoreBand }
+  | null;
+
+function fitLineFor(result: AssessmentResult, fitScore: FitScoreResult): FitLine {
+  if (fitScore.kind === "VALIDATED") return { kind: "FINAL", band: fitScore.fitScore.band };
+  const provisional = provisionalFitBand(result);
+  return provisional ? { kind: "PROVISIONAL", band: provisional.band } : null;
 }
 
 export function AssessmentDisplay({ result, fitScore }: Props) {
@@ -87,58 +86,95 @@ export function AssessmentDisplay({ result, fitScore }: Props) {
   // is always. When a validated config ships, the hook returns false and
   // the banner disappears from every surface at once.
   const provisional = useProvisionalBanner();
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const openEvidence = () => setEvidenceOpen(true);
   const a = result.assessment;
+
+  const banner = provisional ? (
+    <ProvisionalBanner onSeeEvidence={openEvidence} evidenceOpen={evidenceOpen} />
+  ) : null;
+  const panel = evidenceOpen ? <EvidencePanel onClose={() => setEvidenceOpen(false)} /> : null;
 
   // Genuinely blocked: UNVALIDATED and no classification content.
   // Fall back to the reason string. This is the "roll-up could not
   // classify" state — null weights, missing bands, missing severity
-  // mapping. There is nothing useful to render.
-  if (result.kind === "UNVALIDATED" && !hasRenderableContent(a)) {
+  // mapping. There is nothing useful to render, and no band to show.
+  if (result.kind === "UNVALIDATED" && !isClassified(a)) {
     return (
       <>
-        {provisional ? <ProvisionalBanner /> : null}
+        {banner}
+        {panel}
         <UnvalidatedState reason={result.reason} />
       </>
     );
   }
 
-  // Provisional-but-populated (or fully VALIDATED): render the
-  // classification. When the result is UNVALIDATED, show the reason string
-  // as a subordinate note so the user knows why the assessment is labeled
-  // provisional.
   return (
     <article className={styles.wrapper}>
-      {provisional ? <ProvisionalBanner /> : null}
-
-      {result.kind === "UNVALIDATED" ? (
-        <p className={styles.provisionalReason}>{result.reason}</p>
-      ) : null}
-
-      <AssessmentBody a={a} fitScore={fitScore} />
+      {banner}
+      {panel}
+      <AssessmentBody
+        a={a}
+        fit={fitLineFor(result, fitScore)}
+        onSeeEvidence={openEvidence}
+        evidenceOpen={evidenceOpen}
+      />
     </article>
   );
 }
 
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
 function AssessmentBody({
   a,
-  fitScore,
+  fit,
+  onSeeEvidence,
+  evidenceOpen,
 }: {
   a: Assessment;
-  fitScore: FitScoreResult;
+  fit: FitLine;
+  onSeeEvidence: () => void;
+  evidenceOpen: boolean;
 }) {
   return (
     <>
       <section className={styles.overall}>
         <h2 className={styles.sectionHeading}>Overall</h2>
-        <p className={styles.overallSummary}>{a.overallSummary}</p>
-        {fitScore.kind === "VALIDATED" ? (
-          <p className={styles.fitScore}>
-            Fit Score:{" "}
-            <span className={styles.fitScoreBand}>
-              {fitScore.fitScore.band}
-            </span>
-          </p>
+        {fit ? (
+          fit.kind === "FINAL" ? (
+            <p className={styles.fitScore}>
+              Fit: <span className={styles.fitScoreBand}>{fitBandLabel(fit.band)}</span>
+            </p>
+          ) : (
+            <p className={styles.fitScore}>
+              Provisional fit:{" "}
+              <span className={styles.fitScoreBand}>{fitBandLabel(fit.band)}</span> — based on
+              evidence-graded thresholds.{" "}
+              <button
+                type="button"
+                className={styles.linkButton}
+                onClick={onSeeEvidence}
+                aria-expanded={evidenceOpen}
+              >
+                See evidence
+              </button>
+            </p>
+          )
         ) : null}
+        <p className={styles.overallSummary}>
+          {plural(a.strengths.length, "strength", "strengths")} ·{" "}
+          {plural(a.attentionAreas.length + (a.biggestOpportunity ? 1 : 0), "thing", "things")} to
+          look at
+          {a.biggestOpportunity ? (
+            <>
+              . Biggest opportunity: <strong>{axisLabel(a.biggestOpportunity)}</strong>.
+            </>
+          ) : (
+            "."
+          )}
+        </p>
       </section>
 
       {a.strengths.length > 0 ? (
@@ -146,11 +182,7 @@ function AssessmentBody({
           <h2 className={styles.sectionHeading}>Strengths</h2>
           <div className={styles.axisList}>
             {a.strengths.map((axis) => (
-              <AxisCard
-                key={axisKey(axis)}
-                axis={axis}
-                variant="strength"
-              />
+              <AxisCard key={axisKey(axis)} axis={axis} variant="strength" />
             ))}
           </div>
         </section>
@@ -161,11 +193,7 @@ function AssessmentBody({
           <h2 className={styles.sectionHeading}>Attention areas</h2>
           <div className={styles.axisList}>
             {a.attentionAreas.map((axis) => (
-              <AxisCard
-                key={axisKey(axis)}
-                axis={axis}
-                variant="attention"
-              />
+              <AxisCard key={axisKey(axis)} axis={axis} variant="attention" />
             ))}
           </div>
         </section>
@@ -183,13 +211,12 @@ function AssessmentBody({
           <h2 className={styles.sectionHeading}>Actions</h2>
           <ul className={styles.actionList}>
             {a.actions.map((action) => (
-              <li key={action.rootCauseKey} className={styles.actionItem}>
-                <p className={styles.actionDescription}>
-                  {action.description}
-                </p>
-                <p className={styles.actionRootCause}>
-                  Root cause key: <code>{action.rootCauseKey}</code>
-                </p>
+              <li
+                key={action.rootCauseKey}
+                className={styles.actionItem}
+                data-root-cause={action.rootCauseKey}
+              >
+                <p className={styles.actionDescription}>{action.description}</p>
               </li>
             ))}
           </ul>

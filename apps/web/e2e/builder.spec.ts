@@ -124,7 +124,7 @@ test("Builder: build a draft, see the unvalidated Assessment state, commit a ver
   await expect(page).toHaveURL(/\/app\/programs\/[^/]+\/build$/);
 
   // ── Create a draft ────────────────────────────────────────────────────
-  await page.getByPlaceholder("Option B").fill("Option A");
+  await page.getByLabel("New draft label").fill("Option A");
   await page.getByRole("button", { name: "Create draft" }).click();
 
   // The draft's label becomes the editor heading.

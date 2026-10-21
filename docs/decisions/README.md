@@ -89,3 +89,5 @@ force.
 MODEL_PROVIDER=mock
 - [ARCH-051](./ARCH-051.md) — HYPERTROPHY candidate configuration, reference-data scoping, and seed convention
 - [ARCH-052](./ARCH-052.md) — Axis rebuild E5–E9: effort-aware counting, frequency as distribution, config-driven selection patterns, progression rule set, injectable recovery calculator
+- [ARCH-053](./ARCH-053.md) — Breadth-aware Fit projection (E11): worst single leverage plus breadth floors; 3 findings at LOW or worse → no better than DECENT (backfilled)
+- [ARCH-054](./ARCH-054.md) — Evidence-graded thresholds: provisional Fit band shown, per-axis evidence tiers and sources as config data, banner wording revised (supersedes ARCH-046 wording only)

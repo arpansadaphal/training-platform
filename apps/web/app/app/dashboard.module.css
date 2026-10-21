@@ -31,6 +31,8 @@
 
 .signOutButton {
   background: transparent;
+  /* The global button colour is white (for accent-filled buttons); on a transparent background the label vanished. */
+  color: var(--fg);
   border: 1px solid var(--border, #ccc);
   border-radius: 4px;
   padding: 0.35rem 0.7rem;

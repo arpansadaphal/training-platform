@@ -265,6 +265,42 @@ export interface ProgressionRulesConfig {
 
 
 // ---------------------------------------------------------------------------
+// Evidence grading (ARCH-054). Descriptive only: no engine code reads these fields.
+// ---------------------------------------------------------------------------
+
+/**
+ * 1 = direct research (RCTs / meta-analyses / consensus statements); 2 = research-informed synthesis;
+ * 3 = expert / coaching heuristic; 4 = engine-derived model parameter. Definitions live in
+ * goal-profiles/evidence.ts.
+ */
+export type EvidenceTier = 1 | 2 | 3 | 4;
+
+/** Inclusive tier range. A config comment reading "Tier 3/4" is { from: 3, to: 4 }. */
+export interface EvidenceTierRange {
+  readonly from: EvidenceTier;
+  readonly to: EvidenceTier;
+}
+
+/** One statement the profile relies on, at the tier the config already assigns it. */
+export interface EvidenceClaim {
+  readonly claim: string;
+  readonly tier: EvidenceTierRange;
+  /** Short citations exactly as the config comments give them. Empty when the claim cites none. */
+  readonly sources: readonly string[];
+}
+
+export interface AxisEvidence {
+  /** The tier of the band cutpoints a user's result is read against. */
+  readonly thresholdTier: EvidenceTierRange;
+  readonly claims: readonly EvidenceClaim[];
+}
+
+export interface GoalProfileEvidence {
+  readonly axes: Readonly<Record<AxisType, AxisEvidence>>;
+  readonly fitScoreProjection: AxisEvidence;
+}
+
+// ---------------------------------------------------------------------------
 // Goal-profile config (Phase 3 shape)
 // ---------------------------------------------------------------------------
 
@@ -323,6 +359,11 @@ export interface GoalProfileConfig {
   fitScoreProjection: FitScoreProjection;
   validated: boolean;
   sourceNote: string;
+  /**
+   * ARCH-054. The evidence tier and sources behind each axis's thresholds, for display. Optional so test
+   * configs need not carry it; no engine code reads it, and it has no bearing on `validated`.
+   */
+  readonly evidence?: GoalProfileEvidence;
 }
 
 // ---------------------------------------------------------------------------

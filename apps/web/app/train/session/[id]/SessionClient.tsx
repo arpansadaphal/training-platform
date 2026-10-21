@@ -16,6 +16,10 @@
 //     the data Review exists to surface. The plan is shown as reference;
 //     the inputs start empty.
 //   - Skip session is a first-class button, not hidden in a menu.
+//   - Phase A: the planned weight is part of the plan line and the Weight
+//     placeholder, and every weight carries its unit ("kg per dumbbell" for
+//     dumbbell exercises). Logged weights are read in the plan's unit: lb if
+//     the plan says lb, kg otherwise. Only the number is stored.
 //
 // HONESTY REQUIREMENT: this component does not reconcile, clamp, or reject a
 // deviation from the plan. Whatever is typed is what is logged. The service
@@ -35,6 +39,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ExerciseRecord } from "@training/db";
 import { TRPCProvider, trpc } from "@/src/lib/trpc";
+import { loadUnitLabel } from "@/src/lib/loadLabels";
 import styles from "../../train.module.css";
 
 type SessionStatus = "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED";
@@ -107,22 +112,41 @@ function parseNullableNumber(s: string): number | null {
   return n;
 }
 
+/** The plan's weight, if the load scheme names one. Tolerant of the Json column's unknown shape. */
+function plannedWeight(p: ClientPrescription): { weight: number; unit: string } | null {
+  const scheme = p.loadScheme as { type?: string; weight?: unknown; unit?: unknown } | null;
+  if (scheme?.type !== "FIXED_WEIGHT" || typeof scheme.weight !== "number") return null;
+  return { weight: scheme.weight, unit: scheme.unit === "lb" ? "lb" : "kg" };
+}
+
+/** The unit logged weights are read in for this prescription: the plan's, else kg. */
+function logUnit(p: ClientPrescription): string {
+  return plannedWeight(p)?.unit ?? "kg";
+}
+
 /**
  * A human-readable description of a prescription's plan, shown above the log
  * inputs as a reference. Intentionally tolerant of a Decimal-serialized
  * targetRpe (string) from the wire — the RSC path gives a number, the tRPC
  * path would give a string; both are handled.
  */
-function describePlan(p: ClientPrescription): string {
+function describePlan(p: ClientPrescription, equipment: string | null): string {
   const reps =
     p.targetRepsLow === p.targetRepsHigh
       ? `${p.targetRepsHigh}`
       : `${p.targetRepsLow}-${p.targetRepsHigh}`;
-  const rpePart =
-    p.targetRpe !== null && p.targetRpe !== undefined
-      ? ` @ RPE ${p.targetRpe}`
-      : "";
-  return `${p.targetSets} × ${reps}${rpePart}`;
+  const rpe = p.targetRpe !== null && p.targetRpe !== undefined ? Number(p.targetRpe) : null;
+  const rpePart = rpe !== null ? ` @ RPE ${rpe} (${Math.max(0, 10 - rpe)} RIR)` : "";
+  const scheme = p.loadScheme as { type?: string; percent?: unknown } | null;
+  const planned = plannedWeight(p);
+  const weightPart = planned
+    ? ` · ${planned.weight} ${loadUnitLabel(planned.unit, equipment)}`
+    : scheme?.type === "BODYWEIGHT"
+      ? " · bodyweight"
+      : scheme?.type === "PERCENT_1RM" && typeof scheme.percent === "number"
+        ? ` · ${scheme.percent > 1 ? scheme.percent : Math.round(scheme.percent * 100)}% 1RM`
+        : "";
+  return `${p.targetSets} × ${reps}${rpePart}${weightPart}`;
 }
 
 export function SessionClient(props: Props) {
@@ -160,6 +184,7 @@ function SessionClientInner({
   const [observationText, setObservationText] = useState("");
 
   const exerciseNameById = new Map(exercises.map((e) => [e.id, e.name]));
+  const equipmentById = new Map(exercises.map((e) => [e.id, e.equipment]));
 
   function recordsFor(prescriptionId: string): ClientPerformanceRecord[] {
     return records.filter((r) => r.exercisePrescriptionId === prescriptionId);
@@ -358,12 +383,15 @@ function SessionClientInner({
                 const remaining = Math.max(0, p.targetSets - logged.length);
                 const name = exerciseNameById.get(p.exerciseId) ?? p.exerciseId;
                 const vals = inputs[p.id] ?? { reps: "", load: "", rpe: "" };
+                const equipment = equipmentById.get(p.exerciseId) ?? null;
+                const unitLabel = loadUnitLabel(logUnit(p), equipment);
+                const planned = plannedWeight(p);
                 return (
                   <li key={p.id} className={styles.exerciseCard}>
                     <div className={styles.exerciseHeader}>
                       <span className={styles.exerciseName}>{name}</span>
                       <span className={styles.exercisePlan}>
-                        {describePlan(p)} · {logged.length}/{p.targetSets} logged
+                        {describePlan(p, equipment)} · {logged.length}/{p.targetSets} logged
                       </span>
                     </div>
 
@@ -376,7 +404,7 @@ function SessionClientInner({
                               ? `${r.actualReps} reps`
                               : "reps not recorded"}
                             {r.actualLoad !== null
-                              ? ` @ ${r.actualLoad}`
+                              ? ` @ ${r.actualLoad} ${unitLabel}`
                               : ""}
                             {r.actualRpe !== null
                               ? ` @ RPE ${r.actualRpe}`
@@ -403,7 +431,9 @@ function SessionClientInner({
                             />
                           </label>
                           <label className={styles.inputField}>
-                            <span className={styles.inputLabel}>Load</span>
+                            <span className={styles.inputLabel}>
+                              Weight ({unitLabel})
+                            </span>
                             <input
                               type="number"
                               inputMode="decimal"
@@ -411,6 +441,9 @@ function SessionClientInner({
                               value={vals.load}
                               onChange={(e) =>
                                 setInputValue(p.id, "load", e.target.value)
+                              }
+                              placeholder={
+                                planned ? String(planned.weight) : undefined
                               }
                             />
                           </label>
