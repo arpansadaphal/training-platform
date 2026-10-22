@@ -29,7 +29,7 @@ Phase A2 shipped:
 - Dashboard stats row fits at 375px.
 
 **Cross-references for what comes next:**
-- **Register:** ARCH-055 to ARCH-058 added in this batch. ARCH-058 was not in the original brief: the ReviewData contract comment requires a decision entry for the shape change, and the row-id bug needed recording. **Next free ID is ARCH-059.**
+- **Register:** ARCH-055 to ARCH-058 added in this batch. ARCH-058 was not in the original brief: the ReviewData contract comment requires a decision entry for the shape change, and the row-id bug needed recording. **Next free ID is ARCH-061** (ARCH-059 and ARCH-060 were logged on 2026-10-22 as *Proposed*, not in effect, by the strategy plan).
 - **Deferred from the diagnostic:** per-exercise progress trend (7), novice starter templates (8), back-dating a session (10).
 - **Mid-block correction semantics remain deferred** (see Unresolved decisions). Phase A2 makes the old block reachable after a correction commit, which removes most of the "progress wiped" cost.
 - **Phase B candidates still open:** exercise swap mid-session (`PerformanceRecord.performedExerciseId`), per-exercise cues, per-exercise "tried something different" notes. The day picker shipped here.
@@ -240,4 +240,4 @@ Phase-1 through Phase-7 items are preserved from the previous state of this file
 3. **Phase 9 operational items** (`docs/LAUNCH_CHECKLIST.md`): Sentry alert rules, Upstash verification, Neon backups.
 4. **Deferred:** E4 (band-level severity), E10 (UI-enforced classification gate).
 
-**Register:** ARCH-001 through ARCH-058; next free ID is **ARCH-059**.
+**Register:** ARCH-001 through ARCH-058 in effect; ARCH-059 and ARCH-060 proposed (not in effect); next free ID is **ARCH-061**.
