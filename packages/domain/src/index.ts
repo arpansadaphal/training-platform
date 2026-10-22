@@ -148,3 +148,22 @@ export {
 } from "./analysis/hardSetCredit";
 export { evaluateProgressionChecks, epleyMaxReps } from "./analysis/progressionSoundness";
 export type { ProgressionCheck, ProgressionCheckId } from "./analysis/progressionSoundness";
+// --- Progress (Phase A3a) ---
+// Pure, outside analysis/ and assessment/: nothing here feeds the engine.
+
+export { epleyE1rm, convertLoad } from "./progress/e1rm";
+export type { WeightUnit } from "./progress/e1rm";
+export { topSetOf, totalVolumeOf, buildExerciseHistory } from "./progress/history";
+export type {
+  LoggedSet, SessionSets, TopSet, ExerciseSessionRecord,
+} from "./progress/history";
+export {
+  computeProgressVerdict, progressVerdictLine,
+  VERDICT_WINDOW, VERDICT_MIN_SESSIONS, VERDICT_THRESHOLD_PERCENT,
+} from "./progress/verdict";
+export type { ProgressVerdict, ProgressVerdictKind } from "./progress/verdict";
+export { computeSessionSummary } from "./progress/sessionSummary";
+export type {
+  SessionSummary, SessionSummaryInput, SummaryExerciseInput,
+  MuscleInvolvement, MuscleVolumeDelta, NewPersonalRecord,
+} from "./progress/sessionSummary";

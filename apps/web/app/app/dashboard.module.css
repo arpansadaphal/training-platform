@@ -17,9 +17,17 @@
   margin: 0 auto;
 }
 
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
 .heading {
   margin-top: 0.25rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0;
 }
 
 .muted {
@@ -208,5 +216,49 @@
   .statLabel {
     font-size: 0.65rem;
     letter-spacing: 0.02em;
+  }
+}
+
+/* Phase A3a: "Where you stand", and 44px targets for the dashboard's text links. */
+.standing {
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 6px;
+}
+
+.standingHeading {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.standingList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.standingLink,
+.standingAll,
+.footerAnchor {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: inherit;
+}
+
+.standingLink {
+  width: 100%;
+  text-decoration: none;
+  border-bottom: 1px solid var(--border, #e5e5e5);
+}
+
+.standingAll {
+  font-size: 0.9rem;
+}
+
+@media (max-width: 40rem) {
+  .page {
+    padding: 1rem;
   }
 }

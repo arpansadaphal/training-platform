@@ -96,3 +96,19 @@ button:hover {
 .muted {
   color: var(--muted);
 }
+
+/* Phase A3a. Phone layout: room for the fixed bottom tab bar, and no iOS
+   zoom-on-focus. Inputs inside a <label> inherited the label's 0.9rem, which
+   iOS Safari zooms on focus; 16px stops that. Class-level font sizes in
+   component CSS still win where they are set deliberately. */
+@media (max-width: 40rem) {
+  body:has([data-bottom-tabs]) {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom) + 1rem);
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 1rem;
+  }
+}

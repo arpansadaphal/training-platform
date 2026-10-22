@@ -23,6 +23,13 @@
   opacity: 0.7;
 }
 
+/* Phase A3a: the breadcrumb link is a 44px target. */
+.nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .heading {
   margin-top: 0.5rem;
 }
@@ -297,13 +304,15 @@
 
 .setControls {
   display: inline-flex;
-  gap: 0.25rem;
+  gap: 0.5rem;
   margin-left: 0.5rem;
+  vertical-align: middle;
 }
 
+/* Phase A3a: 44px, and a gap wide enough that edit and delete are not mis-tapped. */
 .iconButton {
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0 0.4rem;
   background: transparent;
   color: var(--fg);
@@ -313,22 +322,54 @@
 }
 
 .setEditRow {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.setEditTitle {
+  font-weight: 600;
+}
+
+/* Three labelled fields in one row: reps, weight, RPE. */
+.setEditFields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.setEditField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.setEditCaption {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
 }
 
 .setEditInput {
-  width: 4.5rem;
-  min-height: 36px;
+  width: 100%;
+  min-height: 44px;
   padding: 0.25rem 0.4rem;
+  font-size: 1rem;
+}
+
+/* Save and Cancel sit on their own row under the three fields. */
+.setEditButtons {
+  display: flex;
+  flex-basis: 100%;
+  gap: 0.5rem;
 }
 
 .smallButton,
 .smallSecondaryButton {
-  min-height: 36px;
-  padding: 0.25rem 0.7rem;
+  min-height: 44px;
+  padding: 0.25rem 1rem;
 }
 
 .smallSecondaryButton {
@@ -376,4 +417,31 @@
 
 .frozenNote summary {
   cursor: pointer;
+}
+
+/* Phase A3a: phone layout and 44px disclosure targets. */
+.frozenNote summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.viewSummary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 1.15rem;
+  margin: 0 0 1rem;
+  border-radius: 6px;
+  background: var(--accent, #047857);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (max-width: 40rem) {
+  .page {
+    padding: 1rem;
+  }
 }

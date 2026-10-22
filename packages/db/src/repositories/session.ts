@@ -257,3 +257,29 @@ export async function countCompletedSessionsForProgram(
     },
   });
 }
+
+/**
+ * Phase A3a — the post-workout summary's comparison session: the user's most
+ * recent COMPLETED Session before `before` in the same Program whose
+ * WorkoutDay has the same name (case-insensitive). WorkoutDay rows are new per
+ * ProgramVersion, so the name is what survives a version bump.
+ */
+export async function findPreviousCompletedSessionOfDay(
+  userId: string,
+  programId: string,
+  dayName: string,
+  before: Date,
+  excludeSessionId: string,
+): Promise<SessionRecord | null> {
+  return prisma.session.findFirst({
+    where: {
+      id: { not: excludeSessionId },
+      status: "COMPLETED",
+      completedAt: { lt: before },
+      trainingBlock: { userId, programVersion: { programId } },
+      workoutDay: { name: { equals: dayName, mode: "insensitive" } },
+    },
+    orderBy: { completedAt: "desc" },
+    select: SESSION_SELECT,
+  });
+}

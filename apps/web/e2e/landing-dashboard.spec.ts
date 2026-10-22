@@ -149,7 +149,9 @@ test("Landing dashboard: primary program surfaces as the identity/progress conte
   await completeAnyway
     .waitFor({ timeout: 2_000 })
     .then(() => completeAnyway.click(), () => undefined);
-  await expect(page.getByText(/Session completed\./)).toBeVisible();
+  // Phase A3a: completing a session lands on its summary.
+  await expect(page).toHaveURL(/\/train\/session\/[^/]+\/summary$/);
+  await expect(page.getByText("Session complete", { exact: true })).toBeVisible();
 
   // ── Back to /app: the identity surface is intact, stats reflect the
   //    completed session ────────────────────────────────────────────────

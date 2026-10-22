@@ -44,7 +44,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FocusEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ExerciseRecord } from "@training/db";
@@ -133,6 +133,16 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
 };
 
 /** "3 hours ago", "1 hour ago", "under an hour ago". */
+/**
+ * On a phone the keyboard can cover the log buttons under the input just
+ * focused. After it has opened, bring the card's log buttons back into view.
+ */
+function revealLogButtons(e: FocusEvent<HTMLElement>): void {
+  const target = e.currentTarget.closest("li")?.querySelector("[data-log-actions]");
+  if (!target) return;
+  window.setTimeout(() => target.scrollIntoView({ block: "nearest", behavior: "smooth" }), 300);
+}
+
 function hoursAgo(iso: string): string {
   const hours = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000);
   if (hours < 1) return "under an hour ago";
@@ -381,7 +391,9 @@ function SessionClientInner({
     onSuccess: () => {
       setStatusMessage("Session completed.");
       setErrorMessage(null);
-      router.refresh();
+      // Phase A3a: completing a session lands on its summary, the reward
+      // moment, rather than refreshing this page in place.
+      router.push(`/train/session/${context.session.id}/summary`);
     },
     onError: (err) => {
       setErrorMessage(err.message);
@@ -544,6 +556,9 @@ function SessionClientInner({
           <p className={styles.statusBanner}>
             This session is complete. Logs below are final.
           </p>
+          <Link href={`/train/session/${session.id}/summary`} className={styles.viewSummary}>
+            View summary
+          </Link>
           <details className={styles.frozenNote}>
             <summary>Sets from completed sessions can&apos;t be edited. Why?</summary>
             The record of what you did is frozen once the session is complete, so
@@ -616,48 +631,59 @@ function SessionClientInner({
                           editing?.id === r.id ? (
                             <li key={r.id} className={styles.setItem}>
                               <span className={styles.setEditRow}>
-                                Set {i + 1}:
-                                <input
-                                  type="number"
-                                  inputMode="numeric"
-                                  aria-label="Edit reps"
-                                  className={styles.setEditInput}
-                                  value={editing.reps}
-                                  onChange={(e) => setEditing({ ...editing, reps: e.target.value })}
-                                />
-                                reps @
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  aria-label={`Edit weight (${unitLabel})`}
-                                  className={styles.setEditInput}
-                                  value={editing.load}
-                                  onChange={(e) => setEditing({ ...editing, load: e.target.value })}
-                                />
-                                {unitLabel} · RPE
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  aria-label="Edit RPE"
-                                  className={styles.setEditInput}
-                                  value={editing.rpe}
-                                  onChange={(e) => setEditing({ ...editing, rpe: e.target.value })}
-                                />
-                                <button
-                                  type="button"
-                                  className={styles.smallButton}
-                                  onClick={handleSaveEdit}
-                                  disabled={updateSetMutation.isPending}
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  type="button"
-                                  className={styles.smallSecondaryButton}
-                                  onClick={() => setEditing(null)}
-                                >
-                                  Cancel
-                                </button>
+                                <span className={styles.setEditTitle}>Set {i + 1}</span>
+                                <span className={styles.setEditFields}>
+                                  <span className={styles.setEditField}>
+                                    <span className={styles.setEditCaption}>Reps</span>
+                                    <input
+                                      type="number"
+                                      inputMode="numeric"
+                                      aria-label="Edit reps"
+                                      className={styles.setEditInput}
+                                      value={editing.reps}
+                                      onChange={(e) => setEditing({ ...editing, reps: e.target.value })}
+                                    />
+                                  </span>
+                                  <span className={styles.setEditField}>
+                                    <span className={styles.setEditCaption}>Weight ({unitLabel})</span>
+                                    <input
+                                      type="number"
+                                      inputMode="decimal"
+                                      aria-label={`Edit weight (${unitLabel})`}
+                                      className={styles.setEditInput}
+                                      value={editing.load}
+                                      onChange={(e) => setEditing({ ...editing, load: e.target.value })}
+                                    />
+                                  </span>
+                                  <span className={styles.setEditField}>
+                                    <span className={styles.setEditCaption}>RPE</span>
+                                    <input
+                                      type="number"
+                                      inputMode="decimal"
+                                      aria-label="Edit RPE"
+                                      className={styles.setEditInput}
+                                      value={editing.rpe}
+                                      onChange={(e) => setEditing({ ...editing, rpe: e.target.value })}
+                                    />
+                                  </span>
+                                </span>
+                                <span className={styles.setEditButtons}>
+                                  <button
+                                    type="button"
+                                    className={styles.smallButton}
+                                    onClick={handleSaveEdit}
+                                    disabled={updateSetMutation.isPending}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={styles.smallSecondaryButton}
+                                    onClick={() => setEditing(null)}
+                                  >
+                                    Cancel
+                                  </button>
+                                </span>
                               </span>
                             </li>
                           ) : (
@@ -714,7 +740,7 @@ function SessionClientInner({
 
                     {remaining > 0 ? (
                       <>
-                        <div className={styles.inputRow}>
+                        <div className={styles.inputRow} onFocusCapture={revealLogButtons}>
                           <label className={styles.inputField}>
                             <span className={styles.inputLabel}>Reps</span>
                             <input
@@ -766,6 +792,7 @@ function SessionClientInner({
                         <div className={styles.actionRow}>
                           <button
                             type="button"
+                            data-log-actions
                             className={styles.primaryButton}
                             onClick={() => handleLogOne(p)}
                             disabled={logSetMutation.isPending}

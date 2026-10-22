@@ -187,6 +187,26 @@ export interface ExercisePerformanceRecord extends PerformanceRecordRecord {
   sessionCompletedAt: Date | null;
 }
 
+const EXERCISE_PERFORMANCE_SELECT = {
+  ...PERFORMANCE_RECORD_SELECT,
+  exercisePrescription: { select: { exerciseId: true, loadScheme: true } },
+  session: { select: { completedAt: true } },
+} as const;
+
+function toExerciseRecord(
+  row: RawPerformanceRecord & {
+    exercisePrescription: { exerciseId: string; loadScheme: unknown };
+    session: { completedAt: Date | null };
+  },
+): ExercisePerformanceRecord {
+  return {
+    ...toRecord(row),
+    exerciseId: row.exercisePrescription.exerciseId,
+    loadScheme: row.exercisePrescription.loadScheme,
+    sessionCompletedAt: row.session.completedAt,
+  };
+}
+
 /**
  * "Last time" hints: every record for the given exercises in the user's
  * COMPLETED Sessions (any block, any program), newest Session first,
@@ -206,18 +226,41 @@ export async function listCompletedPerformancesForExercises(
       exercisePrescription: { exerciseId: { in: [...exerciseIds] } },
     },
     orderBy: [{ session: { completedAt: "desc" } }, { completedAt: "desc" }],
-    select: {
-      ...PERFORMANCE_RECORD_SELECT,
-      exercisePrescription: { select: { exerciseId: true, loadScheme: true } },
-      session: { select: { completedAt: true } },
-    },
+    select: EXERCISE_PERFORMANCE_SELECT,
   });
-  return rows.map((row) => ({
-    ...toRecord(row),
-    exerciseId: row.exercisePrescription.exerciseId,
-    loadScheme: row.exercisePrescription.loadScheme,
-    sessionCompletedAt: row.session.completedAt,
-  }));
+  return rows.map(toExerciseRecord);
+}
+
+/**
+ * Phase A3a — the Progress view: every logged set in every one of the user's
+ * COMPLETED Sessions (any block, any program), newest Session first. Grouping
+ * by exercise and by Session is the service's job.
+ */
+export async function listCompletedPerformancesForUser(
+  userId: string,
+): Promise<ExercisePerformanceRecord[]> {
+  const rows = await prisma.performanceRecord.findMany({
+    where: { session: { status: "COMPLETED", trainingBlock: { userId } } },
+    orderBy: [{ session: { completedAt: "desc" } }, { completedAt: "desc" }],
+    select: EXERCISE_PERFORMANCE_SELECT,
+  });
+  return rows.map(toExerciseRecord);
+}
+
+/**
+ * Phase A3a — one Session's sets with the exercise each was logged against.
+ * The post-workout summary reads the finished Session and its predecessor
+ * through this.
+ */
+export async function listExercisePerformancesForSession(
+  sessionId: string,
+): Promise<ExercisePerformanceRecord[]> {
+  const rows = await prisma.performanceRecord.findMany({
+    where: { sessionId },
+    orderBy: [{ completedAt: "asc" }, { setIndex: "asc" }],
+    select: EXERCISE_PERFORMANCE_SELECT,
+  });
+  return rows.map(toExerciseRecord);
 }
 
 /**
