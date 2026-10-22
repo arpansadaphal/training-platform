@@ -158,7 +158,9 @@ async function trainOneSession(page: Page): Promise<void> {
 
   await completeButton.click();
 
-  await expect(page.getByText(/this session is complete/i)).toBeVisible({ timeout: 15_000 });
+  // Phase A3a: completing lands on the post-workout summary, not the session page.
+  await expect(page).toHaveURL(/\/train\/session\/[^/]+\/summary$/, { timeout: 15_000 });
+  await expect(page.getByText("Session complete", { exact: true })).toBeVisible({ timeout: 15_000 });
 }
 
 async function openReviewAndRecompute(page: Page): Promise<void> {

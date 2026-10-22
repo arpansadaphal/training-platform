@@ -10,10 +10,14 @@
 
 import Link from "next/link";
 import { signOut } from "@/src/server/auth";
+import { BottomTabs } from "./BottomTabs";
 import styles from "./AppNav.module.css";
 
+// Phase A3a: two navs, one visible at a time. Above 40rem the top bar (with
+// Progress); at <=40rem the top bar is hidden and BottomTabs takes over.
 export function AppNav() {
   return (
+    <>
     <nav className={styles.nav} aria-label="Main">
       <Link href="/app" className={styles.brand}>
         Training Platform
@@ -28,6 +32,9 @@ export function AppNav() {
       <Link href="/train" className={styles.navLink}>
         Train
       </Link>
+      <Link href="/app/progress" className={styles.navLink}>
+        Progress
+      </Link>
       <form
         action={async () => {
           "use server";
@@ -39,5 +46,7 @@ export function AppNav() {
         </button>
       </form>
     </nav>
+    <BottomTabs />
+    </>
   );
 }

@@ -37,6 +37,22 @@ Phase A2 shipped:
 - **`commitFromMutation`'s two call sites** are still the complete write-path surface. Phase A2 adds Session status writes (picker, auto-close) and PerformanceRecord update/delete; no ProgramVersion writes.
 - **FREQUENCY `minExposureSets` = 2.0** is a tuning question, not a bug.
 
+**Phase A3a ("is the training working?") is built on branch `phase-a3a-progress-summary`, awaiting founder testing with 4-5 warm users.** A3b (exercise illustrations and mental cues) does **not** start until that testing is done. No schema change in A3a; the engine, Assessment and `calibration-before.txt` are untouched (all 15 programs "no change").
+
+Phase A3a shipped:
+- **Progress view** `/app/progress` (`progress.getForUser`): per exercise, an accordion (collapsed by default, one open at a time) with name, top-set-weight sparkline and verdict line; expanded: weight chart, volume-per-session chart, estimated 1RM and PR chips, a table view. Empty state: "Log 2-3 sessions with a lift and we'll show your trend." Charts are hand-rolled inline SVG (no chart dependency).
+- **Progress verdict** (`packages/domain/src/progress/verdict.ts`, pure): TRENDING_WELL / STALLED / DECLINING / INSUFFICIENT_DATA over the last 4 sessions, ±5%. **Compares top-set estimated 1RM** (Epley, `epleyE1rm`), so added reps at the same weight count; the chart and the "Last time" hint still show weight. Needs 3 sessions. Copy names the exercise, states the change over "your last N sessions", attributes no cause. `/app` shows the three most recently trained lifts under "Where you stand".
+- **Post-workout summary** `/train/session/[id]/summary` (`progress.getSessionSummary`): a full page, reached after "Mark complete" (and via "View summary" on a completed session). Duration, sets logged / planned, total volume and change, new PRs, sets-by-muscle vs last time, one verdict line. `computeSessionSummary` is **domain** (pure, no I/O, testable without a DB); `progressService` loads and maps. Computed on read; stores nothing. Uses only history from before the session, so a revisit never shifts.
+- **Definitions chosen:** "same day type" = the user's previous COMPLETED session in the same Program whose WorkoutDay has the same name (case-insensitive), because WorkoutDay ids are new per ProgramVersion. A PR needs an earlier session of that lift to beat (a first session is a baseline). Per-muscle volume = sets x involvement factor; overall volume = load x reps, in kg (lb loads converted). Logged loads carry no unit, so the unit is read from the prescription's LoadScheme as in the "Last time" hint.
+- **Phone layout:** bottom tab bar at <=40rem (Dashboard, Train, Progress, Programs) with safe-area padding; Sign out moves to a small menu top-right of the dashboard; `viewport-fit=cover`; inputs 16px at <=40rem (no iOS zoom). Session screen: edit/delete buttons 44px with wider gaps, the set-edit row is three labelled columns with Save/Cancel on their own row, breadcrumb and disclosure targets 44px, log buttons scroll into view when an input is focused.
+- **Behaviour change:** "Mark complete" now navigates to the summary instead of refreshing in place. `training`, `landing-dashboard` and `regression` e2e specs were updated for it.
+
+**Live 375px audit (Playwright, step 0) vs the static audit:** confirmed the session-screen and nav findings; it also showed **the Builder overflows horizontally at 375px (page width 496px)**, which the static audit missed, and 14.4px signup/train inputs (fixed globally at <=40rem).
+
+**Deferred to A3c (trigger: warm-user complaints only):** Builder and Coach on a phone (Builder: 496px page width at 375px, 13.6px inputs and 13px selects that trigger iOS zoom, 26-32px controls, a 24px picker clear button, 4-5 wrapped lines per exercise; Coach and constraints inputs under 16px, 32-40px buttons; `100vh` where `dvh` is needed), plus the global `button` (38px) and `input` (40px) defaults on non-A3a screens.
+
+**PHASE 2 BLOCKER, HARD RULE (founder, 2026-10-22): do not charge money (the day-28 paywall, subscriptions) until the exercise illustrations are swapped to properly sourced assets.** The planned A3b source (yuhonas/free-exercise-db) is The Unlicense, but the repo does not say where its images came from, so public-domain status of the images is unverified. A warm-user beta is fine. A3b ships a `/credits` page.
+
 ## Completed phases
 
 - **Phase 0 — Foundation.** Monorepo (`pnpm@9.12.0` + Turborepo), five `packages/*` stubs, `apps/web` on Next.js (App Router), Auth.js v5 Credentials + JWT (no adapter), `user.getSelf`, landing + signup + login + empty authenticated dashboard, CI (GitHub Actions), Sentry (client/server/edge), ESLint + Prettier, 5 Vitest tests + 1 Playwright E2E, deployed to Vercel production + PR previews.
@@ -169,6 +185,9 @@ tRPC 11, mounted at `/api/trpc/[trpc]` via `fetchRequestHandler`. Routers and pr
 - **ARCH-057's 6-hour staleness window is a product boundary.** If real users routinely split a session across a long break (or two gyms a day), tune `STALE_SESSION_AFTER_MS`; a config change, not a redesign.
 - **ARCH-056 extra sessions (addendum).** Picking an earlier day is an extra session and leaves the rotation alone. At the last day of the cycle every other day is "behind", so skipping the last day is only possible with "Skip session". Watch whether that matters in practice.
 
+- **A3a verdict window and threshold are provisional.** 4 sessions, ±5% on estimated 1RM, 3 sessions minimum (`VERDICT_*` constants in `progress/verdict.ts`). Epley is an estimate and is noisier above about 10 reps; a rep-range cap is the lever if warm users see odd verdicts. Tune from real logs, not by adding hedging copy.
+- **A3a copy lint is duplicated.** `progress/__tests__/forbiddenCopy.ts` mirrors `FORBIDDEN_PATTERNS` in `blockReport.test.ts` (plus a no-cause-attribution rule). Extract one shared list when a third surface needs it.
+- **The `regression` e2e spec needs `MODEL_PROVIDER=mock MOCK_SCENARIO=coach-regression`.** Against a dev server on a real provider it fails at "Apply this change", with or without A3a (checked on the previous commit).
 - **Mid-block correction semantics deferred.** Phase A ships with a warning under the Edit flow ('committing will end your current block'). The question of whether a correction commit should keep the block open is deferred until real usage shows whether users make corrections mid-block often enough to warrant a separate flow. If it matters, ARCH-039 gets an addendum. Not a Phase B blocker.
 
 Phase-1 through Phase-7 items are preserved from the previous state of this file. **Phase-8-specific items:**
@@ -201,11 +220,11 @@ Phase-1 through Phase-7 items are preserved from the previous state of this file
   - `packages/config` — 1 file, 3 tests
   - `packages/ai` — 8 files, 61 tests
   - `packages/db` — 4 files, 9 tests
-  - `packages/api` — **17 files, 163 tests** (Phase A2 added `phaseA2.test.ts` (21, including the patch): day picker, auto-close, set edit/delete, hints, Review row-id join and new kinds, unarchive/blocks, identity)
-  - `packages/domain` — **30 files, 302 tests** (Phase A added `assessment/__tests__/provisional-fit.test.ts` (5) and `goal-profiles/__tests__/evidence.test.ts` (10), which pins the evidence tiers)
-  - **Total Vitest**: **60 files, 538 tests**
+  - `packages/api` — **18 files, 170 tests** (Phase A3a added `progressService.test.ts` (7): Progress rows and verdict, summary vs the previous same-day session, PR baseline, revisit stability, ownership; Phase A2 added `phaseA2.test.ts` (21, including the patch): day picker, auto-close, set edit/delete, hints, Review row-id join and new kinds, unarchive/blocks, identity)
+  - `packages/domain` — **31 files, 320 tests** (Phase A3a added `progress/__tests__/progress.test.ts` (18): e1RM, top set, history and PR flags, verdict boundaries, session summary, banned-phrase lint over all new copy; Phase A added `assessment/__tests__/provisional-fit.test.ts` (5) and `goal-profiles/__tests__/evidence.test.ts` (10), which pins the evidence tiers)
+  - **Total Vitest**: **62 files, 563 tests**
 - **Playwright** (all passing where runnable):
-  - `e2e/landing.spec.ts`, `e2e/builder.spec.ts`, `e2e/builder-simulate.spec.ts`, `e2e/training.spec.ts`, `e2e/landing-dashboard.spec.ts`, `e2e/review.spec.ts`, `e2e/coach.spec.ts`
+  - `e2e/landing.spec.ts`, `e2e/builder.spec.ts`, `e2e/builder-simulate.spec.ts`, `e2e/training.spec.ts`, `e2e/landing-dashboard.spec.ts`, `e2e/review.spec.ts`, `e2e/coach.spec.ts`, `e2e/progress-mobile.spec.ts` (Phase A3a: Progress, verdict and summary at 375px, including no horizontal scroll and 44px targets on the new screens and the session screen)
 - `pnpm turbo run typecheck` → clean; `pnpm lint` → 0 errors (1 pre-existing warning in `invariant.test.ts`); `check:provisional-banner` → PASS
 - Playwright (Phase A): all 12 specs pass (1 skipped as designed) when run against a dev server with CI's `MODEL_PROVIDER=mock MOCK_SCENARIO=coach-regression`. Spec changes: the draft-label selector moved from `getByPlaceholder("Option B")` to `getByLabel("New draft label")` (9 call sites; the placeholder is now the default label); `review.spec` `commitV2` targets the new day's picker (drafts now start from v1); `regression.spec` asserts the ARCH-054 banner copy. With the local `.env.local` (`MODEL_PROVIDER=gemini`), the Coach regression step fails because a live model does not reliably propose a change; that step is CI-mock-only by design.
 - `pnpm turbo run test` → all packages pass. Known pre-existing flake: under `--force`, `@training/db`'s own tests can race `@training/db#build` (`prisma generate`), because other packages' `test` depends on `^build` and db's does not; a rerun passes.

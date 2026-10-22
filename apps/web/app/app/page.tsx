@@ -19,6 +19,7 @@ import { redirect } from "next/navigation";
 import { appRouter } from "@training/api";
 import { auth } from "@/src/server/auth";
 import { AppNav } from "@/components/nav/AppNav";
+import { AccountMenu } from "@/components/nav/AccountMenu";
 import styles from "./dashboard.module.css";
 
 export const dynamic = "force-dynamic";
@@ -35,9 +36,10 @@ export default async function DashboardPage() {
     user: { id: session.user.id, email: session.user.email },
   });
 
-  const [me, identity] = await Promise.all([
+  const [me, identity, progress] = await Promise.all([
     caller.user.getSelf(),
     caller.program.getIdentitySummary(),
+    caller.progress.getForUser(),
   ]);
 
   const { primaryProgram, currentSession, stats, recentClosedBlock, lastCompletedSessionAt } =
@@ -48,9 +50,12 @@ export default async function DashboardPage() {
       <AppNav />
 
       <main className={styles.page}>
-        <h1 className={styles.heading}>
-          {me.displayName ? `Hi, ${me.displayName}` : "Welcome back"}
-        </h1>
+        <div className={styles.headerRow}>
+          <h1 className={styles.heading}>
+            {me.displayName ? `Hi, ${me.displayName}` : "Welcome back"}
+          </h1>
+          <AccountMenu />
+        </div>
 
         {primaryProgram === null ? (
           <EmptyState />
@@ -66,6 +71,8 @@ export default async function DashboardPage() {
               totalSetsLogged={stats.totalSetsLogged}
               versionsCommitted={stats.versionsCommitted}
             />
+
+            <WhereYouStand lifts={progress.slice(0, 3)} />
 
             {primaryProgram.currentBlock ? (
               <WelcomeBack lastCompletedSessionAt={lastCompletedSessionAt} />
@@ -84,7 +91,9 @@ export default async function DashboardPage() {
             {recentClosedBlock ? <RecentBlock block={recentClosedBlock} /> : null}
 
             <p className={styles.footerLink}>
-              <Link href="/app/programs">All programs →</Link>
+              <Link href="/app/programs" className={styles.footerAnchor}>
+                All programs →
+              </Link>
             </p>
           </>
         )}
@@ -278,6 +287,37 @@ function BlockStrip({
 }
 
 /**
+ * Phase A3a: the three most recently trained lifts, each with its verdict
+ * line. Facts from the user's own logs, linked to the full Progress view.
+ */
+function WhereYouStand({
+  lifts,
+}: {
+  lifts: Array<{ exerciseId: string; verdictLine: string }>;
+}) {
+  if (lifts.length === 0) return null;
+  return (
+    <section className={styles.standing} aria-labelledby="standing-heading">
+      <h2 id="standing-heading" className={styles.standingHeading}>
+        Where you stand
+      </h2>
+      <ul className={styles.standingList}>
+        {lifts.map((lift) => (
+          <li key={lift.exerciseId}>
+            <Link href="/app/progress" className={styles.standingLink}>
+              {lift.verdictLine}
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <Link href="/app/progress" className={styles.standingAll}>
+        See all progress →
+      </Link>
+    </section>
+  );
+}
+
+/**
  * Phase A2: an informational line when the last completed session is more
  * than 3 days old. Not a streak and not a nag (Final Freeze §26): a fact,
  * shown only while a block is active.
@@ -309,9 +349,13 @@ function RecentBlock({
         {block.endedAt ? fmt(block.endedAt) : "?"}
       </p>
       <p className={styles.recentBlockLinks}>
-        <Link href={`/app/review/${block.id}`}>Review</Link>
+        <Link href={`/app/review/${block.id}`} className={styles.footerAnchor}>
+          Review
+        </Link>
         {" · "}
-        <Link href={`/app/blocks/${block.id}/report`}>Block Report</Link>
+        <Link href={`/app/blocks/${block.id}/report`} className={styles.footerAnchor}>
+          Block Report
+        </Link>
       </p>
     </section>
   );

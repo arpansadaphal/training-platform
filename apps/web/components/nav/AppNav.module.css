@@ -43,12 +43,107 @@
   cursor: pointer;
 }
 
-@media (max-width: 30rem) {
+/* ── Phone layout (Phase A3a) ─────────────────────────────────────────
+ * <=40rem: the top bar is hidden; a bottom tab bar (BottomTabs) replaces it
+ * and the dashboard's account menu carries Sign out. Every target is >=44px.
+ * The global `nav` element rule (globals.css) is overridden here by class.
+ */
+
+.bottomBar,
+.accountMenu {
+  display: none;
+}
+
+@media (max-width: 40rem) {
   .nav {
-    gap: 0.6rem;
-    padding: 0.75rem 1rem;
-  }
-  .brand {
     display: none;
+  }
+
+  .bottomBar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    max-width: none;
+    margin: 0;
+    padding: 0 0 env(safe-area-inset-bottom);
+    gap: 0;
+    align-items: stretch;
+    background: var(--bg, #fff);
+    border-top: 1px solid var(--border, #ddd);
+    border-bottom: 0;
+  }
+
+  .tab {
+    flex: 1;
+    min-width: 0;
+    min-height: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 0.75rem;
+    color: var(--muted, #666);
+    text-decoration: none;
+  }
+
+  .tab:hover {
+    text-decoration: none;
+  }
+
+  .tabActive {
+    color: var(--accent, #047857);
+    font-weight: 600;
+  }
+
+  .accountMenu {
+    display: block;
+    position: relative;
+  }
+
+  .accountButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--border, #ddd);
+    border-radius: 6px;
+    cursor: pointer;
+    list-style: none;
+    color: var(--fg);
+  }
+
+  .accountButton::-webkit-details-marker {
+    display: none;
+  }
+
+  .accountPanel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.25rem);
+    z-index: 60;
+    min-width: 9rem;
+    padding: 0.25rem;
+    background: var(--bg, #fff);
+    border: 1px solid var(--border, #ddd);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+
+  .accountPanel form {
+    max-width: none;
+  }
+
+  .accountSignOut {
+    width: 100%;
+    min-height: 44px;
+    background: transparent;
+    color: var(--fg);
+    border: 0;
+    text-align: left;
   }
 }

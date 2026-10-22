@@ -138,10 +138,12 @@ test("Training: commit a version, start the session, log a deviation, mark compl
   await completeAnyway
     .waitFor({ timeout: 2_000 })
     .then(() => completeAnyway.click(), () => undefined);
-  await expect(page.getByText(/Session completed\./)).toBeVisible();
+  // Phase A3a: completing a session lands on its summary, the reward moment.
+  await expect(page).toHaveURL(/\/train\/session\/[^/]+\/summary$/);
+  await expect(page.getByText("Session complete", { exact: true })).toBeVisible();
 
   // ── Back to /train: the picker still works ────────────────────────────
-  await page.getByRole("link", { name: /← Training/ }).click();
+  await page.getByRole("link", { name: "Log another session" }).click();
   await expect(page).toHaveURL(/\/train$/);
   await expect(page.getByRole("heading", { name: "Training" })).toBeVisible();
 

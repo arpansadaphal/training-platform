@@ -8,6 +8,7 @@
 //                    workout Session generation + status transitions, set
 //                    logging, and observation capture).
 // Phase 7 addition:  review — the Assessment-vs-execution Review surface.
+// Phase A3a addition: progress — per-exercise trend and the post-workout summary.
 
 import { router } from "./trpc";
 import { userRouter } from "./routers/user";
@@ -26,6 +27,7 @@ import { reviewRouter } from "./routers/review";
 import { coachRouter } from './routers/coach';
 import { constraintRouter } from './routers/constraint';
 import { blockReportRouter } from "./routers/blockReport";
+import { progressRouter } from "./routers/progress";
 
 export const appRouter = router({
   user: userRouter,
@@ -44,6 +46,7 @@ export const appRouter = router({
   coach: coachRouter,
   constraint: constraintRouter,
   blockReport: blockReportRouter,
+  progress: progressRouter,
 });
 
 export type AppRouter = typeof appRouter;
