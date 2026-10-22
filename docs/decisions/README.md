@@ -95,3 +95,5 @@ MODEL_PROVIDER=mock
 - [ARCH-056](./ARCH-056.md) — Day picker rotation semantics: passed-over days become SKIPPED, rotation advances from the picked day (addendum 2026-10-21: cascade only forward; earlier days are extra sessions)
 - [ARCH-057](./ARCH-057.md) — Session auto-close on stale start: superseded IN_PROGRESS sessions close as COMPLETED (with records); 6-hour staleness window (addendum 2026-10-21: 0-record sessions are deleted, not skipped)
 - [ARCH-058](./ARCH-058.md) — Review adherence joins on row ids; EXERCISES_NOT_DONE / EXERCISES_UNLOGGED; always-shown summary and session log
+- [ARCH-059](./ARCH-059.md) — (proposed, not in effect) New users follow a vetted, deterministically selected program by default; Build stays first-class; templates are not AI-generated
+- [ARCH-060](./ARCH-060.md) — (proposed, not in effect) User-scheduled training reminders and an opt-in weekly progress summary; streaks, guilt copy and unsolicited re-engagement stay forbidden

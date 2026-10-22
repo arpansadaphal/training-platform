@@ -12,6 +12,17 @@ const nextConfig = {
     "@training/db",
     "@training/domain",
   ],
+  // Next's file tracing does not see the Prisma query engine (it is loaded by
+  // path, not imported). Ship the Linux engine and schema into every serverless
+  // function at the generated-client location Prisma searches first. The
+  // webpack plugin below copies the engine next to one chunk, and which chunk
+  // varies from build to build, so some Vercel functions did not find it.
+  outputFileTracingIncludes: {
+    "/**/*": [
+      "../../node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/libquery_engine-rhel-openssl-3.0.x.so.node",
+      "../../node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/schema.prisma",
+    ],
+  },
   webpack: (config, { isServer }) => {
     // Copies Prisma's query engine into the serverless bundle.
     // Required because Next.js's output file tracing does not follow
