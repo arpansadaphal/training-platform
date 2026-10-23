@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { chooseRpe, chooseWeight, openSheet, rpeButton, weightButton } from "./pickers";
 
 /**
- * Phase A3c: the session screen.
+ * Phase A3a.1: the session screen.
  *   - Before "Start session": only the day, date and exercise names.
  *   - Weight and effort are chosen from sheets that open centered on the plan.
  *
@@ -69,7 +69,7 @@ async function noHorizontalScroll(page: Page): Promise<void> {
 
 test("session screen is gated until Start, then shows the pickers (375px)", async ({ page }) => {
   test.setTimeout(150_000);
-  const program = `A3c UX ${Date.now()}`;
+  const program = `A3a.1 UX ${Date.now()}`;
   await signUp(page);
   await commitProgram(page, program, { weight: 62.5 });
   await page.setViewportSize({ width: 375, height: 812 });
@@ -174,7 +174,7 @@ test("session screen is gated until Start, then shows the pickers (375px)", asyn
 
 test("a pound plan lists 5 lb steps with kilograms beside, opening on the plan", async ({ page }) => {
   test.setTimeout(150_000);
-  const program = `A3c lb ${Date.now()}`;
+  const program = `A3a.1 lb ${Date.now()}`;
   await signUp(page);
   await commitProgram(page, program, { weight: 135, unit: "lb" });
   await openSession(page, program);

@@ -43,7 +43,7 @@ test("rest day: build, rotate, pick, move past (375px for the session part)", as
 
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Overall" })).toBeVisible();
-  // Phase A3c: volume and frequency findings lead with a plain sentence, and the numbers stay under it.
+  // Phase A3a.1: volume and frequency findings lead with a plain sentence, and the numbers stay under it.
   const sentence = page.getByText(/ volume is (low|in range|on the high side|past the well-studied range):/).first();
   await expect(sentence).toBeVisible();
   const axisCard = sentence.locator("xpath=ancestor::div[contains(@class,'axisCard')][1]");

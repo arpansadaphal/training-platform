@@ -5,7 +5,7 @@
 // and opens centered on a target, which is not selected: choosing is still the
 // user's act.
 //
-// Phase A3c: used for the weight and the effort (RPE) while logging.
+// Phase A3a.1: used for the weight and the effort (RPE) while logging.
 
 "use client";
 

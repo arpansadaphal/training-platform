@@ -15,11 +15,11 @@
 //     toward affirming the target without thinking, which pollutes the data
 //     Review exists to surface. The plan is shown as reference; reps and
 //     weight start empty (the weight list opens on the plan's weight but
-//     chooses nothing). Phase A3c, by the founder's decision: the effort
+//     chooses nothing). Phase A3a.1, by the founder's decision: the effort
 //     picker starts on the option nearest the plan's target RPE, and says
 //     so in its label; "Don't record" clears it.
 //   - Skip session is a first-class button, not hidden in a menu.
-//   - Phase A3c: before "Start session" only the day, date and exercise names
+//   - Phase A3a.1: before "Start session" only the day, date and exercise names
 //     show. Weight and effort are chosen from sheets (components/session),
 //     not typed; the stored numbers are unchanged.
 //   - Phase A: the planned weight is part of the plan line and the Weight

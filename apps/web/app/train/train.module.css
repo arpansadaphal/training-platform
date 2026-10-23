@@ -455,7 +455,7 @@
   }
 }
 
-/* Phase A3c: before the session starts, only the day, date and exercise names. */
+/* Phase A3a.1: before the session starts, only the day, date and exercise names. */
 .preStart {
   margin-top: 1rem;
 }

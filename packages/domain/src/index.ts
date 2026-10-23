@@ -168,7 +168,7 @@ export type {
   MuscleInvolvement, MuscleVolumeDelta, NewPersonalRecord,
 } from "./progress/sessionSummary";
 
-// --- Session logging choices (Phase A3c) ---
+// --- Session logging choices (Phase A3a.1) ---
 export {
   weightOptions, weightOption, weightTarget, WEIGHT_STEP, WEIGHT_MAX, DEFAULT_TARGET,
   RPE_OPTIONS, rpeOptionText, rpeLabel, nearestRpeOption,
@@ -180,6 +180,6 @@ export {
   REST_DAY_NAME, isRestDay, makeRestDay, withoutRestDays, trainingDayCount,
 } from "./structure/restDay";
 
-// --- Plain-language assessment copy (Phase A3c) ---
+// --- Plain-language assessment copy (Phase A3a.1) ---
 export { axisSentence } from "./copy/axisSentence";
 export type { AxisSentenceInput } from "./copy/axisSentence";

@@ -1,4 +1,4 @@
-// Helpers for the weight and effort pickers (Phase A3c). They are bottom
+// Helpers for the weight and effort pickers (Phase A3a.1). They are bottom
 // sheets, so a test opens one, then taps an option.
 
 import { expect, type Locator, type Page } from "@playwright/test";

@@ -1,6 +1,6 @@
 // packages/domain/src/copy/axisSentence.ts
 //
-// Phase A3c: one plain sentence that leads a volume or frequency finding.
+// Phase A3a.1: one plain sentence that leads a volume or frequency finding.
 // Display copy only: it reads an AssessedAxis the engine already produced and
 // the profile's own band bounds, and computes no band, severity or leverage.
 // The numbers stay on the card under it.

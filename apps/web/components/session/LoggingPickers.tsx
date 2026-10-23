@@ -1,6 +1,6 @@
 // apps/web/components/session/LoggingPickers.tsx
 //
-// The weight and effort pickers used while logging a set (Phase A3c). Both
+// The weight and effort pickers used while logging a set (Phase A3a.1). Both
 // hand back the same plain numeric strings the old text inputs did; only the
 // way they are chosen changed.
 

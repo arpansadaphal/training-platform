@@ -10,7 +10,7 @@
 // week", one line on what the band means). The engine's own values (raw
 // metric, weight, severity, leverage) stay one click away under "Details".
 //
-// Phase A3c: volume and frequency findings open with one plain sentence
+// Phase A3a.1: volume and frequency findings open with one plain sentence
 // (domain/copy/axisSentence) that says where the number sits against the
 // profile's range. It replaces the generic "what the band means" line for
 // those two axes; the numbers stay visible under it.
