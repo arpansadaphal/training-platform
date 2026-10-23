@@ -11,11 +11,17 @@
 //   - Per-prescription input row, with both "Log one set" and
 //     "Log N remaining" (the batch path). Successive identical sets are
 //     two taps: set values once, then tap Log repeatedly.
-//   - No pre-fill of reps/load/RPE from the plan. Pre-filling would nudge
-//     users toward affirming the target without thinking, which pollutes
-//     the data Review exists to surface. The plan is shown as reference;
-//     the inputs start empty.
+//   - No pre-fill of reps/load from the plan. Pre-filling would nudge users
+//     toward affirming the target without thinking, which pollutes the data
+//     Review exists to surface. The plan is shown as reference; reps and
+//     weight start empty (the weight list opens on the plan's weight but
+//     chooses nothing). Phase A3c, by the founder's decision: the effort
+//     picker starts on the option nearest the plan's target RPE, and says
+//     so in its label; "Don't record" clears it.
 //   - Skip session is a first-class button, not hidden in a menu.
+//   - Phase A3c: before "Start session" only the day, date and exercise names
+//     show. Weight and effort are chosen from sheets (components/session),
+//     not typed; the stored numbers are unchanged.
 //   - Phase A: the planned weight is part of the plan line and the Weight
 //     placeholder, and every weight carries its unit ("kg per dumbbell" for
 //     dumbbell exercises). Logged weights are read in the plan's unit: lb if
@@ -50,6 +56,8 @@ import { useRouter } from "next/navigation";
 import type { ExerciseRecord } from "@training/db";
 import { TRPCProvider, trpc } from "@/src/lib/trpc";
 import { loadUnitLabel } from "@/src/lib/loadLabels";
+import { convertLoad, nearestRpeOption } from "@training/domain";
+import { RpePicker, WeightPicker } from "@/components/session/LoggingPickers";
 import styles from "../../train.module.css";
 
 type SessionStatus = "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED";
@@ -207,6 +215,25 @@ function describePlan(p: ClientPrescription, equipment: string | null): string {
   return `${p.targetSets} × ${reps}${rpePart}${weightPart}`;
 }
 
+/**
+ * The weight "Same as last" repeats: the previous set of this exercise in
+ * this session, else last session's load (in this exercise's logging unit).
+ */
+function lastWeightFor(
+  p: ClientPrescription,
+  logged: ClientPerformanceRecord[],
+  hint: ClientLastTimeHint | undefined,
+): number | null {
+  const inSession = [...logged].reverse().find((r) => r.actualLoad !== null);
+  if (inSession) return inSession.actualLoad;
+  if (!hint || hint.load === null) return null;
+  const unit = logUnit(p);
+  if (hint.unit === unit) return hint.load;
+  const converted = convertLoad(hint.load, hint.unit, unit === "lb" ? "lb" : "kg");
+  const step = unit === "lb" ? 5 : 2.5;
+  return Math.round(converted / step) * step;
+}
+
 const toDate = (d: Date | string) => (d instanceof Date ? d : new Date(d));
 
 /** "04:07", or "1:04:07" past an hour. */
@@ -228,11 +255,12 @@ export function formatGap(totalSeconds: number): string {
 
 /** "Last: 60 kg × 10 (Mar 15)". */
 export function formatHint(h: ClientLastTimeHint, unitLabel: string): string {
+  const loadText = h.load === 0 ? "bodyweight" : h.load === null ? "" : `${h.load} ${unitLabel}`;
   const what =
     h.load !== null && h.reps !== null
-      ? `${h.load} ${unitLabel} × ${h.reps}`
+      ? `${loadText} × ${h.reps}`
       : h.load !== null
-        ? `${h.load} ${unitLabel}`
+        ? loadText
         : h.reps !== null
           ? `${h.reps} reps`
           : "logged";
@@ -288,7 +316,12 @@ function SessionClientInner({
     // prescription; the key is prescription id.
     const init: Record<string, InputValues> = {};
     for (const p of context.workoutDay.prescriptions) {
-      init[p.id] = { reps: "", load: "", rpe: "" };
+      const target = p.targetRpe === null || p.targetRpe === undefined ? null : Number(p.targetRpe);
+      init[p.id] = {
+        reps: "",
+        load: "",
+        rpe: target === null || !Number.isFinite(target) ? "" : String(nearestRpeOption(target).rpe),
+      };
     }
     return init;
   });
@@ -501,9 +534,14 @@ function SessionClientInner({
   // ── Render ───────────────────────────────────────────────────────────────
 
   const { session, program, workoutDay } = context;
-  const isLogging = session.status === "PLANNED" || session.status === "IN_PROGRESS";
   const inProgress = session.status === "IN_PROGRESS";
   const startedAt = session.startedAt ? toDate(session.startedAt) : null;
+  const planned = session.status === "PLANNED";
+  const todayText = new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
 
   // "Since last" gaps: each set against the previous set logged in this
   // session (any exercise), the first against startedAt.
@@ -578,22 +616,45 @@ function SessionClientInner({
         <p className={styles.statusBanner}>This session was skipped.</p>
       ) : null}
 
-      {session.status === "PLANNED" ? (
-        <div className={styles.sessionActions}>
+      {planned ? (
+        <section className={styles.preStart} aria-label="Before you start">
+          <p className={styles.preStartDate} suppressHydrationWarning>
+            {todayText}
+          </p>
           <button
             type="button"
-            className={styles.primaryButton}
-            onClick={() =>
-              markStartedMutation.mutate({ sessionId: session.id })
-            }
+            className={`${styles.primaryButton} ${styles.preStartCta}`}
+            onClick={() => markStartedMutation.mutate({ sessionId: session.id })}
             disabled={markStartedMutation.isPending}
           >
             {markStartedMutation.isPending ? "Starting…" : "Start session"}
           </button>
-        </div>
+          {workoutDay.prescriptions.length === 0 ? (
+            <p className={styles.emptyState}>
+              This workout day has no exercises. Add some in the Builder, or
+              skip the session.
+            </p>
+          ) : (
+            <ul className={styles.preStartList} aria-label="Exercises">
+              {workoutDay.prescriptions.map((p) => (
+                <li key={p.id}>{exerciseNameById.get(p.exerciseId) ?? p.exerciseId}</li>
+              ))}
+            </ul>
+          )}
+          <div className={styles.sessionActions}>
+            <button
+              type="button"
+              className={styles.skipButton}
+              onClick={() => markSkippedMutation.mutate({ sessionId: session.id })}
+              disabled={markSkippedMutation.isPending}
+            >
+              Skip session
+            </button>
+          </div>
+        </section>
       ) : null}
 
-      {isLogging ? (
+      {inProgress ? (
         <>
           {workoutDay.prescriptions.length === 0 ? (
             <p className={styles.emptyState}>
@@ -609,7 +670,7 @@ function SessionClientInner({
                 const vals = inputs[p.id] ?? { reps: "", load: "", rpe: "" };
                 const equipment = equipmentById.get(p.exerciseId) ?? null;
                 const unitLabel = loadUnitLabel(logUnit(p), equipment);
-                const planned = plannedWeight(p);
+                const plan = plannedWeight(p);
                 const hint = hintByExercise.get(p.exerciseId);
                 return (
                   <li key={p.id} className={styles.exerciseCard}>
@@ -646,24 +707,22 @@ function SessionClientInner({
                                   </span>
                                   <span className={styles.setEditField}>
                                     <span className={styles.setEditCaption}>Weight ({unitLabel})</span>
-                                    <input
-                                      type="number"
-                                      inputMode="decimal"
-                                      aria-label={`Edit weight (${unitLabel})`}
-                                      className={styles.setEditInput}
+                                    <WeightPicker
+                                      label={`Edit weight (${unitLabel})`}
+                                      unit={logUnit(p) === "lb" ? "lb" : "kg"}
+                                      unitText={logUnit(p)}
                                       value={editing.load}
-                                      onChange={(e) => setEditing({ ...editing, load: e.target.value })}
+                                      onChange={(v) => setEditing({ ...editing, load: v })}
+                                      plannedWeight={plan ? plan.weight : null}
+                                      lastWeight={null}
                                     />
                                   </span>
-                                  <span className={styles.setEditField}>
-                                    <span className={styles.setEditCaption}>RPE</span>
-                                    <input
-                                      type="number"
-                                      inputMode="decimal"
-                                      aria-label="Edit RPE"
-                                      className={styles.setEditInput}
+                                  <span className={`${styles.setEditField} ${styles.setEditFieldWide}`}>
+                                    <span className={styles.setEditCaption}>Effort (RPE)</span>
+                                    <RpePicker
+                                      label="Edit effort (RPE)"
                                       value={editing.rpe}
-                                      onChange={(e) => setEditing({ ...editing, rpe: e.target.value })}
+                                      onChange={(v) => setEditing({ ...editing, rpe: v })}
                                     />
                                   </span>
                                 </span>
@@ -693,7 +752,9 @@ function SessionClientInner({
                                 ? `${r.actualReps} reps`
                                 : "reps not recorded"}
                               {r.actualLoad !== null
-                                ? ` @ ${r.actualLoad} ${unitLabel}`
+                                ? r.actualLoad === 0
+                                  ? " @ bodyweight"
+                                  : ` @ ${r.actualLoad} ${unitLabel}`
                                 : ""}
                               {r.actualRpe !== null
                                 ? ` @ RPE ${r.actualRpe}`
@@ -754,40 +815,28 @@ function SessionClientInner({
                               placeholder={String(p.targetRepsHigh)}
                             />
                           </label>
-                          <label className={styles.inputField}>
-                            <span className={styles.inputLabel}>
-                              Weight ({unitLabel})
-                            </span>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              className={styles.numberInput}
+                          <div className={styles.inputField}>
+                            <span className={styles.inputLabel}>Weight ({unitLabel})</span>
+                            <WeightPicker
+                              label={`Weight (${unitLabel})`}
+                              unit={logUnit(p) === "lb" ? "lb" : "kg"}
+                              unitText={logUnit(p)}
                               value={vals.load}
-                              onChange={(e) =>
-                                setInputValue(p.id, "load", e.target.value)
-                              }
-                              placeholder={
-                                planned ? String(planned.weight) : undefined
-                              }
+                              onChange={(v) => setInputValue(p.id, "load", v)}
+                              plannedWeight={plan ? plan.weight : null}
+                              lastWeight={lastWeightFor(p, logged, hint)}
+                              testId={`weight-${p.id}`}
                             />
-                          </label>
-                          <label className={styles.inputField}>
-                            <span className={styles.inputLabel}>RPE</span>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              className={styles.numberInput}
+                          </div>
+                          <div className={`${styles.inputField} ${styles.inputFieldWide}`}>
+                            <span className={styles.inputLabel}>Effort (RPE)</span>
+                            <RpePicker
+                              label="Effort (RPE)"
                               value={vals.rpe}
-                              onChange={(e) =>
-                                setInputValue(p.id, "rpe", e.target.value)
-                              }
-                              placeholder={
-                                p.targetRpe !== null
-                                  ? String(p.targetRpe)
-                                  : undefined
-                              }
+                              onChange={(v) => setInputValue(p.id, "rpe", v)}
+                              testId={`rpe-${p.id}`}
                             />
-                          </label>
+                          </div>
                         </div>
                         <div className={styles.actionRow}>
                           <button
@@ -877,6 +926,7 @@ function SessionClientInner({
         </>
       ) : null}
 
+      {planned ? null : (
       <section className={styles.observationBox}>
         <h2 className={styles.sectionHeading}>Post-session notes</h2>
         <p className={styles.muted}>
@@ -914,6 +964,7 @@ function SessionClientInner({
           </ul>
         ) : null}
       </section>
+      )}
     </>
   );
 }
@@ -956,7 +1007,7 @@ function CompletedLog({
                 {sets.map((r, i) => (
                   <li key={r.id} className={styles.setItem}>
                     Set {i + 1}: {r.actualReps !== null ? `${r.actualReps} reps` : "reps not recorded"}
-                    {r.actualLoad !== null ? ` @ ${r.actualLoad} ${unit}` : ""}
+                    {r.actualLoad !== null ? (r.actualLoad === 0 ? " @ bodyweight" : ` @ ${r.actualLoad} ${unit}`) : ""}
                     {r.actualRpe !== null ? ` @ RPE ${r.actualRpe}` : ""}
                     <span className={styles.setGap} suppressHydrationWarning>
                       {" "}· {hhmm(r.completedAt)}

@@ -167,3 +167,10 @@ export type {
   SessionSummary, SessionSummaryInput, SummaryExerciseInput,
   MuscleInvolvement, MuscleVolumeDelta, NewPersonalRecord,
 } from "./progress/sessionSummary";
+
+// --- Session logging choices (Phase A3c) ---
+export {
+  weightOptions, weightOption, weightTarget, WEIGHT_STEP, WEIGHT_MAX, DEFAULT_TARGET,
+  RPE_OPTIONS, rpeOptionText, rpeLabel, nearestRpeOption,
+} from "./session/loggingOptions";
+export type { WeightOption, RpeOption } from "./session/loggingOptions";

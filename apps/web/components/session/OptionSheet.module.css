@@ -1,0 +1,158 @@
+/* Phase A3c: the weight / effort picker. A bottom sheet on a phone, a
+   centered card on a wider screen. Every target is at least 44px tall. */
+
+.trigger {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.6rem 0.75rem;
+  font-size: 1rem;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 4px;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.trigger::after {
+  content: "▾";
+  margin-left: auto;
+  padding-left: 0.5rem;
+  opacity: 0.6;
+}
+
+.placeholder {
+  opacity: 0.65;
+}
+
+.sheet {
+  padding: 0;
+  border: none;
+  border-radius: 12px 12px 0 0;
+  width: 100%;
+  max-width: 26rem;
+  margin: auto auto 0;
+  max-height: 80dvh;
+  color: inherit;
+  background: #fff;
+  overflow: hidden;
+}
+
+.sheet[open] {
+  display: flex;
+}
+
+.sheet::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+@media (min-width: 40.01rem) {
+  .sheet {
+    margin: auto;
+    border-radius: 12px;
+  }
+}
+
+.sheetBody {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.sheetHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.5rem 0.25rem 1rem;
+  border-bottom: 1px solid var(--border, #e5e5e5);
+}
+
+.sheetTitle {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.closeButton {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1.5rem;
+  line-height: 1;
+  background: transparent;
+  color: inherit;
+  border: none;
+  cursor: pointer;
+}
+
+.fixedGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.fixedOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  border: none;
+  border-bottom: 1px solid var(--border, #e5e5e5);
+  cursor: pointer;
+}
+
+.list {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  border-bottom: 1px solid var(--border, #f0f0f0);
+  cursor: pointer;
+}
+
+.option:focus-visible,
+.fixedOption:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The row the list opened on: marked, not chosen. */
+.centered {
+  background: rgba(4, 120, 87, 0.08);
+}
+
+.chosen {
+  font-weight: 600;
+  background: rgba(4, 120, 87, 0.16);
+}
+
+.other {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.detail {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 400;
+}

@@ -167,10 +167,15 @@
 }
 
 .inputRow {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
   gap: 0.5rem;
   margin-top: 0.75rem;
-  flex-wrap: wrap;
+}
+
+/* Effort has the longest label, so it takes a full row. */
+.inputFieldWide {
+  grid-column: 1 / -1;
 }
 
 .inputField {
@@ -331,11 +336,15 @@
   font-weight: 600;
 }
 
-/* Three labelled fields in one row: reps, weight, RPE. */
+/* Reps and weight share a row; effort has the longer label, so it takes its own. */
 .setEditFields {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
   gap: 0.5rem;
+}
+
+.setEditFieldWide {
+  grid-column: 1 / -1;
 }
 
 .setEditField {
@@ -444,4 +453,26 @@
   .page {
     padding: 1rem;
   }
+}
+
+/* Phase A3c: before the session starts, only the day, date and exercise names. */
+.preStart {
+  margin-top: 1rem;
+}
+
+.preStartDate {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+}
+
+.preStartCta {
+  width: 100%;
+  min-height: 52px;
+  font-size: 1.1rem;
+}
+
+.preStartList {
+  margin: 1.25rem 0 0;
+  padding-left: 1.25rem;
+  line-height: 1.9;
 }
