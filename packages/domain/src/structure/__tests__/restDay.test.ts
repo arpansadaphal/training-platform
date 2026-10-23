@@ -66,8 +66,8 @@ describe("rest days do not count toward any axis", () => {
     const withRest = analyze(withRestDays(fullyCoveredProgram));
     expect(withRest.axisResults).toEqual(plain.axisResults);
     // And the same assessment on top of it.
-    expect(computeAssessment(withRest, TEST_CONFIG_BOUNDED, {})).toEqual(
-      computeAssessment(plain, TEST_CONFIG_BOUNDED, {}),
+    expect(computeAssessment(withRest, TEST_CONFIG_BOUNDED, { goalId: "test-goal" })).toEqual(
+      computeAssessment(plain, TEST_CONFIG_BOUNDED, { goalId: "test-goal" }),
     );
   });
 
