@@ -48,12 +48,19 @@ const exercisePrescriptionSchema = z.object({
   loadScheme: loadSchemeSchema,
 });
 
-const workoutDaySchema = z.object({
-  id: z.string().min(1),
-  orderIndex: z.number().int().nonnegative(),
-  name: z.string().trim().min(1).max(120),
-  prescriptions: z.array(exercisePrescriptionSchema),
-});
+const workoutDaySchema = z
+  .object({
+    id: z.string().min(1),
+    orderIndex: z.number().int().nonnegative(),
+    name: z.string().trim().min(1).max(120),
+    prescriptions: z.array(exercisePrescriptionSchema),
+    // ARCH-061: a rest day has no exercises.
+    isRestDay: z.boolean().optional(),
+  })
+  .refine((d) => d.isRestDay !== true || d.prescriptions.length === 0, {
+    message: "A rest day cannot have exercises.",
+    path: ["prescriptions"],
+  });
 
 export const programStructureSchema = z.object({
   workoutDays: z.array(workoutDaySchema),

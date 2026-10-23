@@ -76,6 +76,8 @@ interface ClientPrescription {
 interface ClientWorkoutDay {
   id: string;
   name: string;
+  /** ARCH-061 */
+  isRestDay?: boolean;
   orderIndex: number;
   prescriptions: ClientPrescription[];
 }
@@ -536,7 +538,9 @@ function SessionClientInner({
   const { session, program, workoutDay } = context;
   const inProgress = session.status === "IN_PROGRESS";
   const startedAt = session.startedAt ? toDate(session.startedAt) : null;
-  const planned = session.status === "PLANNED";
+  // ARCH-061: a rest day shows its own screen; it is moved past, not logged.
+  const restDay = workoutDay.isRestDay === true && (session.status === "PLANNED" || session.status === "IN_PROGRESS");
+  const planned = session.status === "PLANNED" && !restDay;
   const todayText = new Date().toLocaleDateString(undefined, {
     weekday: "long",
     month: "short",
@@ -613,7 +617,33 @@ function SessionClientInner({
         </>
       ) : null}
       {session.status === "SKIPPED" ? (
-        <p className={styles.statusBanner}>This session was skipped.</p>
+        workoutDay.isRestDay === true ? (
+          <p className={styles.statusBanner}>
+            Rest day done. <Link href="/train">Back to training</Link>
+          </p>
+        ) : (
+          <p className={styles.statusBanner}>This session was skipped.</p>
+        )
+      ) : null}
+
+      {restDay ? (
+        <section className={styles.preStart} aria-label="Rest day">
+          <p className={styles.preStartDate} suppressHydrationWarning>
+            {todayText}
+          </p>
+          <p className={styles.restDayText}>Rest day — no training scheduled.</p>
+          <button
+            type="button"
+            className={`${styles.primaryButton} ${styles.preStartCta}`}
+            onClick={() => markSkippedMutation.mutate({ sessionId: session.id })}
+            disabled={markSkippedMutation.isPending}
+          >
+            {markSkippedMutation.isPending ? "Moving on…" : "Continue to next day"}
+          </button>
+          <p className={styles.muted}>
+            A rest day is not counted as a missed session.
+          </p>
+        </section>
       ) : null}
 
       {planned ? (
@@ -654,7 +684,7 @@ function SessionClientInner({
         </section>
       ) : null}
 
-      {inProgress ? (
+      {inProgress && !restDay ? (
         <>
           {workoutDay.prescriptions.length === 0 ? (
             <p className={styles.emptyState}>
@@ -926,7 +956,7 @@ function SessionClientInner({
         </>
       ) : null}
 
-      {planned ? null : (
+      {planned || restDay ? null : (
       <section className={styles.observationBox}>
         <h2 className={styles.sectionHeading}>Post-session notes</h2>
         <p className={styles.muted}>

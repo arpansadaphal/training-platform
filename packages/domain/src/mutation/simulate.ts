@@ -32,6 +32,7 @@ import type {
 } from "../analysis/types";
 import { computeAssessment } from "../assessment/computeAssessment";
 import type { ProgramStructure } from "../types";
+import { withoutRestDays } from "../structure/restDay";
 import { applyMutation } from "./apply-mutation";
 import { diffAssessments } from "./diff-assessments";
 import {
@@ -113,13 +114,13 @@ export function simulate(
   // the same instant makes the two Analysis payloads comparable as values
   // rather than as timestamped observations, which is what the diff and the
   // full-stack invariant test both want.
-  const baseAnalysis = computeAnalysis(baseStructure, referenceData, config, {
+  const baseAnalysis = computeAnalysis(withoutRestDays(baseStructure), referenceData, config, {
     now,
   });
   const baseAssessment = computeAssessment(baseAnalysis, config, { goalId });
 
   const mutatedAnalysis = computeAnalysis(
-    mutatedStructure,
+    withoutRestDays(mutatedStructure),
     referenceData,
     config,
     { now },

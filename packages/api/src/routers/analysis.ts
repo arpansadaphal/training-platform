@@ -22,6 +22,7 @@ import {
   type Analysis,
   type FitScoreResult,
   type ProgramStructure,
+  withoutRestDays,
 } from "@training/domain";
 import { findDraftById, findGoalById, findGoalProfileById } from "@training/db";
 import { router, protectedProcedure } from "../trpc";
@@ -75,7 +76,7 @@ export const analysisRouter = router({
 });
       const structure = draft.structure as ProgramStructure;
 
-      const analysis = computeAnalysis(structure, referenceData, config);
+      const analysis = computeAnalysis(withoutRestDays(structure), referenceData, config);
       const assessment = computeAssessment(analysis, config, { goalId });
       const fitScore = computeFitScore(assessment);
 

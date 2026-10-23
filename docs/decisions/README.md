@@ -97,3 +97,4 @@ MODEL_PROVIDER=mock
 - [ARCH-058](./ARCH-058.md) — Review adherence joins on row ids; EXERCISES_NOT_DONE / EXERCISES_UNLOGGED; always-shown summary and session log
 - [ARCH-059](./ARCH-059.md) — (proposed, not in effect) New users follow a vetted, deterministically selected program by default; Build stays first-class; templates are not AI-generated
 - [ARCH-060](./ARCH-060.md) — (proposed, not in effect) User-scheduled training reminders and an opt-in weekly progress summary; streaks, guilt copy and unsolicited re-engagement stay forbidden
+- [ARCH-061](./ARCH-061.md) — Rest days: WorkoutDay.isRestDay (additive), in the rotation, stripped before analysis, excluded from adherence

@@ -26,6 +26,7 @@ export async function loadExecutionStructure(
       id: d.id,
       orderIndex: d.orderIndex,
       name: d.name,
+      ...(d.isRestDay ? { isRestDay: true } : {}),
       prescriptions: d.prescriptions.map((p) => ({
         id: p.id,
         orderIndex: p.orderIndex,

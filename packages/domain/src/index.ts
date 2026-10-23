@@ -174,3 +174,8 @@ export {
   RPE_OPTIONS, rpeOptionText, rpeLabel, nearestRpeOption,
 } from "./session/loggingOptions";
 export type { WeightOption, RpeOption } from "./session/loggingOptions";
+
+// --- Rest days (ARCH-061) ---
+export {
+  REST_DAY_NAME, isRestDay, makeRestDay, withoutRestDays, trainingDayCount,
+} from "./structure/restDay";

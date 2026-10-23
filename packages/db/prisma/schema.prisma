@@ -159,6 +159,9 @@ model WorkoutDay {
   programVersion   ProgramVersion @relation(fields: [programVersionId], references: [id])
   orderIndex       Int
   name             String
+  // ARCH-061: a rest day sits in the rotation with no prescriptions. It is
+  // excluded from the analysis and from adherence. Additive; existing rows false.
+  isRestDay        Boolean        @default(false)
 
   prescriptions ExercisePrescription[]
   sessions      Session[]
