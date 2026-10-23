@@ -160,6 +160,31 @@ describe("Phase A3a session summary", () => {
     );
   });
 
+  it("after three same-lift sessions, compares with the previous one and shows volume, not set counts", async () => {
+    const programId = await setupProgram(user);
+    const lift = [[100, 5], [100, 5], [100, 5]] as Array<[number, number]>;
+    const first = await train(user, programId, 0, lift, 9);
+    const second = await train(user, programId, 0, lift.map(([l, r]) => [l + 5, r] as [number, number]), 5);
+    const third = await train(user, programId, 0, lift.map(([l, r]) => [l + 10, r] as [number, number]), 1);
+
+    // Third compares with the second (not the first, not itself).
+    const view = await getSessionSummary(user.id, third);
+    expect(view.hasPreviousSession).toBe(true);
+    expect(view.summary.volumeChangePercent).toBeCloseTo((110 / 105 - 1) * 100, 5);
+    // Same number of sets every time: the set delta is legitimately 0, and
+    // the volume change is what the summary page shows (it used to show 0).
+    const rows = view.summary.volumeDeltaPerMuscle;
+    expect(rows.length).toBeGreaterThan(0);
+    for (const m of rows) {
+      expect(m.previousSets).toBe(m.sets);
+      expect(m.delta).toBe(0);
+      expect(m.volumeChangePercent).toBeCloseTo((110 / 105 - 1) * 100, 5);
+    }
+    // And the second compares with the first.
+    expect((await getSessionSummary(user.id, second)).summary.volumeChangePercent).toBeCloseTo(5, 5);
+    expect((await getSessionSummary(user.id, first)).hasPreviousSession).toBe(false);
+  });
+
   it("treats a first session as a baseline, with no PR", async () => {
     const programId = await setupProgram(user);
     const first = await train(user, programId, 0, [[100, 5]], 2);
