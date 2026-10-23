@@ -179,3 +179,7 @@ export type { WeightOption, RpeOption } from "./session/loggingOptions";
 export {
   REST_DAY_NAME, isRestDay, makeRestDay, withoutRestDays, trainingDayCount,
 } from "./structure/restDay";
+
+// --- Plain-language assessment copy (Phase A3c) ---
+export { axisSentence } from "./copy/axisSentence";
+export type { AxisSentenceInput } from "./copy/axisSentence";

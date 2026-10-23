@@ -9,8 +9,13 @@
 // Phase A: the card leads with words ("Weekly volume · Chest", "6 hard sets /
 // week", one line on what the band means). The engine's own values (raw
 // metric, weight, severity, leverage) stay one click away under "Details".
+//
+// Phase A3c: volume and frequency findings open with one plain sentence
+// (domain/copy/axisSentence) that says where the number sits against the
+// profile's range. It replaces the generic "what the band means" line for
+// those two axes; the numbers stay visible under it.
 
-import type { AssessedAxis } from "@training/domain";
+import { HYPERTROPHY_CONFIG, axisSentence, type AssessedAxis } from "@training/domain";
 import { axisLabel, meaningText, metricText } from "./labels";
 import styles from "./assessment.module.css";
 
@@ -22,13 +27,15 @@ interface Props {
 }
 
 export function AxisCard({ axis, variant }: Props) {
-  const meaning = meaningText(axis);
+  const sentence = axisSentence(axis, HYPERTROPHY_CONFIG.statusBands[axis.axisType] ?? []);
+  const meaning = sentence === null ? meaningText(axis) : "";
   return (
     <div className={`${styles.axisCard} ${styles[`variant_${variant}`]}`}>
       <div className={styles.axisCardHeader}>
         <span className={styles.axisLabel}>{axisLabel(axis)}</span>
         <span className={styles.axisBand}>{axis.status.band}</span>
       </div>
+      {sentence !== null ? <p className={styles.axisSentence}>{sentence}</p> : null}
       <p className={styles.axisMetric}>{metricText(axis)}</p>
       {meaning ? <p className={styles.axisMeaning}>{meaning}</p> : null}
       <details className={styles.details}>

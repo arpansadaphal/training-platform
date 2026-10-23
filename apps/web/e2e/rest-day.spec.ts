@@ -43,6 +43,12 @@ test("rest day: build, rotate, pick, move past (375px for the session part)", as
 
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Overall" })).toBeVisible();
+  // Phase A3c: volume and frequency findings lead with a plain sentence, and the numbers stay under it.
+  const sentence = page.getByText(/ volume is (low|in range|on the high side|past the well-studied range):/).first();
+  await expect(sentence).toBeVisible();
+  const axisCard = sentence.locator("xpath=ancestor::div[contains(@class,'axisCard')][1]");
+  await expect(axisCard.getByText(/hard sets? \/ week/)).toBeVisible();
+  if (process.env.A3A_SHOTS) await axisCard.screenshot({ path: `${process.env.A3A_SHOTS}/axis-card.png` });
   await page.getByRole("button", { name: "Commit", exact: true }).click();
   await expect(page.getByText(/Committed as version 1\./)).toBeVisible();
 
@@ -89,5 +95,6 @@ test("rest day: build, rotate, pick, move past (375px for the session part)", as
   await page.goto("/app");
   await page.getByRole("link", { name: "Review block" }).click();
   await expect(page.getByText(/No systematic deviations|Adherence/i).first()).toBeVisible();
+  await expect(page.getByText(/ (volume|frequency) is /).first()).toBeVisible();
   await expect(page.getByText(/sessions? skipped/i)).toHaveCount(0);
 });
