@@ -153,11 +153,32 @@ describe("computeSessionSummary", () => {
     expect(s.totalVolumeKg).toBe(1500);
     // 1500 vs 1400
     expect(s.volumeChangePercent).toBeCloseTo(7.14, 1);
+    // Same number of sets, more volume: the set delta is 0 but the
+    // volume change is not. This is the case the summary used to show as 0.
     expect(s.volumeDeltaPerMuscle).toEqual([
-      { muscle: "chest", sets: 3, previousSets: 3, delta: 0 },
-      { muscle: "triceps", sets: 1.5, previousSets: 1.5, delta: 0 },
+      { muscle: "chest", sets: 3, previousSets: 3, delta: 0, volumeChangePercent: expect.closeTo(7.14, 1) },
+      { muscle: "triceps", sets: 1.5, previousSets: 1.5, delta: 0, volumeChangePercent: expect.closeTo(7.14, 1) },
     ]);
     expect(s.verdict).toBe("Solid session. Total volume up 7% from last time.");
+  });
+
+  it("weights a muscle's volume change by involvement and ignores exercises not shared with last time", () => {
+    const s = computeSessionSummary({
+      ...base,
+      exercises: [
+        exercise({ current: [set(110, 5)], previous: [set(100, 5)] }),
+        // New this time: no previous volume, so it cannot move the percent.
+        exercise({
+          exerciseId: "ex2",
+          exerciseName: "Dips",
+          involvements: [{ muscle: "chest", factor: 0.5 }],
+          current: [set(50, 10)],
+          previous: [],
+        }),
+      ],
+    });
+    const chest = s.volumeDeltaPerMuscle.find((m) => m.muscle === "chest")!;
+    expect(chest.volumeChangePercent).toBeCloseTo(10, 5); // 550 vs 500
   });
 
   it("flags a PR only when it beats earlier sessions", () => {
@@ -178,7 +199,11 @@ describe("computeSessionSummary", () => {
     });
     expect(first.newPRs).toEqual([]);
     expect(first.volumeChangePercent).toBeNull();
-    expect(first.volumeDeltaPerMuscle[0]).toMatchObject({ previousSets: null, delta: null });
+    expect(first.volumeDeltaPerMuscle[0]).toMatchObject({
+      previousSets: null,
+      delta: null,
+      volumeChangePercent: null,
+    });
     expect(first.verdict).toBe(
       "Solid session. This is your first logged session of this day, so it sets the baseline.",
     );

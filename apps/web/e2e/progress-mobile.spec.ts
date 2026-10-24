@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { chooseWeight } from "./pickers";
 
 /**
  * Phase A3a: Progress view, progress verdict, post-workout summary, and the
@@ -46,7 +47,7 @@ async function trainOnce(page: Page, programName: string, weight: number): Promi
   await expect(page).toHaveURL(/\/train\/session\/[^/]+$/);
   await page.getByRole("button", { name: "Start session" }).click();
   await expect(page.getByRole("button", { name: "Mark complete" })).toBeVisible();
-  await page.getByLabel(/Weight/).first().fill(String(weight));
+  await chooseWeight(page, String(weight));
   await page.getByLabel("Reps").first().fill("5");
   await page.getByRole("button", { name: "Log one set" }).first().click();
   await expect(page.getByText(/Set logged\./)).toBeVisible();
@@ -123,7 +124,7 @@ test("A3a: progress, verdict and summary, at 375px", async ({ page }) => {
   await card.getByRole("button", { name: /Start training|Continue training/ }).click();
   await page.getByRole("button", { name: "Start session" }).click();
   await expect(page.getByRole("button", { name: "Mark complete" })).toBeVisible();
-  await page.getByLabel(/Weight/).first().fill("110");
+  await chooseWeight(page, "110");
   await page.getByLabel("Reps").first().fill("5");
   await page.getByRole("button", { name: "Log one set" }).first().click();
   await expect(page.getByText(/Set logged\./)).toBeVisible();

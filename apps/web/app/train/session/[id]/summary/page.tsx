@@ -30,6 +30,19 @@ function signed(n: number): string {
   return `${n > 0 ? "+" : "−"}${fmtLoad(Math.abs(n))}`;
 }
 
+/** "+5%" when load × reps is comparable, else the change in sets, labelled as such. */
+function vsLastTime(m: {
+  delta: number | null;
+  volumeChangePercent: number | null;
+}): string {
+  if (m.volumeChangePercent !== null) {
+    const pct = Math.round(m.volumeChangePercent);
+    return pct === 0 ? "0%" : `${pct > 0 ? "+" : "−"}${Math.abs(pct)}%`;
+  }
+  if (m.delta === null) return "—";
+  return m.delta === 0 ? "same sets" : `${signed(m.delta)} sets`;
+}
+
 export default async function SessionSummaryPage({ params }: PageProps) {
   const { id } = await params;
   const session = await auth();
@@ -117,7 +130,7 @@ export default async function SessionSummaryPage({ params }: PageProps) {
               <tr>
                 <th scope="col">Muscle</th>
                 <th scope="col">Sets</th>
-                <th scope="col">vs last time</th>
+                <th scope="col">Volume vs last time</th>
               </tr>
             </thead>
             <tbody>
@@ -125,13 +138,13 @@ export default async function SessionSummaryPage({ params }: PageProps) {
                 <tr key={m.muscle}>
                   <th scope="row">{titleCase(m.muscle)}</th>
                   <td>{fmtLoad(m.sets)}</td>
-                  <td>{m.delta === null ? "—" : signed(m.delta)}</td>
+                  <td>{vsLastTime(m)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <p className={styles.note}>
-            Sets count toward each muscle by how much the exercise works it.
+            Sets and volume count toward each muscle by how much the exercise works it.
           </p>
         </details>
       ) : null}

@@ -159,6 +159,7 @@ export async function findVersionWithStructure(id: string) {
           id: true,
           orderIndex: true,
           name: true,
+          isRestDay: true,
           prescriptions: {
             orderBy: { orderIndex: "asc" },
             select: {
@@ -186,6 +187,7 @@ export interface CreateProgramVersionInput {
   workoutDays: Array<{
     orderIndex: number;
     name: string;
+    isRestDay?: boolean;
     prescriptions: Array<{
       orderIndex: number;
       exerciseId: string;
@@ -226,6 +228,7 @@ export async function createProgramVersionInTx(
         programVersionId: version.id,
         orderIndex: day.orderIndex,
         name: day.name,
+        isRestDay: day.isRestDay ?? false,
       },
       select: { id: true },
     });

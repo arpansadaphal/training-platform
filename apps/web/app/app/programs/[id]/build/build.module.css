@@ -262,8 +262,15 @@
   gap: 0.25rem;
 }
 
+.addDayRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .addDayButton {
   align-self: flex-start;
+  min-height: 44px;
   background: var(--bg);
   color: var(--fg);
   border-color: var(--border);

@@ -140,6 +140,7 @@ interface ProgramHeroProps {
     id: string;
     status: "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED";
     workoutDayName: string;
+    isRestDay?: boolean;
     sequenceIndex: number;
   } | null;
 }
@@ -158,9 +159,11 @@ function ProgramHero({ program, currentSession }: ProgramHeroProps) {
     cta = {
       href: `/train/session/${currentSession.id}`,
       label:
-        currentSession.status === "IN_PROGRESS"
-          ? `Continue ${currentSession.workoutDayName}`
-          : `Start ${currentSession.workoutDayName}`,
+        currentSession.isRestDay === true
+          ? "Open rest day"
+          : currentSession.status === "IN_PROGRESS"
+            ? `Continue ${currentSession.workoutDayName}`
+            : `Start ${currentSession.workoutDayName}`,
     };
   } else if (hasActiveBlock) {
     cta = { href: "/train", label: "Start next session" };
@@ -188,7 +191,9 @@ function ProgramHero({ program, currentSession }: ProgramHeroProps) {
             ? ""
             : currentSession.status === "IN_PROGRESS"
               ? ` · ${currentSession.workoutDayName} in progress`
-              : ` · Next up: ${currentSession.workoutDayName}`}
+              : currentSession.isRestDay === true
+                ? " · Next up: rest day"
+                : ` · Next up: ${currentSession.workoutDayName}`}
         </p>
       ) : (
         <p className={styles.heroMeta}>

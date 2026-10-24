@@ -49,6 +49,7 @@ const workoutDayStructureSchema = z.object({
   orderIndex: z.number().int().nonnegative(),
   name: z.string(),
   prescriptions: z.array(exercisePrescriptionStructureSchema),
+  isRestDay: z.boolean().optional(),
 });
 
 /**

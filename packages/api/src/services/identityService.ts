@@ -49,7 +49,7 @@ import {
   type TrainingBlockRecord,
   type ProgramRecord,
 } from "@training/db";
-import type { ProgramStructure } from "@training/domain";
+import { trainingDayCount, type ProgramStructure } from "@training/domain";
 import { isStaleInProgress } from "./sessionService";
 import {
   buildAnticipationCue,
@@ -75,6 +75,8 @@ export interface IdentitySummaryCurrentSession {
   id: string;
   status: "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED";
   workoutDayName: string;
+  /** ARCH-061: the day is a rest day. */
+  isRestDay: boolean;
   sequenceIndex: number;
 }
 
@@ -170,7 +172,7 @@ export async function getMyIdentitySummary(
       plannedLengthWeeks: block.plannedLengthWeeks,
       anticipationCue: buildAnticipationCue({
         plannedLengthWeeks: block.plannedLengthWeeks,
-        sessionsPerWeek: activeVersionStructure?.workoutDays.length ?? 0,
+        sessionsPerWeek: activeVersionStructure ? trainingDayCount(activeVersionStructure) : 0,
         sessionsCompletedInBlock,
       }),
     };
@@ -184,12 +186,13 @@ export async function getMyIdentitySummary(
     const s = await findActiveSessionForBlock(block.id);
     if (s && !(await isStaleInProgress(s, new Date()))) {
       const rows = await findVersionWithStructure(block.programVersionId);
+      const day = rows?.workoutDays.find((d) => d.id === s.workoutDayId);
       currentSession = {
         id: s.id,
         status: s.status,
         sequenceIndex: s.sequenceIndex,
-        workoutDayName:
-          rows?.workoutDays.find((d) => d.id === s.workoutDayId)?.name ?? "Workout",
+        workoutDayName: day?.name ?? "Workout",
+        isRestDay: day?.isRestDay ?? false,
       };
     }
   }

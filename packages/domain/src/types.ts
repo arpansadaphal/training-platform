@@ -45,6 +45,12 @@ export interface WorkoutDayStructure {
   orderIndex: number;
   name: string;
   prescriptions: ExercisePrescriptionStructure[];
+  /**
+   * ARCH-061: a rest day. It sits in the training rotation but has no
+   * prescriptions, and is left out of the analysis and of adherence.
+   * Absent means a training day.
+   */
+  isRestDay?: boolean;
 }
 
 /**

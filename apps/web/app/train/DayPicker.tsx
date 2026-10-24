@@ -12,7 +12,7 @@ import styles from "./train.module.css";
 
 export interface DayPickerProps {
   programId: string;
-  days: { id: string; name: string }[];
+  days: { id: string; name: string; isRestDay?: boolean }[];
   suggestedDayId: string;
   /** ARCH-056 addendum: the day the rotation trains next. */
   pointerDayId: string;
@@ -34,7 +34,7 @@ export type PickOutcome =
  * days behind it are extra sessions that leave the rotation alone.
  */
 export function pickOutcome(
-  days: { id: string; name: string }[],
+  days: { id: string; name: string; isRestDay?: boolean }[],
   pointerDayId: string,
   pending: DayPickerProps["pending"],
   pickedDayId: string,
@@ -50,9 +50,21 @@ export function pickOutcome(
   }
   if (picked === pointer) return { kind: "SAME" };
   if (picked > pointer) {
-    return { kind: "SKIP", skipped: days.slice(pointer, picked).map((d) => d.name) };
+    // ARCH-061: passing over a rest day is not skipping training; leave it out of the warning.
+    return {
+      kind: "SKIP",
+      skipped: days
+        .slice(pointer, picked)
+        .filter((d) => d.isRestDay !== true)
+        .map((d) => d.name),
+    };
   }
   return { kind: "EXTRA", rotationDay: days[pointer]?.name ?? "" };
+}
+
+/** "Push", or "Rest (rest day)" for a rest day whose name does not already say so. */
+function dayLabel(d: { name: string; isRestDay?: boolean }): string {
+  return d.isRestDay === true && !/rest/i.test(d.name) ? `${d.name} (rest day)` : d.name;
 }
 
 export function DayPicker({ programId, days, suggestedDayId, pointerDayId, pending }: DayPickerProps) {
@@ -73,13 +85,13 @@ export function DayPicker({ programId, days, suggestedDayId, pointerDayId, pendi
         >
           {days.map((d) => (
             <option key={d.id} value={d.id}>
-              {d.name}
+              {dayLabel(d)}
               {d.id === suggestedDayId ? " (next in rotation)" : ""}
             </option>
           ))}
         </select>
       </label>
-      {outcome.kind === "SKIP" ? (
+      {outcome.kind === "SKIP" && outcome.skipped.length > 0 ? (
         <p className={styles.muted}>
           {outcome.skipped.join(", ")} will be marked as skipped, and the rotation
           continues from {pickedName}.
@@ -91,7 +103,11 @@ export function DayPicker({ programId, days, suggestedDayId, pointerDayId, pendi
         </p>
       ) : null}
       <button type="submit" className={styles.primaryButton}>
-        {resuming ? "Continue training" : "Start training"}
+        {resuming
+          ? "Continue training"
+          : days.find((d) => d.id === picked)?.isRestDay === true
+            ? "Open rest day"
+            : "Start training"}
       </button>
     </form>
   );

@@ -281,3 +281,10 @@
 .claimSources {
   color: var(--muted);
 }
+
+/* Phase A3a.1: the plain sentence that leads a volume or frequency finding. */
+.axisSentence {
+  margin: 0.35rem 0 0.25rem;
+  font-size: 1rem;
+  line-height: 1.45;
+}

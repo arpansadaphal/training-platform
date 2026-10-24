@@ -9,6 +9,7 @@
 
 "use client";
 
+import { makeRestDay } from "@training/domain";
 import type {
   ExercisePrescriptionStructure,
   LoadScheme,
@@ -97,6 +98,13 @@ export function StructureEditor({ structure, exercises, onChange }: Props) {
       prescriptions: [],
     };
     updateDays([...structure.workoutDays, day]);
+  }
+
+  function addRestDay() {
+    updateDays([
+      ...structure.workoutDays,
+      makeRestDay(nextId("day"), structure.workoutDays.length),
+    ]);
   }
 
   function removeDay(dayId: string) {
@@ -225,6 +233,14 @@ export function StructureEditor({ structure, exercises, onChange }: Props) {
             </div>
           </div>
 
+          {day.isRestDay === true ? (
+            <p className={styles.muted}>
+              Rest day: no exercises. It sits in your rotation and is left out
+              of the analysis.
+            </p>
+          ) : null}
+
+          {day.isRestDay === true ? null : (
           <ul className={styles.prescriptionList}>
             {day.prescriptions.map((p, pIdx) => {
               const exercise = exercises.find((e) => e.id === p.exerciseId);
@@ -338,16 +354,25 @@ export function StructureEditor({ structure, exercises, onChange }: Props) {
             })}
           </ul>
 
-          <ExercisePicker
-            exercises={exercises}
-            onSelect={(exerciseId) => addPrescription(day.id, exerciseId)}
-          />
+          )}
+
+          {day.isRestDay === true ? null : (
+            <ExercisePicker
+              exercises={exercises}
+              onSelect={(exerciseId) => addPrescription(day.id, exerciseId)}
+            />
+          )}
         </div>
       ))}
 
-      <button type="button" onClick={addDay} className={styles.addDayButton}>
-        + Add workout day
-      </button>
+      <div className={styles.addDayRow}>
+        <button type="button" onClick={addDay} className={styles.addDayButton}>
+          + Add workout day
+        </button>
+        <button type="button" onClick={addRestDay} className={styles.addDayButton}>
+          + Add rest day
+        </button>
+      </div>
     </div>
   );
 }

@@ -77,6 +77,8 @@ interface PrescriptionContext {
 interface WorkoutDayContext {
   id: string;
   name: string;
+  /** ARCH-061 */
+  isRestDay: boolean;
   orderIndex: number;
   prescriptions: PrescriptionContext[];
 }
@@ -170,6 +172,8 @@ export function replayRotationPointer(
 export interface RotationDay {
   id: string;
   name: string;
+  /** ARCH-061: shown as a rest day in the picker; skipped through, not trained. */
+  isRestDay: boolean;
 }
 
 /**
@@ -217,7 +221,7 @@ export async function resolveRotation(
       message: "The active version has no workout days to train.",
     });
   }
-  const days = version.workoutDays.map((d) => ({ id: d.id, name: d.name }));
+  const days = version.workoutDays.map((d) => ({ id: d.id, name: d.name, isRestDay: d.isRestDay }));
   const indexOf = (dayId: string) => days.findIndex((d) => d.id === dayId);
 
   const [active, sessions] = await Promise.all([
@@ -588,6 +592,7 @@ export async function getSessionContext(
   const workoutDay: WorkoutDayContext = {
     id: day.id,
     name: day.name,
+    isRestDay: day.isRestDay,
     orderIndex: day.orderIndex,
     prescriptions: day.prescriptions.map((p) => ({
       id: p.id,

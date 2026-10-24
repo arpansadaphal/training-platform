@@ -38,6 +38,7 @@ import {
   computeFitScore,
   diffStructures,
   goalProfileRegistry,
+  withoutRestDays,
   ASSESSMENT_ENGINE_VERSION,
   MutationError,
   type MutationSpec,
@@ -113,6 +114,7 @@ function toNormalizedRows(structure: ProgramStructure) {
   return structure.workoutDays.map((day) => ({
     orderIndex: day.orderIndex,
     name: day.name,
+    isRestDay: day.isRestDay === true,
     prescriptions: day.prescriptions.map((p) => ({
       orderIndex: p.orderIndex,
       exerciseId: p.exerciseId,
@@ -252,7 +254,7 @@ export async function commitFromMutation(
   });
 
   // ── Deterministic engine ───────────────────────────────────────────────
-  const analysis = computeAnalysis(nextStructure, referenceData, config);
+  const analysis = computeAnalysis(withoutRestDays(nextStructure), referenceData, config);
   const assessmentResult = computeAssessment(analysis, config, { goalId });
   const fitScoreResult = computeFitScore(assessmentResult);
 

@@ -43,6 +43,7 @@ import {
   computeAssessment,
   computeFitScore,
   goalProfileRegistry,
+  withoutRestDays,
   type ProgramStructure,
   type WorkoutDayStructure,
   type ExercisePrescriptionStructure,
@@ -284,7 +285,7 @@ export async function recomputeAssessment(
   const structure = version.structureSnapshot as ProgramStructure;
 
   // Positional signatures match programVersionService's usage.
-  const analysis = computeAnalysis(structure, referenceData, config);
+  const analysis = computeAnalysis(withoutRestDays(structure), referenceData, config);
   const assessment = computeAssessment(analysis, config, {
     goalId: snapshot.goalId,
   });
@@ -305,8 +306,15 @@ interface AdherenceInput {
 }
 
 export function computeAdherence(input: AdherenceInput): ReviewAdherence {
-  const { block, structure, sessions, recordsBySession, nameById, now } =
-    input;
+  const { block, structure, recordsBySession, nameById, now } = input;
+
+  // ARCH-061: a rest day is in the rotation but is not training. Its sessions
+  // (always closed as skipped) never count as adherence, either way, and it
+  // does not raise how many sessions a week are expected.
+  const restDayIds = new Set(
+    structure.workoutDays.filter((d) => d.isRestDay === true).map((d) => d.id),
+  );
+  const sessions = input.sessions.filter((s) => !restDayIds.has(s.workoutDayId));
 
   // --- plannedSessions: linear-expectation form (Phase 7 kickoff Q1(c)). --
   //   daysElapsed     = floor((now - block.startedAt) / 1 day)
@@ -317,7 +325,7 @@ export function computeAdherence(input: AdherenceInput): ReviewAdherence {
   const daysElapsed = Math.floor(
     (now.getTime() - block.startedAt.getTime()) / MS_PER_DAY,
   );
-  const sessionsPerWeek = structure.workoutDays.length;
+  const sessionsPerWeek = structure.workoutDays.length - restDayIds.size;
   const plannedSessions =
     daysElapsed <= 0 || sessionsPerWeek === 0
       ? 0

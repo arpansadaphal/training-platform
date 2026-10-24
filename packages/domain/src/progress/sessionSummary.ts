@@ -50,6 +50,13 @@ export interface MuscleVolumeDelta {
   previousSets: number | null;
   /** sets − previousSets; null when there is no previous session. */
   delta: number | null;
+  /**
+   * Percent change in this muscle's credited load × reps against last time,
+   * over exercises logged with a load in both sessions. Sets alone stay flat
+   * for anyone who adds weight or reps, so this is what "vs last time" shows.
+   * Null when no loaded exercise for the muscle is shared with last time.
+   */
+  volumeChangePercent: number | null;
 }
 
 export interface NewPersonalRecord {
@@ -97,6 +104,8 @@ export function computeSessionSummary(
   let sharedBefore = 0;
   const muscleNow = new Map<string, number>();
   const musclePrev = new Map<string, number>();
+  const muscleVolNow = new Map<string, number>();
+  const muscleVolPrev = new Map<string, number>();
   const newPRs: NewPersonalRecord[] = [];
 
   for (const ex of input.exercises) {
@@ -111,7 +120,12 @@ export function computeSessionSummary(
       sharedBefore += prevVol;
     }
 
+    const shared = nowVol > 0 && prevVol > 0;
     for (const inv of ex.involvements) {
+      if (shared) {
+        muscleVolNow.set(inv.muscle, (muscleVolNow.get(inv.muscle) ?? 0) + inv.factor * nowVol);
+        muscleVolPrev.set(inv.muscle, (muscleVolPrev.get(inv.muscle) ?? 0) + inv.factor * prevVol);
+      }
       muscleNow.set(
         inv.muscle,
         (muscleNow.get(inv.muscle) ?? 0) + inv.factor * ex.current.length,
@@ -145,11 +159,16 @@ export function computeSessionSummary(
     .filter(([, sets]) => sets > 0)
     .map(([muscle, sets]) => {
       const prev = input.hasPreviousSession ? (musclePrev.get(muscle) ?? 0) : null;
+      const volBefore = muscleVolPrev.get(muscle) ?? 0;
       return {
         muscle,
         sets: round1(sets),
         previousSets: prev === null ? null : round1(prev),
         delta: prev === null ? null : round1(sets - prev),
+        volumeChangePercent:
+          input.hasPreviousSession && volBefore > 0
+            ? (((muscleVolNow.get(muscle) ?? 0) - volBefore) / volBefore) * 100
+            : null,
       };
     })
     .sort((a, b) => b.sets - a.sets || a.muscle.localeCompare(b.muscle));
