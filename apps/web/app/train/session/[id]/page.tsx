@@ -52,7 +52,7 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
     }
     throw err;
   }
-  const { context, exercises, records, observations, lastTimeHints, targets } = data;
+  const { context, exercises, records, observations, lastTimeHints, targets, recalledNote } = data;
 
   // ARCH-057: sessions the start that led here auto-saved. Each is loaded
   // through getContext, so only the caller's own sessions are ever named.
@@ -92,6 +92,7 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
         initialObservations={observations}
         lastTimeHints={lastTimeHints}
         targets={targets}
+        recalledNote={recalledNote}
         autoSaved={autoSaved}
       />
     </main>

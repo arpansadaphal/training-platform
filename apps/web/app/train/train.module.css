@@ -631,3 +631,28 @@
 .suggestion {
   margin: 0.5rem 0;
 }
+
+/* Project 4: the lifter's own note from the last session of this day, echoed as written. */
+.recalledNote {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--accent);
+  background: rgba(4, 120, 87, 0.06);
+  border-radius: 0 4px 4px 0;
+}
+
+.recalledNoteLabel {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.recalledNoteText {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.recalledNoteText + .recalledNoteText {
+  margin-top: 0.5rem;
+}

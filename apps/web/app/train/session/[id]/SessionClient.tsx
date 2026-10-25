@@ -69,6 +69,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ExerciseRecord } from "@training/db";
 import { TRPCProvider, trpc } from "@/src/lib/trpc";
+import { formatShortDate } from "@/src/lib/shortDate";
 import { loadUnitLabel } from "@/src/lib/loadLabels";
 import {
   REPS_LEFT_ANSWERS,
@@ -173,6 +174,8 @@ interface Props {
   initialObservations: ClientObservation[];
   lastTimeHints: ClientLastTimeHint[];
   targets: ClientTarget[];
+  /** Project 4: the lifter's own note from the last session of this day, verbatim. */
+  recalledNote: { dayName: string; completedAtIso: string; notes: string[] } | null;
   /** ARCH-057: sessions the start that led here auto-saved (COMPLETED), for the banner. */
   autoSaved: { sessionId: string; dayName: string; completedAtIso: string }[];
 }
@@ -391,6 +394,22 @@ function SessionTimer({ startedAt }: { startedAt: Date }) {
   );
 }
 
+/** The lifter's note from the last session of this day, as they wrote it. Echoed, never interpreted. */
+function RecalledNoteBlock({ note }: { note: NonNullable<Props["recalledNote"]> }) {
+  return (
+    <section className={styles.recalledNote} aria-label="Your note from last time">
+      <p className={styles.recalledNoteLabel} suppressHydrationWarning>
+        Your note from last {note.dayName} ({formatShortDate(note.completedAtIso)}):
+      </p>
+      {note.notes.map((text, i) => (
+        <p key={i} className={styles.recalledNoteText}>
+          {text}
+        </p>
+      ))}
+    </section>
+  );
+}
+
 export function SessionClient(props: Props) {
   return (
     <TRPCProvider>
@@ -406,6 +425,7 @@ function SessionClientInner({
   initialObservations,
   lastTimeHints,
   targets,
+  recalledNote,
   autoSaved,
 }: Props) {
   const router = useRouter();
@@ -1035,6 +1055,7 @@ function SessionClientInner({
           >
             {markStartedMutation.isPending ? "Starting…" : "Start session"}
           </button>
+          {recalledNote ? <RecalledNoteBlock note={recalledNote} /> : null}
           {workoutDay.prescriptions.length === 0 ? (
             <p className={styles.emptyState}>
               This workout day has no exercises. Add some in the Builder, or
@@ -1073,6 +1094,7 @@ function SessionClientInner({
 
       {inProgress && !restDay && !skipPending ? (
         <>
+          {recalledNote ? <RecalledNoteBlock note={recalledNote} /> : null}
           {workoutDay.prescriptions.length === 0 ? (
             <p className={styles.emptyState}>
               This workout day has no exercises. Add some in the Builder, or
