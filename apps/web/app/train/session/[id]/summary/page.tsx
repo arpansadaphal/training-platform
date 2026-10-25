@@ -77,6 +77,12 @@ export default async function SessionSummaryPage({ params }: PageProps) {
       <h1 className={styles.title}>{view.dayName}</h1>
       <p className={styles.program}>{view.programName}</p>
 
+      {view.milestone ? (
+        <p className={styles.milestone} data-milestone>
+          {view.milestone}
+        </p>
+      ) : null}
+
       <p className={styles.verdict}>{summary.verdict}</p>
 
       <section className={styles.stats} aria-label="Session totals">

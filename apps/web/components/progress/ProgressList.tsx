@@ -9,7 +9,9 @@
 
 import { useState } from "react";
 import type { ProgressExercise } from "@training/api";
+import { firstVsNow, firstVsNowLine } from "@training/domain";
 import { fmtLoad, fmtVolume } from "@/src/lib/progressFormat";
+import { formatShortDate } from "@/src/lib/shortDate";
 import { LineChart, type ChartPoint } from "./LineChart";
 import { Sparkline } from "./Sparkline";
 import styles from "./progress.module.css";
@@ -73,6 +75,9 @@ function Detail({ ex }: { ex: ProgressExercise }) {
   const latest = ex.records[ex.records.length - 1]!;
   const pr = ex.personalRecord;
 
+  // "Your first: 40 kg × 10 (25 Oct). Now: 55 kg × 10 (24 Dec)." in the lifter's own time zone.
+  const firstLine = firstVsNowLine(firstVsNow(ex.records), unit, (iso) => formatShortDate(iso));
+
   const weightPoints: ChartPoint[] = ex.records.map((r) => ({
     date: r.date,
     value: r.topSet.weight,
@@ -105,6 +110,11 @@ function Detail({ ex }: { ex: ProgressExercise }) {
         formatValue={(n) => `${fmtLoad(n)}`}
         label={`${ex.exerciseName} top set weight in ${unit} over ${ex.records.length} sessions`}
       />
+      {firstLine !== null ? (
+        <p className={styles.firstVsNow} data-first-vs-now suppressHydrationWarning>
+          {firstLine}
+        </p>
+      ) : null}
 
       <h3 className={styles.chartTitle}>Total volume per session</h3>
       <LineChart

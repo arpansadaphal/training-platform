@@ -244,3 +244,15 @@ export {
   cleanupTrackedUsers,
   cleanupUser,
 } from "./repositories/tests/helpers";
+
+// Training record (Project 4): journal, export, milestones, notes that come back
+export {
+  listJournalSessionsForUser,
+  listLoggedSessionTimesForUser,
+  listPrescriptionOrderForUser,
+  findNotesOfLatestSessionOfDay,
+  findDayOfSessionId,
+  type JournalSessionRow,
+  type LoggedSessionTime,
+  type DayNoteRow,
+} from "./repositories/journal";

@@ -25,6 +25,7 @@ const TABS: readonly Tab[] = [
   { href: "/app", label: "Dashboard", match: "/app", exact: true, icon: "M3 11l9-8 9 8M5 10v10h14V10" },
   { href: "/train", label: "Train", match: "/train", icon: "M6 7v10M3 9v6M18 7v10M21 9v6M6 12h12" },
   { href: "/app/progress", label: "Progress", match: "/app/progress", icon: "M3 17l6-6 4 4 8-8M15 7h6v6" },
+  { href: "/app/journal", label: "Journal", match: "/app/journal", icon: "M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3V4zM9 9h6M9 13h6" },
   { href: "/app/programs", label: "Programs", match: "/app/programs", icon: "M4 6h16M4 12h16M4 18h10" },
 ];
 

@@ -28,6 +28,7 @@ import { coachRouter } from './routers/coach';
 import { constraintRouter } from './routers/constraint';
 import { blockReportRouter } from "./routers/blockReport";
 import { progressRouter } from "./routers/progress";
+import { journalRouter } from "./routers/journal";
 
 export const appRouter = router({
   user: userRouter,
@@ -47,6 +48,7 @@ export const appRouter = router({
   constraint: constraintRouter,
   blockReport: blockReportRouter,
   progress: progressRouter,
+  journal: journalRouter,
 });
 
 export type AppRouter = typeof appRouter;

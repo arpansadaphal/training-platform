@@ -1,0 +1,160 @@
+/* apps/web/app/app/journal/journal.module.css
+ *
+ * Project 4: a diary, not a table. One card per session with room to read.
+ * Phone first: every target is at least 44px and nothing is wider than the
+ * viewport. Colours come from the global tokens.
+ */
+
+.page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0.25rem 0 0.25rem;
+}
+
+.heading {
+  margin: 0;
+}
+
+.download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 6px;
+  color: var(--fg, #111);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ownership {
+  margin: 0 0 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted, #666);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.entry {
+  padding: 1.25rem 1.25rem 1.35rem;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 10px;
+}
+
+.entryTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.9rem;
+  color: var(--muted, #666);
+}
+
+.date {
+  font-weight: 600;
+  color: var(--fg, #111);
+}
+
+.day {
+  margin: 0.2rem 0 0.75rem;
+  font-size: 1.3rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.topSets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  overflow-wrap: anywhere;
+}
+
+.pr {
+  margin: 0.9rem 0 0;
+  font-weight: 600;
+  color: var(--accent, #047857);
+}
+
+.note {
+  margin: 1rem 0 0;
+  padding-left: 0.9rem;
+  border-left: 3px solid var(--border, #ddd);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+
+.more {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.loadOlder {
+  min-height: 48px;
+  padding: 0 1.5rem;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg, #111);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.loadOlder:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.error {
+  margin: 0.75rem 0 0;
+  color: #9b1c1c;
+}
+
+.empty {
+  padding: 1.25rem;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 8px;
+}
+
+.emptyText {
+  margin: 0 0 1rem;
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 1.15rem;
+  border-radius: 6px;
+  background: var(--accent, #047857);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (min-width: 40.01rem) {
+  .page {
+    padding: 2rem;
+  }
+}

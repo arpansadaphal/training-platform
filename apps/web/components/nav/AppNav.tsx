@@ -35,6 +35,9 @@ export function AppNav() {
       <Link href="/app/progress" className={styles.navLink}>
         Progress
       </Link>
+      <Link href="/app/journal" className={styles.navLink}>
+        Journal
+      </Link>
       <form
         action={async () => {
           "use server";

@@ -163,6 +163,13 @@
   color: var(--muted, #666);
 }
 
+/* Project 4: first vs now, one line under the weight chart. */
+.firstVsNow {
+  margin: 0.5rem 0 0;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
 /* ── Page ─────────────────────────────────────────────────────────── */
 
 .page {

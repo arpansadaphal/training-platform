@@ -196,3 +196,22 @@ export {
 // --- Plain-language assessment copy (Phase A3a.1) ---
 export { axisSentence } from "./copy/axisSentence";
 export type { AxisSentenceInput } from "./copy/axisSentence";
+
+// --- Training record (Project 4) ---
+export {
+  buildJournalEntries, topSetText, joinLifts, durationMinutesOf, durationText,
+} from "./progress/journal";
+export type {
+  JournalEntry, JournalSessionInput, JournalExerciseInput, JournalTopSet,
+} from "./progress/journal";
+export {
+  sessionMilestone, ordinalText, weeksBetween,
+  SESSION_COUNT_MILESTONES, WEEK_MILESTONES, ROUND_WEIGHT_STEP,
+} from "./progress/milestones";
+export type { MilestoneInput, MilestoneExercise } from "./progress/milestones";
+export { firstVsNow, firstVsNowLine, DELTA_MIN_SESSIONS } from "./progress/firstVsNow";
+export type { FirstVsNow, FirstVsNowPoint } from "./progress/firstVsNow";
+export {
+  buildTrainingCsv, csvText, isoDate, TRAINING_CSV_HEADER,
+} from "./progress/trainingCsv";
+export type { TrainingCsvRow } from "./progress/trainingCsv";

@@ -21,6 +21,7 @@ import {
   listCompletedPerformancesForUser,
   listExercisePerformancesForSession,
   listExercises,
+  listLoggedSessionTimesForUser,
   listMuscleGroups,
   type ExercisePerformanceRecord,
 } from "@training/db";
@@ -30,7 +31,10 @@ import {
   computeSessionSummary,
   convertLoad,
   progressVerdictLine,
+  sessionMilestone,
+  topSetOf,
   type ExerciseSessionRecord,
+  type MilestoneExercise,
   type MuscleInvolvement,
   type ProgressVerdict,
   type SessionSummary,
@@ -123,6 +127,8 @@ export interface SessionSummaryView {
   /** ISO. */
   completedAt: string;
   summary: SessionSummary;
+  /** Project 4: one fact true of this session alone ("Your 10th session."), or null. */
+  milestone: string | null;
   hasPreviousSession: boolean;
   /** Unit for `totalVolume`: lb only when every exercise with logged sets is in lb. */
   volumeUnit: WeightUnit;
@@ -141,13 +147,15 @@ export async function getSessionSummary(
   // the previous same-day session is found. Its sets are already in the
   // history, so they are not read again.
   const owned = await loadOwnedSessionOrThrow(userId, sessionId);
-  const [ctx, currentRows, historyRows, involvements, muscleGroups] = await Promise.all([
-    getSessionContextOf(owned),
-    listExercisePerformancesForSession(sessionId),
-    listCompletedPerformancesForDay(userId, owned.workoutDayId, sessionId),
-    listAllInvolvements(),
-    listMuscleGroups(),
-  ]);
+  const [ctx, currentRows, historyRows, involvements, muscleGroups, loggedSessions] =
+    await Promise.all([
+      getSessionContextOf(owned),
+      listExercisePerformancesForSession(sessionId),
+      listCompletedPerformancesForDay(userId, owned.workoutDayId, sessionId),
+      listAllInvolvements(),
+      listMuscleGroups(),
+      listLoggedSessionTimesForUser(userId),
+    ]);
   const { session } = ctx;
   if (session.status !== "COMPLETED" || session.completedAt === null) {
     throw new TRPCError({
@@ -239,6 +247,35 @@ export async function getSessionSummary(
     exercises,
   });
 
+  // Project 4: a fact true of this session alone, computed from where it sits
+  // among the lifter's logged sessions, so a revisit says the same thing.
+  const position = loggedSessions.findIndex((x) => x.id === sessionId);
+  const milestoneExercises: MilestoneExercise[] = exercises.map((e) => {
+    const earlierTops = buildExerciseHistory(
+      groupBySession(
+        earlierRows.filter((r) => r.exerciseId === e.exerciseId),
+        e.unit,
+      ),
+    ).map((r) => r.topSet.weight);
+    return {
+      exerciseName: e.exerciseName,
+      unit: e.unit,
+      topWeight: topSetOf(e.current)?.weight ?? null,
+      priorMaxWeight: earlierTops.length === 0 ? null : Math.max(...earlierTops),
+    };
+  });
+  const milestone =
+    position < 0
+      ? null
+      : sessionMilestone({
+          sessionNumber: position + 1,
+          completedAt: completedAt.toISOString(),
+          firstSessionAt: loggedSessions[0]!.completedAt.toISOString(),
+          previousSessionAt:
+            position === 0 ? null : loggedSessions[position - 1]!.completedAt.toISOString(),
+          exercises: milestoneExercises,
+        });
+
   const logged = exercises.filter((e) => e.current.length > 0);
   const volumeUnit: WeightUnit =
     logged.length > 0 && logged.every((e) => e.unit === "lb") ? "lb" : "kg";
@@ -251,6 +288,7 @@ export async function getSessionSummary(
     dayName: ctx.workoutDay.name,
     completedAt: completedAt.toISOString(),
     summary,
+    milestone,
     hasPreviousSession: previousSession !== null,
     volumeUnit,
     totalVolume: convertLoad(summary.totalVolumeKg, "kg", volumeUnit),
