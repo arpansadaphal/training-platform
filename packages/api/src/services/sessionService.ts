@@ -34,15 +34,21 @@
 
 import { TRPCError } from "@trpc/server";
 import {
+  countCompletedInBlockThrough,
   createSessionInTx,
   deleteSessionIfEmptyInTx,
   findActiveSessionForBlock,
   findActiveTrainingBlockForProgram,
-  findProgramById,
+  findProgramOfBlock,
   findTrainingBlockById,
   findVersionWithStructure,
-  listCompletedPerformancesForExercises,
+  findWorkoutDayRow,
+  listCompletedPerformancesForDay,
   listExercises,
+  listObservationsForSession,
+  listPrescriptionRowsForDay,
+  type ExerciseRecord,
+  type ObservationRecord,
   listInProgressSessionsForUser,
   listPerformanceRecordsForSession,
   listSessionsForBlock,
@@ -114,6 +120,11 @@ export function lastActivityAt(
   return latest;
 }
 
+/** ARCH-057: whether activity at `activity` is old enough to be stale at `now`. */
+export function isStaleAt(activity: Date | null, now: Date): boolean {
+  return activity !== null && now.getTime() - activity.getTime() >= STALE_SESSION_AFTER_MS;
+}
+
 /** ARCH-057 staleness. Only IN_PROGRESS Sessions can be stale. */
 export async function isStaleInProgress(
   session: SessionRecord,
@@ -122,7 +133,7 @@ export async function isStaleInProgress(
   if (session.status !== "IN_PROGRESS") return false;
   const records = await listPerformanceRecordsForSession(session.id);
   const activity = lastActivityAt(session, records);
-  return activity !== null && now.getTime() - activity.getTime() >= STALE_SESSION_AFTER_MS;
+  return isStaleAt(activity, now);
 }
 
 /**
@@ -498,19 +509,13 @@ export interface LastTimeHint {
 }
 
 /**
- * "Last: 60 kg × 10 (Mar 15)". For each exercise in the Session's workout
- * day, the top set (heaviest load, then most reps) of the most recent
- * COMPLETED Session that included it, in any block. Display-only: the
- * Phase 6 no-prefill rule stands, so nothing here fills an input.
+ * The hints for a session's exercises from the user's earlier COMPLETED sets,
+ * newest Session first (the order listCompletedPerformancesForDay returns).
+ * Pure: shared by the hints procedure and the session page's single read.
  */
-export async function getLastTimeHints(
-  userId: string,
-  sessionId: string,
-): Promise<LastTimeHint[]> {
-  const context = await getSessionContext(userId, sessionId);
-  const exerciseIds = [...new Set(context.workoutDay.prescriptions.map((p) => p.exerciseId))];
-  const rows = await listCompletedPerformancesForExercises(userId, exerciseIds, sessionId);
-
+export function lastTimeHintsFromRows(
+  rows: readonly ExercisePerformanceRecord[],
+): LastTimeHint[] {
   // Rows arrive newest Session first; keep only each exercise's newest Session.
   const latestSessionOf = new Map<string, string>();
   const byExercise = new Map<string, ExercisePerformanceRecord[]>();
@@ -543,75 +548,70 @@ export async function getLastTimeHints(
 }
 
 /**
- * Loads a Session plus its structural context (block, workout day,
- * prescriptions, program) for the session-detail UI. Returns everything the
- * /train/session/[id] page needs in one call, so the RSC page does not
- * re-fetch the version and program separately.
+ * "Last: 60 kg × 10 (Mar 15)". For each exercise in the Session's workout
+ * day, the top set (heaviest load, then most reps) of the most recent
+ * COMPLETED Session that included it, in any block. Display-only: the
+ * Phase 6 no-prefill rule stands, so nothing here fills an input.
  */
-export async function getSessionContext(
+export async function getLastTimeHints(
   userId: string,
   sessionId: string,
-): Promise<SessionContext> {
+): Promise<LastTimeHint[]> {
   const session = await loadOwnedSessionOrThrow(userId, sessionId);
+  const rows = await listCompletedPerformancesForDay(userId, session.workoutDayId, sessionId);
+  return lastTimeHintsFromRows(rows);
+}
 
-  const block = await findTrainingBlockById(session.trainingBlockId);
+/**
+ * The Session plus everything that hangs off its own ids, read in two steps:
+ * the owned Session (one statement), then block, workout day, prescriptions,
+ * program and position in the block side by side. It used to be seven reads in
+ * a row, and was run twice per page.
+ */
+async function loadContextFor(
+  session: SessionRecord,
+  exercises: readonly ExerciseRecord[],
+): Promise<SessionContext> {
+  const [block, day, prescriptions, program, completedInBlockThrough] = await Promise.all([
+    findTrainingBlockById(session.trainingBlockId),
+    findWorkoutDayRow(session.workoutDayId),
+    listPrescriptionRowsForDay(session.workoutDayId),
+    findProgramOfBlock(session.trainingBlockId),
+    countCompletedInBlockThrough(session.trainingBlockId, session.sequenceIndex),
+  ]);
   if (!block) {
     throw new Error(
-      `Session ${sessionId} references missing TrainingBlock ${session.trainingBlockId}`,
+      `Session ${session.id} references missing TrainingBlock ${session.trainingBlockId}`,
     );
   }
-
-  const version = await findVersionWithStructure(block.programVersionId);
-  if (!version) {
-    throw new Error(
-      `TrainingBlock ${block.id} references missing ProgramVersion ${block.programVersionId}`,
-    );
-  }
-
-  const day = version.workoutDays.find((d) => d.id === session.workoutDayId);
   if (!day) {
     throw new Error(
-      `Session ${sessionId} references WorkoutDay ${session.workoutDayId} that is not in its version's structure.`,
+      `Session ${session.id} references WorkoutDay ${session.workoutDayId} that does not exist.`,
     );
   }
-
-  const program = await findProgramById(version.programId);
   if (!program) {
-    throw new Error(
-      `ProgramVersion ${version.id} references missing Program ${version.programId}`,
-    );
+    throw new Error(`TrainingBlock ${block.id} has no Program through its version.`);
   }
 
-  // Phase 7 fix: previously returned the exercise cuid as exerciseName — the
-  // session UI displayed a cuid where a human-readable name belongs. Load
-  // the reference data once per call and resolve names below.
-  const allExercises = await listExercises();
-  const nameById = new Map<string, string>();
-  for (const e of allExercises) nameById.set(e.id, e.name);
-
+  // Phase 7 fix: the exercise id used to leak to the UI as the display name.
+  const nameById = new Map(exercises.map((e) => [e.id, e.name]));
   const workoutDay: WorkoutDayContext = {
     id: day.id,
     name: day.name,
     isRestDay: day.isRestDay,
     orderIndex: day.orderIndex,
-    prescriptions: day.prescriptions.map((p) => ({
+    prescriptions: prescriptions.map((p) => ({
       id: p.id,
       orderIndex: p.orderIndex,
       exerciseId: p.exerciseId,
-      // Phase 7 fix: was `p.exerciseId` — a cuid leaked to the UI.
       exerciseName: nameById.get(p.exerciseId) ?? p.exerciseId,
       targetSets: p.targetSets,
       targetRepsLow: p.targetRepsLow,
       targetRepsHigh: p.targetRepsHigh,
-      targetRpe: p.targetRpe === null ? null : Number(p.targetRpe),
+      targetRpe: p.targetRpe,
       loadScheme: p.loadScheme,
     })),
   };
-
-  const blockSessions = await listSessionsForBlock(block.id);
-  const completedInBlockThrough = blockSessions.filter(
-    (s) => s.status === "COMPLETED" && s.sequenceIndex <= session.sequenceIndex,
-  ).length;
 
   return {
     session,
@@ -619,6 +619,67 @@ export async function getSessionContext(
     block,
     workoutDay,
     program: { id: program.id, name: program.name },
+  };
+}
+
+/** The context of a Session the caller has already proven they own (one read fewer). */
+export async function getSessionContextOf(session: SessionRecord): Promise<SessionContext> {
+  return loadContextFor(session, await listExercises());
+}
+
+/**
+ * Loads a Session plus its structural context (block, workout day,
+ * prescriptions, program) for the session-detail UI.
+ */
+export async function getSessionContext(
+  userId: string,
+  sessionId: string,
+): Promise<SessionContext> {
+  const [session, exercises] = await Promise.all([
+    loadOwnedSessionOrThrow(userId, sessionId),
+    listExercises(),
+  ]);
+  return loadContextFor(session, exercises);
+}
+
+/** Everything the session page renders, from one call. */
+export interface SessionPageData {
+  context: SessionContext;
+  exercises: ExerciseRecord[];
+  records: PerformanceRecordRecord[];
+  observations: ObservationRecord[];
+  lastTimeHints: LastTimeHint[];
+  /** Earlier sets of this day's exercises, newest Session first. Targets are computed from these. */
+  history: ExercisePerformanceRecord[];
+}
+
+/**
+ * The session page's whole read in two steps (down from a chain of fifteen
+ * reads): the owned Session, then the context, the logged sets, the notes and
+ * the exercise history all at once. Ownership is proven by the first step, so
+ * the second reads by id without re-checking.
+ */
+export async function getSessionPage(
+  userId: string,
+  sessionId: string,
+): Promise<SessionPageData> {
+  const [session, exercises] = await Promise.all([
+    loadOwnedSessionOrThrow(userId, sessionId),
+    listExercises(),
+  ]);
+  const [context, records, observations, history] = await Promise.all([
+    loadContextFor(session, exercises),
+    listPerformanceRecordsForSession(sessionId),
+    listObservationsForSession(sessionId),
+    listCompletedPerformancesForDay(userId, session.workoutDayId, sessionId),
+  ]);
+  return {
+    context,
+    exercises,
+    records,
+    observations,
+    lastTimeHints: lastTimeHintsFromRows(history),
+    history,
   };
 }
 

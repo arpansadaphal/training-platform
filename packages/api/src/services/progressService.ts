@@ -15,7 +15,7 @@ import { TRPCError } from "@trpc/server";
 import {
   findPreviousCompletedSessionOfDay,
   listAllInvolvements,
-  listCompletedPerformancesForExercises,
+  listCompletedPerformancesForDay,
   listCompletedPerformancesForUser,
   listExercisePerformancesForSession,
   listExercises,
@@ -37,7 +37,8 @@ import {
   type SummaryExerciseInput,
   type WeightUnit,
 } from "@training/domain";
-import { getSessionContext } from "./sessionService";
+import { getSessionContextOf } from "./sessionService";
+import { loadOwnedSessionOrThrow } from "./loadOwnedExecution";
 
 function unitOf(loadScheme: unknown): WeightUnit {
   const scheme = loadScheme as { type?: string; unit?: string } | null;
@@ -168,7 +169,19 @@ export async function getSessionSummary(
   userId: string,
   sessionId: string,
 ): Promise<SessionSummaryView> {
-  const ctx = await getSessionContext(userId, sessionId);
+  // Three steps, not nine: the context, the finished session's sets and the
+  // exercise history are read side by side (the history is keyed by the
+  // session's workout day, so it does not wait for the prescriptions), then
+  // the previous same-day session is found. Its sets are already in the
+  // history, so they are not read again.
+  const owned = await loadOwnedSessionOrThrow(userId, sessionId);
+  const [ctx, currentRows, historyRows, involvements, muscleGroups] = await Promise.all([
+    getSessionContextOf(owned),
+    listExercisePerformancesForSession(sessionId),
+    listCompletedPerformancesForDay(userId, owned.workoutDayId, sessionId),
+    listAllInvolvements(),
+    listMuscleGroups(),
+  ]);
   const { session } = ctx;
   if (session.status !== "COMPLETED" || session.completedAt === null) {
     throw new TRPCError({
@@ -188,17 +201,10 @@ export async function getSessionSummary(
     completedAt,
     sessionId,
   );
-
-  const [currentRows, previousRows, historyRows, involvements, muscleGroups] =
-    await Promise.all([
-      listExercisePerformancesForSession(sessionId),
-      previousSession === null
-        ? Promise.resolve([] as ExercisePerformanceRecord[])
-        : listExercisePerformancesForSession(previousSession.id),
-      listCompletedPerformancesForExercises(userId, exerciseIds, sessionId),
-      listAllInvolvements(),
-      listMuscleGroups(),
-    ]);
+  const previousRows =
+    previousSession === null
+      ? ([] as ExercisePerformanceRecord[])
+      : historyRows.filter((r) => r.sessionId === previousSession.id);
 
   const muscleName = new Map(muscleGroups.map((m) => [m.id, m.name]));
   const involvementsByExercise = new Map<string, MuscleInvolvement[]>();

@@ -8,6 +8,42 @@
 
 import { prisma } from "../client";
 
+// ---- Reference-data cache --------------------------------------------------
+//
+// Exercises, muscle groups and involvements are seed data: only prisma/seed.ts
+// writes them. A request used to read the 110-exercise list up to three times,
+// each a round trip to the database. They are now read at most once per
+// process per REFERENCE_TTL_MS. The TTL is a safety net for a reseed while a
+// server is running; clearReferenceDataCache() is the explicit reset.
+
+const REFERENCE_TTL_MS = 10 * 60 * 1000;
+
+interface Cached<T> {
+  value: Promise<T>;
+  loadedAt: number;
+}
+
+function cached<T>(load: () => Promise<T>): { get: () => Promise<T>; clear: () => void } {
+  let entry: Cached<T> | null = null;
+  return {
+    get() {
+      const now = Date.now();
+      if (entry === null || now - entry.loadedAt > REFERENCE_TTL_MS) {
+        const value = load();
+        entry = { value, loadedAt: now };
+        // A failed load must not be remembered.
+        value.catch(() => {
+          if (entry !== null && entry.value === value) entry = null;
+        });
+      }
+      return entry.value;
+    },
+    clear() {
+      entry = null;
+    },
+  };
+}
+
 export type MovementPattern =
   | "SQUAT"
   | "HINGE"
@@ -37,8 +73,8 @@ export interface ExerciseMuscleInvolvementRecord {
   involvementFactor: number;
 }
 
-export async function listExercises(): Promise<ExerciseRecord[]> {
-  return prisma.exercise.findMany({
+const exercisesCache = cached<ExerciseRecord[]>(() =>
+  prisma.exercise.findMany({
     select: {
       id: true,
       name: true,
@@ -46,7 +82,12 @@ export async function listExercises(): Promise<ExerciseRecord[]> {
       equipment: true,
     },
     orderBy: { name: "asc" },
-  });
+  }),
+);
+
+/** Every exercise, by name. Cached per process (see the reference-data cache above). */
+export function listExercises(): Promise<ExerciseRecord[]> {
+  return exercisesCache.get();
 }
 
 export async function findExerciseById(
@@ -63,11 +104,16 @@ export async function findExerciseById(
   });
 }
 
-export async function listMuscleGroups(): Promise<MuscleGroupRecord[]> {
-  return prisma.muscleGroup.findMany({
+const muscleGroupsCache = cached<MuscleGroupRecord[]>(() =>
+  prisma.muscleGroup.findMany({
     select: { id: true, name: true },
     orderBy: { name: "asc" },
-  });
+  }),
+);
+
+/** Every muscle group, by name. Cached per process. */
+export function listMuscleGroups(): Promise<MuscleGroupRecord[]> {
+  return muscleGroupsCache.get();
 }
 
 export async function listInvolvementsForExercise(
@@ -97,9 +143,7 @@ export async function listInvolvementsForExercise(
  * The seed data is a few hundred rows; a full read is cheap and simpler than
  * a per-exercise fan-out. No ordering is required by any consumer.
  */
-export async function listAllInvolvements(): Promise<
-  ExerciseMuscleInvolvementRecord[]
-> {
+const involvementsCache = cached<ExerciseMuscleInvolvementRecord[]>(async () => {
   const rows = await prisma.exerciseMuscleInvolvement.findMany({
     select: {
       exerciseId: true,
@@ -112,4 +156,15 @@ export async function listAllInvolvements(): Promise<
     muscleGroupId: r.muscleGroupId,
     involvementFactor: Number(r.involvementFactor),
   }));
+});
+
+export function listAllInvolvements(): Promise<ExerciseMuscleInvolvementRecord[]> {
+  return involvementsCache.get();
+}
+
+/** Drops the cached reference data. Only a reseed (or a test that changes it) needs this. */
+export function clearReferenceDataCache(): void {
+  exercisesCache.clear();
+  muscleGroupsCache.clear();
+  involvementsCache.clear();
 }

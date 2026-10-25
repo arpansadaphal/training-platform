@@ -104,6 +104,7 @@ export {
 // Session (Phase 6, Phase 7 addition)
 export {
   findSessionById,
+  findSessionOwnedBy,
   listSessionsForBlock,
   findLatestSessionForBlock,
   findActiveSessionForBlock,
@@ -125,6 +126,9 @@ export {
 // PerformanceRecord (Phase 6, Phase 7 addition)
 export {
   createPerformanceRecord,
+  countPrescriptionsOfOwnedSession,
+  isPrimaryKeyConflict,
+  findOwnedPerformanceRecord,
   createPerformanceRecordsBatch,
   listPerformanceRecordsForSession,
   countPerformanceRecordsForProgram,
@@ -132,6 +136,7 @@ export {
   updatePerformanceRecord,
   deletePerformanceRecord,
   listCompletedPerformancesForExercises,
+  listCompletedPerformancesForDay,
   listCompletedPerformancesForUser,
   listExercisePerformancesForSession,
   type ExercisePerformanceRecord,
@@ -148,6 +153,20 @@ export {
   type CreateObservationInput,
 } from "./repositories/observation";
 
+// Flat context reads (session page, summary)
+export {
+  findWorkoutDayRow,
+  listPrescriptionRowsForDay,
+  findProgramOfBlock,
+  countCompletedInBlockThrough,
+  findDayOfActiveSession,
+  findLatestSetTimeInOpenSessions,
+  findRecentClosedBlockWithSessions,
+  countVersionsOfProgram,
+  type WorkoutDayRow,
+  type PrescriptionRow,
+} from "./repositories/sessionContext";
+
 // Reference data
 export {
   listExercises,
@@ -155,6 +174,7 @@ export {
   listMuscleGroups,
   listInvolvementsForExercise,
   listAllInvolvements,
+  clearReferenceDataCache,
   type ExerciseRecord,
   type MuscleGroupRecord,
   type ExerciseMuscleInvolvementRecord,

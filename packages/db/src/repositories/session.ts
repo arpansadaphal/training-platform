@@ -47,6 +47,21 @@ export async function findSessionById(id: string): Promise<SessionRecord | null>
   });
 }
 
+/**
+ * The Session when it exists and its TrainingBlock is `userId`'s, else null.
+ * Ownership is a relation filter, so the check and the read are one statement
+ * (it used to be a Session read, then a TrainingBlock read).
+ */
+export async function findSessionOwnedBy(
+  userId: string,
+  id: string,
+): Promise<SessionRecord | null> {
+  return prisma.session.findFirst({
+    where: { id, trainingBlock: { userId } },
+    select: SESSION_SELECT,
+  });
+}
+
 export async function listSessionsForBlock(
   blockId: string,
 ): Promise<SessionRecord[]> {
