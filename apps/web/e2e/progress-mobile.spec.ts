@@ -50,7 +50,8 @@ async function trainOnce(page: Page, programName: string, weight: number): Promi
   await chooseWeight(page, String(weight));
   await page.getByLabel("Reps").first().fill("5");
   await page.getByRole("button", { name: "Log one set" }).first().click();
-  await expect(page.getByText(/Set logged\./)).toBeVisible();
+  await expect(page.getByText(/Set 1: 5 reps/)).toBeVisible();
+  await expect(page.getByText("Saving…", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Mark complete" }).click();
   const completeAnyway = page.getByRole("button", { name: "Complete anyway" });
   await completeAnyway
@@ -127,7 +128,8 @@ test("A3a: progress, verdict and summary, at 375px", async ({ page }) => {
   await chooseWeight(page, "110");
   await page.getByLabel("Reps").first().fill("5");
   await page.getByRole("button", { name: "Log one set" }).first().click();
-  await expect(page.getByText(/Set logged\./)).toBeVisible();
+  await expect(page.getByText(/Set 1: 5 reps/)).toBeVisible();
+  await expect(page.getByText("Saving…", { exact: true })).toHaveCount(0);
   await expectPhoneFit(page, "session (in progress)");
   await page.getByRole("button", { name: "Edit set 1" }).click();
   await expectPhoneFit(page, "session (editing a set)");
@@ -143,7 +145,7 @@ test("A3a: progress, verdict and summary, at 375px", async ({ page }) => {
   await expect(page).toHaveURL(/\/train\/session\/[^/]+\/summary$/);
   await expect(page.getByText("Session complete", { exact: true })).toBeVisible();
   await expect(page.getByText("Duration")).toBeVisible();
-  await expect(page.getByText("Sets logged")).toBeVisible();
+  await expect(page.getByText("Sets logged", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "New PRs" })).toBeVisible();
   await expect(page.getByText(/Total volume up \d+% from last time\./)).toBeVisible();
   await expectPhoneFit(page, "summary");

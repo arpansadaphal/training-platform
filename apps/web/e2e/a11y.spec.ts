@@ -31,6 +31,7 @@
 // retry, and burn 10 more. 180s is plenty for a run that completes; the
 // ceiling is a fail-fast guard, not a target.
 
+import { currentReviewHref } from "./blocks";
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
@@ -138,27 +139,13 @@ test.describe("Accessibility pass — Builder, Session logging, Review", () => {
     await expect(page.getByText(/Committed as version 1\./)).toBeVisible();
 
     // ── 2. Session logging ────────────────────────────────────────────
-    // /train → "Start training" → /train/session/[id] → "Start session"
+    // /app Today card "Start" → /train/session/[id] → "Start session"
     // (transitions PLANNED → IN_PROGRESS, which is what puts the logging
     // UI in its interactive state).
     await page.goto("/app");
-    const cta = page
-      .getByRole("link", { name: /continue session|start (next )?session/i })
-      .or(
-        page.getByRole("button", {
-          name: /continue session|start (next )?session/i,
-        }),
-      )
-      .first();
+    const cta = page.getByRole("button", { name: "Start", exact: true });
     await expect(cta).toBeVisible({ timeout: 30_000 });
     await cta.click();
-    await expect(page).toHaveURL(/\/train$/, { timeout: 30_000 });
-
-    const startTraining = page.getByRole("button", {
-      name: /^start training$/i,
-    });
-    await expect(startTraining).toBeVisible({ timeout: 15_000 });
-    await startTraining.click();
     await expect(page).toHaveURL(/\/train\/session\/[^/]+$/, {
       timeout: 30_000,
     });
@@ -178,18 +165,7 @@ test.describe("Accessibility pass — Builder, Session logging, Review", () => {
     await runAxe(page, "Session logging");
 
     // ── 3. Review ─────────────────────────────────────────────────────
-    await page.goto("/app");
-    const reviewLink = page.getByRole("link", {
-      name: "Review block",
-      exact: true,
-    });
-    await expect(reviewLink).toBeVisible({ timeout: 30_000 });
-    const reviewHref = await reviewLink.getAttribute("href");
-    if (!reviewHref || !reviewHref.startsWith("/app/review/")) {
-      throw new Error(
-        `Review block link has unexpected href: ${reviewHref ?? "(null)"}`,
-      );
-    }
+    const reviewHref = await currentReviewHref(page);
     await page.goto(reviewHref);
     await expect(page).toHaveURL(/\/app\/review\/[^/]+$/);
 

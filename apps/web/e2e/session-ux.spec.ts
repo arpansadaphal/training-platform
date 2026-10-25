@@ -102,10 +102,16 @@ test("session screen is gated until Start, then shows the pickers (375px)", asyn
   await expect(page.getByRole("button", { name: "Log one set" }).first()).toBeVisible();
   await expect(page.getByText("Post-session notes")).toBeVisible();
 
-  // Effort starts on the plan's target (the Builder's default is 2 RIR = RPE 8), and says so.
-  await expect(rpeButton(page)).toContainText("Hard — 2-3 reps left (RPE 8)");
+  // First time with this exercise: no effort picker (the question after each
+  // set replaces it), and the screen says so.
+  await expect(page.getByText("First time: find your starting weight.")).toBeVisible();
+  await expect(rpeButton(page)).toHaveCount(0);
   // Weight starts empty: the list opens on the plan but chooses nothing.
   await expect(weightButton(page)).toContainText("Choose");
+  // Reps show the plan's range as a placeholder, not a value; and Log needs reps.
+  await expect(page.getByLabel("Reps").first()).toHaveAttribute("placeholder", "8–12");
+  await expect(page.getByLabel("Reps").first()).toHaveValue("");
+  await expect(page.getByRole("button", { name: "Log one set" }).first()).toBeDisabled();
 
   await shot(page, "2-after-start");
 
@@ -138,14 +144,20 @@ test("session screen is gated until Start, then shows the pickers (375px)", asyn
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
 
-  // ── Choose 60 kg and RPE 9, log; the stored numbers are plain ─────────
+  // ── Choose 60 kg, log; the stored numbers are plain ───────────────────
   await chooseWeight(page, "60");
   await expect(weightButton(page)).toContainText("60 kg");
-  await chooseRpe(page, 9);
-  await expect(rpeButton(page)).toContainText("Very hard — 1 rep left (RPE 9)");
   await page.getByLabel("Reps").first().fill("5");
   await page.getByRole("button", { name: "Log one set" }).first().click();
-  await expect(page.getByText(/Set 1: 5 reps @ 60 kg @ RPE 9/)).toBeVisible();
+  await expect(page.getByText(/Set 1: 5 reps @ 60 kg/)).toBeVisible();
+
+  // ── "How many more could you have done?" and the suggested next weight ─
+  const question = page.getByRole("group", { name: "How many more could you have done?" });
+  await expect(question).toBeVisible();
+  await question.getByRole("button", { name: "1-2", exact: true }).click();
+  await expect(page.getByText(/Set 1: 5 reps @ 60 kg · 1-2 reps left/)).toBeVisible();
+  await expect(question).toBeHidden();
+  await expect(page.getByText(/Next set: (try|stay at) [\d.]+ kg\./)).toBeVisible();
 
   // ── "Same as last" now offers 60 kg ───────────────────────────────────
   const again = await openSheet(page, weightButton(page));
@@ -153,13 +165,9 @@ test("session screen is gated until Start, then shows the pickers (375px)", asyn
   await again.getByRole("button", { name: /^Bodyweight/ }).click();
   await expect(weightButton(page)).toContainText("Bodyweight");
   await page.getByRole("button", { name: "Log one set" }).first().click();
-  await expect(page.getByText(/Set 2: 5 reps @ bodyweight @ RPE 9/)).toBeVisible();
-
-  // ── "Don't record" clears the effort ──────────────────────────────────
-  const rpeSheet = await openSheet(page, rpeButton(page));
-  await shot(page, "4-rpe-sheet");
-  await rpeSheet.getByRole("button", { name: "Don't record" }).click();
-  await expect(rpeButton(page)).toContainText("Choose");
+  await expect(page.getByText(/Set 2: 5 reps @ bodyweight/)).toBeVisible();
+  await question.getByRole("button", { name: "5-6", exact: true }).click();
+  await expect(page.getByText(/Set 2: 5 reps @ bodyweight · 5-6 reps left/)).toBeVisible();
 
   // ── Phone fit while the page has pickers ──────────────────────────────
   await noHorizontalScroll(page);
@@ -186,4 +194,50 @@ test("a pound plan lists 5 lb steps with kilograms beside, opening on the plan",
   await expect(sheet.locator('[data-value="137.5"]')).toHaveCount(0);
   await sheet.locator('[data-value="140"]').click();
   await expect(weightButton(page)).toContainText("140 lb");
+});
+
+test("the second session states a target, offers it in the weight list and does not fill it in", async ({ page }) => {
+  test.setTimeout(180_000);
+  const program = `ARCH-062 ${Date.now()}`;
+  await signUp(page);
+  await commitProgram(page, program);
+  await page.setViewportSize({ width: 375, height: 812 });
+
+  // ── Session 1: find a weight, fill the rep range at it, complete ──────
+  await openSession(page, program);
+  await page.getByRole("button", { name: "Start session" }).click();
+  await chooseWeight(page, "60");
+  await page.getByLabel("Reps").first().fill("12");
+  await page.getByRole("button", { name: /^Log \d+ remaining sets$/ }).click();
+  await expect(page.getByText("Saving…", { exact: true })).toHaveCount(0);
+  // The finished exercise folds to one line.
+  await expect(page.getByRole("button", { name: /✓/ })).toContainText("3 × 12 · 60 kg");
+  await page.getByRole("button", { name: "Mark complete" }).click();
+  await expect(page).toHaveURL(/\/summary$/, { timeout: 30_000 });
+  // The exit says "Done"; there is one day, so the next one is the same day.
+  await expect(page.getByRole("link", { name: "Done" })).toBeVisible();
+
+  // ── Session 2: 12 reps is the top of the 8-12 range on every set, so the target goes up one step ──
+  await openSession(page, program);
+  await page.getByRole("button", { name: "Start session" }).click();
+  await expect(page.getByText("Target: 62.5 kg × 8–12")).toBeVisible();
+  await expect(page.getByText("Up 2.5 kg: you hit 12 reps on every set last time.")).toBeVisible();
+  // Effort starts on the plan's target, and says so.
+  await expect(rpeButton(page)).toContainText("Hard — 2-3 reps left (RPE 8)");
+  // Nothing is filled in: reps empty, weight unchosen.
+  await expect(page.getByLabel("Reps").first()).toHaveValue("");
+  await expect(weightButton(page)).toContainText("Choose");
+  // The weight list offers the target first and opens on it.
+  const sheet = await openSheet(page, weightButton(page));
+  await expect(sheet.getByRole("button", { name: /^Target/ })).toContainText("62.5 kg");
+  await expect(sheet.locator('[data-center="true"]')).toHaveAttribute("data-value", "62.5");
+  await sheet.getByRole("button", { name: /^Target/ }).click();
+  await expect(weightButton(page)).toContainText("62.5 kg");
+
+  // Effort can still be changed or cleared.
+  await chooseRpe(page, 9);
+  await expect(rpeButton(page)).toContainText("Very hard — 1 rep left (RPE 9)");
+  const rpeSheet = await openSheet(page, rpeButton(page));
+  await rpeSheet.getByRole("button", { name: "Don't record" }).click();
+  await expect(rpeButton(page)).toContainText("Choose");
 });

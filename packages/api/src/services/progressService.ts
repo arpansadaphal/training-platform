@@ -220,11 +220,13 @@ export async function getSessionSummary(
       previous: previousRows
         .filter((r) => r.exerciseId === exerciseId)
         .map((r) => toSet(r, unit)),
-      // Fewer sets of this lift than planned last time: not a fair thing to
-      // compare today's volume against.
+      // Last time logged fewer sets of this lift than planned AND fewer than
+      // today: today's volume is mostly extra sets, and a percent against that
+      // says nothing about progress. Short both times is like for like.
       previousIsComplete:
         previousRows.filter((r) => r.exerciseId === exerciseId).length >=
-        exercisePrescriptions.reduce((n, p) => n + p.targetSets, 0),
+          exercisePrescriptions.reduce((n, p) => n + p.targetSets, 0) ||
+        previousRows.filter((r) => r.exerciseId === exerciseId).length >= own.length,
       priorBestE1rm:
         earlier.length === 0 ? null : Math.max(...earlier.map((r) => r.estimated1RM)),
     };

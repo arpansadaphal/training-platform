@@ -15,6 +15,7 @@
 // model produced in Phase 8, so the network-inspection assertion runs
 // identically and now executes in CI. See ARCH-045 and the Phase 9 close-out.
 
+import { currentReviewHref } from "./blocks";
 import { test, expect, type Page, type Request } from "@playwright/test";
 
 // Phase 9: gate on MODEL_PROVIDER=mock. CI sets this; local runs without it
@@ -92,19 +93,9 @@ async function reachReview(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Commit", exact: true }).click();
   await expect(page.getByText(/Committed as version 1\./)).toBeVisible();
 
-  // The /app landing page carries a block strip with the Review link. The
-  // accessible name is "Review block" (see BlockStrip in app/app/page.tsx).
-  await page.goto("/app");
-  const reviewLink = page.getByRole("link", {
-    name: "Review block",
-    exact: true,
-  });
-  await expect(reviewLink).toBeVisible({ timeout: 30_000 });
-
-  const reviewHref = await reviewLink.getAttribute("href");
-  if (!reviewHref || !reviewHref.startsWith("/app/review/")) {
-    throw new Error(`Review block link has unexpected href: ${reviewHref ?? "(null)"}`);
-  }
+  // Review is reached through the program's history while the block is still
+  // empty (the dashboard offers "Review block" once a session is done).
+  const reviewHref = await currentReviewHref(page);
 
   // Navigate directly rather than clicking. Under a cold dev server, a
   // client-side <Link> click can race hydration and leave the URL

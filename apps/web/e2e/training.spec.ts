@@ -128,8 +128,9 @@ test("Training: commit a version, start the session, log a deviation, mark compl
   await repsInput.fill("5");
   await page.getByRole("button", { name: "Log one set" }).first().click();
 
-  await expect(page.getByText(/Set logged\./)).toBeVisible();
+  // The set is on screen at once and saves in the background.
   await expect(page.getByText(/Set 1: 5 reps/)).toBeVisible();
+  await expect(page.getByText("Saving…", { exact: true })).toHaveCount(0);
 
   // ── Mark complete ─────────────────────────────────────────────────────
   await page.getByRole("button", { name: "Mark complete" }).click();
@@ -143,7 +144,8 @@ test("Training: commit a version, start the session, log a deviation, mark compl
   await expect(page.getByText("Session complete", { exact: true })).toBeVisible();
 
   // ── Back to /train: the picker still works ────────────────────────────
-  await page.getByRole("link", { name: "Log another session" }).click();
+  await expect(page.getByRole("link", { name: "Done" })).toBeVisible();
+  await page.goto("/train");
   await expect(page).toHaveURL(/\/train$/);
   await expect(page.getByRole("heading", { name: "Training" })).toBeVisible();
 

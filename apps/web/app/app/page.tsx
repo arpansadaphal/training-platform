@@ -398,6 +398,9 @@ function TodayCard({
           >
             View summary
           </Link>
+          <Link href={`/app/programs/${programId}`} className={styles.secondaryButton}>
+            View program
+          </Link>
         </div>
       </section>
     );
