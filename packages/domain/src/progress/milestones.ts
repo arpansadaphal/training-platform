@@ -14,8 +14,8 @@ import type { WeightUnit } from "./e1rm";
 
 export const SESSION_COUNT_MILESTONES: readonly number[] = [10, 25, 50, 100];
 export const WEEK_MILESTONES: readonly number[] = [4, 8, 12];
-/** A "round plate" is a multiple of 5 kg or 10 lb. */
-export const ROUND_WEIGHT_STEP: Readonly<Record<WeightUnit, number>> = { kg: 5, lb: 10 };
+/** A "round plate" is a multiple of 5 kg or 5 lb. */
+export const ROUND_WEIGHT_STEP: Readonly<Record<WeightUnit, number>> = { kg: 5, lb: 5 };
 
 const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 

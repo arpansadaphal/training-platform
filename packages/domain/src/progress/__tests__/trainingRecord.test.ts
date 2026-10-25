@@ -173,14 +173,16 @@ describe("sessionMilestone", () => {
     expect(text).toBe("First session at 60 kg on Back Squat.");
   });
 
-  it("uses a 10 lb step for pounds", () => {
+  it("uses a 5 lb step for pounds", () => {
     const lb = (top: number, prior: number) =>
       sessionMilestone({
         ...base,
         exercises: [{ exerciseName: "Bench Press", unit: "lb", topWeight: top, priorMaxWeight: prior }],
       });
-    expect(lb(135, 130)).toBeNull();
+    expect(lb(135, 135)).toBeNull();
+    expect(lb(137.5, 135)).toBeNull();
     expect(lb(140, 135)).toBe("First session at 140 lb on Bench Press.");
+    expect(lb(145, 130)).toBe("First session at 145 lb on Bench Press.");
   });
 
   it("names 4, 8 and 12 weeks since the first session, once", () => {
