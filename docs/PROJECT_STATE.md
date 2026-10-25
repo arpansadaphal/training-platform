@@ -2,9 +2,13 @@
 
 **Product-depth roadmap** (`docs/plans/2026-10-24-product-depth-roadmap.md`). 4 projects + Week 1 foundation. **Week 1 and Project 1 are built** (branch `product-depth-week1-project1`, on top of `phase-a3a1-session-ux`, 2026-10-25). Next, in order: Project 4 (training record), Project 3 (onboarding + templates, needs ARCH-059 accepted). Project 2 (cues + illustrations) stays deferred until illustration assets are properly sourced.
 
+## Recent sessions
+
+- 2026-10-25: Week 1 + Project 1 of the product-depth roadmap. Handoff: `docs/handoffs/2026-10-25-week1-project1.md`.
+
 ## Current phase
 
-See the active roadmap for the 4-project product-depth plan. Order: Week 1 (perf + UX) → Project 1 (targets + Today) → Project 4 (journal) → Project 3 (onboarding + templates). Project 2 (cues + illustrations) deferred until illustration assets are properly sourced.
+**Week 1 + Project 1 are complete; Project 4 (the training record) is next.** See the active roadmap for the 4-project product-depth plan. Order: Week 1 (perf + UX) → Project 1 (targets + Today) → Project 4 (journal) → Project 3 (onboarding + templates). Project 2 (cues + illustrations) deferred until illustration assets are properly sourced.
 
 **Week 1 + Project 1 shipped (2026-10-25).** No schema change. `analysis/`, `assessment/` and `goal-profiles/` have no diff; `calibration.test.ts` passes 22/22 and `calibration-before.txt` is unchanged. ARCH-062 is in effect.
 
