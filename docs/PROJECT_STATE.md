@@ -1,4 +1,10 @@
+## Active roadmap
+
+**Product-depth roadmap** (`docs/plans/2026-10-24-product-depth-roadmap.md`). 4 projects + Week 1 foundation. Current phase: Week 1 + Project 1 in progress (started 2026-10-25).
+
 ## Current phase
+
+See the active roadmap for the 4-project product-depth plan. Order: Week 1 (perf + UX) → Project 1 (targets + Today) → Project 4 (journal) → Project 3 (onboarding + templates). Project 2 (cues + illustrations) deferred until illustration assets are properly sourced.
 
 **Phase A2 ("lazy-lifter friction fixes") is done on branch `phase-a2-friction-fixes`, awaiting review and merge.** It follows Phase A (merged to `main`, PR #23) and implements the 2026-10-21 lazy-lifter diagnostic's recommendations 1–6, 9, 11 and 12, plus the founder's session timer and auto-close. Deferred: per-exercise progress (7), starter templates (8), back-dating sessions (10). Phase B is **not started**.
 
