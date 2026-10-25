@@ -30,8 +30,16 @@ export interface WeightPickerProps {
   /** "" = not set. */
   value: string;
   onChange: (value: string) => void;
-  /** The plan's weight, where the list opens; null opens at the default (20 kg / 45 lb). */
+  /** The plan's weight; where the list opens when there is no target. */
   plannedWeight: number | null;
+  /**
+   * ARCH-062: the weight to aim for (a next-session target, or a suggested
+   * starting weight). The list opens centered on it and offers it as the top
+   * row. It is never chosen for the lifter: choosing it is a tap.
+   */
+  targetWeight?: number | null;
+  /** The target row's name: "Target" (default) or "Suggested". */
+  targetLabel?: string;
   /** The weight last logged for this exercise, offered as "Same as last". */
   lastWeight: number | null;
   /** Unit text to put after a number ("kg", "kg per dumbbell"). */
@@ -45,12 +53,14 @@ export function WeightPicker({
   value,
   onChange,
   plannedWeight,
+  targetWeight = null,
+  targetLabel = "Target",
   lastWeight,
   unitText,
   testId,
 }: WeightPickerProps) {
   const current = value === "" ? null : Number(value);
-  const extras = [plannedWeight, lastWeight, current].filter(
+  const extras = [plannedWeight, targetWeight, lastWeight, current].filter(
     (n): n is number => n !== null && Number.isFinite(n),
   );
   const all = weightOptions(unit, extras);
@@ -69,6 +79,19 @@ export function WeightPicker({
   });
 
   const pinned: SheetOption[] = [];
+  if (targetWeight !== null && targetWeight > 0) {
+    const target = weightOption(targetWeight, unit);
+    pinned.push({
+      value: numberString(targetWeight),
+      text: `${targetLabel}, ${target.label}`,
+      node: (
+        <>
+          <span>{targetLabel}</span>
+          <span className={styles.detail}>{target.label}</span>
+        </>
+      ),
+    });
+  }
   if (lastWeight !== null) {
     const last = weightOption(lastWeight, unit);
     pinned.push({
@@ -101,7 +124,7 @@ export function WeightPicker({
       selected={current === null ? "" : numberString(current)}
       options={list}
       pinned={pinned}
-      targetValue={numberString(weightTarget(unit, plannedWeight))}
+      targetValue={numberString(weightTarget(unit, targetWeight ?? plannedWeight))}
       onSelect={onChange}
       testId={testId}
     />

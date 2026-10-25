@@ -67,6 +67,7 @@ export type DeviationKind =
   | "REPS_BELOW"
   | "REPS_ABOVE"
   | "LOAD_BELOW"
+  // No longer produced (ARCH-062): a load above the plan is progress.
   | "LOAD_ABOVE"
   | "SETS_SKIPPED"
   // ARCH-058: every planned exercise of a SKIPPED session.
@@ -314,22 +315,29 @@ export function computeAdherence(input: AdherenceInput): ReviewAdherence {
   const restDayIds = new Set(
     structure.workoutDays.filter((d) => d.isRestDay === true).map((d) => d.id),
   );
-  const sessions = input.sessions.filter((s) => !restDayIds.has(s.workoutDayId));
+  // The records stay paired with their Session: filtering one list and not
+  // the other shifted every record after a rest day onto the wrong Session.
+  const kept = input.sessions
+    .map((session, i) => ({ session, records: recordsBySession[i] ?? [] }))
+    .filter(({ session }) => !restDayIds.has(session.workoutDayId));
+  const sessions = kept.map((k) => k.session);
 
-  // --- plannedSessions: linear-expectation form (Phase 7 kickoff Q1(c)). --
+  // --- plannedSessions: the training days that have come due so far. -------
   //   daysElapsed     = floor((now - block.startedAt) / 1 day)
-  //   sessionsPerWeek = number of WorkoutDays in the version's structure
-  //   plannedSessions = floor((daysElapsed / 7) * sessionsPerWeek)
-  // Provisional: how "expected so far" is measured is a product decision
-  // not signed off. Logged as a Phase-7 outstanding item.
+  //   sessionsPerWeek = training days in the version's structure
+  // Sessions are spread evenly over the week and the first is due the day the
+  // block opens, so session k (from 1) is due on day floor((k - 1) * 7 /
+  // sessionsPerWeek), and the number due is floor(daysElapsed * perWeek / 7)
+  // + 1. The earlier form, floor(daysElapsed / 7 * perWeek), read "0 planned"
+  // for anyone who trained in their first days.
   const daysElapsed = Math.floor(
     (now.getTime() - block.startedAt.getTime()) / MS_PER_DAY,
   );
   const sessionsPerWeek = structure.workoutDays.length - restDayIds.size;
   const plannedSessions =
-    daysElapsed <= 0 || sessionsPerWeek === 0
+    daysElapsed < 0 || sessionsPerWeek === 0
       ? 0
-      : Math.floor((daysElapsed / 7) * sessionsPerWeek);
+      : Math.floor((daysElapsed * sessionsPerWeek) / 7) + 1;
 
   const completedSessions = sessions.filter(
     (s) => s.status === "COMPLETED",
@@ -366,7 +374,7 @@ export function computeAdherence(input: AdherenceInput): ReviewAdherence {
   for (let i = 0; i < sessions.length; i++) {
     const session = sessions[i];
     if (!session) continue;
-    const records = recordsBySession[i] ?? [];
+    const records = kept[i]?.records ?? [];
 
     const loggedCountByPrescription = new Map<string, number>();
 
@@ -414,16 +422,18 @@ export function computeAdherence(input: AdherenceInput): ReviewAdherence {
         }
       }
 
-      // Load deviations — only meaningful for FIXED_WEIGHT schemes.
+      // Load deviations — only meaningful for FIXED_WEIGHT schemes. A load
+      // ABOVE the plan is progress, not a deviation (ARCH-062): the plan's
+      // weight is a starting point, and the lifter is told what to lift next.
+      // Only a load below it is still a finding.
       if (
         r.actualLoad != null &&
         p.loadScheme.type === "FIXED_WEIGHT" &&
-        r.actualLoad !== p.loadScheme.weight
+        r.actualLoad < p.loadScheme.weight
       ) {
         addDeviation(buckets, {
           exerciseId,
-          kind:
-            r.actualLoad < p.loadScheme.weight ? "LOAD_BELOW" : "LOAD_ABOVE",
+          kind: "LOAD_BELOW",
           example: {
             sessionId: session.id,
             prescriptionId: p.id,

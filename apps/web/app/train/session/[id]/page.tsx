@@ -39,18 +39,20 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
     user: { id: session.user.id, email: session.user.email },
   });
 
-  // getContext throws NOT_FOUND for both "session doesn't exist" and "caller
+  // getPage throws NOT_FOUND for both "session doesn't exist" and "caller
   // doesn't own the session's block" — same non-disclosure rule as the rest
   // of the API. Map to Next's notFound() so the user sees the standard 404.
-  let context;
+  // It is one call, two steps of database reads (it was a chain of fifteen).
+  let data;
   try {
-    context = await caller.session.getContext({ sessionId: id });
+    data = await caller.session.getPage({ sessionId: id });
   } catch (err) {
     if (err instanceof TRPCError && err.code === "NOT_FOUND") {
       notFound();
     }
     throw err;
   }
+  const { context, exercises, records, observations, lastTimeHints, targets } = data;
 
   // ARCH-057: sessions the start that led here auto-saved. Each is loaded
   // through getContext, so only the caller's own sessions are ever named.
@@ -76,13 +78,6 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
     )
   ).filter((x): x is NonNullable<typeof x> => x !== null);
 
-  const [exercises, records, observations, lastTimeHints] = await Promise.all([
-    caller.exercise.listAll(),
-    caller.performance.listForSession({ sessionId: id }),
-    caller.observation.listForSession({ sessionId: id }),
-    caller.session.getLastTimeHints({ sessionId: id }),
-  ]);
-
   return (
     <>
       <AppNav />
@@ -96,6 +91,7 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
         initialRecords={records}
         initialObservations={observations}
         lastTimeHints={lastTimeHints}
+        targets={targets}
         autoSaved={autoSaved}
       />
     </main>

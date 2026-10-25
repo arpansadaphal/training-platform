@@ -38,19 +38,26 @@ import {
   listProgramsByOwner,
   findActiveTrainingBlockForProgram,
   findVersionById,
-  listVersionsByProgram,
   countCompletedSessionsForProgram,
   countPerformanceRecordsForProgram,
   findActiveSessionForBlock,
   countCompletedSessionsInBlock,
   findLatestCompletedSessionForUser,
-  findVersionWithStructure,
-  listTrainingBlocksForProgram,
+  findDayOfActiveSession,
+  findLatestSetTimeInOpenSessions,
+  findRecentClosedBlockWithSessions,
+  countVersionsOfProgram,
+  listCompletedPerformancesForVersion,
+  listExercises,
+  listPrescriptionRowsForVersion,
+  listSessionsForBlock,
+  listWorkoutDayRowsForVersion,
   type TrainingBlockRecord,
   type ProgramRecord,
 } from "@training/db";
 import { trainingDayCount, type ProgramStructure } from "@training/domain";
-import { isStaleInProgress } from "./sessionService";
+import { isStaleAt, lastActivityAt } from "./sessionService";
+import { buildTodayPlan, type TodayPlan } from "./todayService";
 import {
   buildAnticipationCue,
   type AnticipationCue,
@@ -69,6 +76,8 @@ export interface IdentitySummaryCurrentBlock {
   plannedLengthWeeks: number | null;
   /** Phase 10c. */
   anticipationCue: AnticipationCue;
+  /** COMPLETED Sessions in this block. */
+  sessionsCompleted: number;
 }
 
 export interface IdentitySummaryCurrentSession {
@@ -108,27 +117,39 @@ export interface IdentitySummary {
   lastCompletedSessionAt: Date | null;
   /** Read-only: an existing PLANNED / IN_PROGRESS Session, or null. Never creates one. */
   currentSession: IdentitySummaryCurrentSession | null;
+  /** The Today card (ARCH-062): today's day with a target per lift, or what was just done. */
+  today: TodayPlan | null;
+  /** Sessions completed in the last 7 days against the training days a week the program has; null with no block. */
+  weekProgress: { completed: number; planned: number } | null;
   stats: IdentitySummaryStats;
 }
 
+/**
+ * Three steps, not eleven: (1) the programs and the last completed session;
+ * (2) each program's active block, to pick the primary one; (3) everything
+ * about the primary program side by side. Each read in step 3 is one flat
+ * statement keyed off ids already in hand, so the page waits for three round
+ * trips however many things it shows.
+ */
 export async function getMyIdentitySummary(
   userId: string,
 ): Promise<IdentitySummary> {
-  const programs = await listProgramsByOwner(userId, {
-    includeArchived: false,
-  });
-
-  const primary = await pickPrimaryProgram(programs);
-
-  const lastCompleted = await findLatestCompletedSessionForUser(userId);
+  const [programs, lastCompleted] = await Promise.all([
+    listProgramsByOwner(userId, { includeArchived: false }),
+    findLatestCompletedSessionForUser(userId),
+  ]);
   const lastCompletedSessionAt = lastCompleted?.completedAt ?? null;
 
-  if (!primary) {
+  const picked = await pickPrimaryProgram(programs);
+
+  if (!picked) {
     return {
       primaryProgram: null,
       recentClosedBlock: null,
       lastCompletedSessionAt,
       currentSession: null,
+      today: null,
+      weekProgress: null,
       stats: {
         sessionsCompleted: 0,
         totalSetsLogged: 0,
@@ -136,40 +157,71 @@ export async function getMyIdentitySummary(
       },
     };
   }
+  const primary = picked.program;
+  const block = picked.block;
 
-  // --- Active version ------------------------------------------------------
+  // The anticipation cue (Phase 10c) is derived from the block's
+  // plannedLengthWeeks, the active version's workoutDay count, and the count
+  // of COMPLETED Sessions in the block (SKIPPED and IN_PROGRESS do not count).
+  // session.getOrCreateNext is the MUTATING path, called only from /train;
+  // rendering /app never creates a Session, so the current session is a read.
+  const now = new Date();
+  const [
+    activeVersion,
+    sessionsCompletedInBlock,
+    activeSession,
+    activeDay,
+    latestSetTime,
+    closed,
+    sessionsCompleted,
+    totalSetsLogged,
+    versionsCommitted,
+    todayDays,
+    todayPrescriptions,
+    blockSessions,
+    todayHistory,
+    exercises,
+  ] = await Promise.all([
+    primary.activeVersionId ? findVersionById(primary.activeVersionId) : Promise.resolve(null),
+    block ? countCompletedSessionsInBlock(block.id) : Promise.resolve(0),
+    block ? findActiveSessionForBlock(block.id) : Promise.resolve(null),
+    block ? findDayOfActiveSession(block.id) : Promise.resolve(null),
+    block ? findLatestSetTimeInOpenSessions(block.id) : Promise.resolve(null),
+    // Newest closed block with at least one completed session. Empty blocks
+    // (opened by unarchive and closed again, or a version activated and
+    // replaced without training) are never "recent".
+    findRecentClosedBlockWithSessions(primary.id),
+    countCompletedSessionsForProgram(primary.id),
+    countPerformanceRecordsForProgram(primary.id),
+    countVersionsOfProgram(primary.id),
+    // The Today card: the version being trained, its history, and the block's
+    // sessions, all keyed off ids already in hand.
+    block ? listWorkoutDayRowsForVersion(block.programVersionId) : Promise.resolve([]),
+    block ? listPrescriptionRowsForVersion(block.programVersionId) : Promise.resolve([]),
+    block ? listSessionsForBlock(block.id) : Promise.resolve([]),
+    block ? listCompletedPerformancesForVersion(userId, block.programVersionId) : Promise.resolve([]),
+    listExercises(),
+  ]);
+
   let activeVersionInfo: IdentitySummaryActiveVersion | null = null;
   let activeVersionStructure: ProgramStructure | null = null;
-  if (primary.activeVersionId) {
-    const v = await findVersionById(primary.activeVersionId);
-    if (v) {
-      activeVersionInfo = {
-        id: v.id,
-        versionNumber: v.versionNumber,
-        createdAt: v.createdAt,
-      };
-      activeVersionStructure = v.structureSnapshot as ProgramStructure;
-    }
+  if (activeVersion) {
+    activeVersionInfo = {
+      id: activeVersion.id,
+      versionNumber: activeVersion.versionNumber,
+      createdAt: activeVersion.createdAt,
+    };
+    activeVersionStructure = activeVersion.structureSnapshot as ProgramStructure;
   }
-
-  // --- Current block -------------------------------------------------------
-  // The anticipation cue (Phase 10c) is derived from three inputs already in
-  // scope: the block's plannedLengthWeeks, the active version's workoutDay
-  // count (sessionsPerWeek), and the count of COMPLETED Sessions in the
-  // block. The session count uses the same COMPLETED-only semantics as the
-  // block-lifecycle resolution rule — SKIPPED and IN_PROGRESS do not count.
-  const block = await findActiveTrainingBlockForProgram(primary.id);
 
   let currentBlock: IdentitySummaryCurrentBlock | null = null;
   if (block) {
-    const sessionsCompletedInBlock = await countCompletedSessionsInBlock(
-      block.id,
-    );
     currentBlock = {
       id: block.id,
       status: block.status,
       startedAt: block.startedAt,
       plannedLengthWeeks: block.plannedLengthWeeks,
+      sessionsCompleted: sessionsCompletedInBlock,
       anticipationCue: buildAnticipationCue({
         plannedLengthWeeks: block.plannedLengthWeeks,
         sessionsPerWeek: activeVersionStructure ? trainingDayCount(activeVersionStructure) : 0,
@@ -178,47 +230,50 @@ export async function getMyIdentitySummary(
     };
   }
 
-  // --- Current session (READ-ONLY — never creates) -------------------------
-  // session.getOrCreateNext is the MUTATING path and is called only from
-  // /train. Rendering /app must not create a Session.
+  // A stale IN_PROGRESS Session (ARCH-057) is not offered: the next start
+  // auto-closes it. Same rule as isStaleInProgress, from the reads above.
   let currentSession: IdentitySummaryCurrentSession | null = null;
-  if (block) {
-    const s = await findActiveSessionForBlock(block.id);
-    if (s && !(await isStaleInProgress(s, new Date()))) {
-      const rows = await findVersionWithStructure(block.programVersionId);
-      const day = rows?.workoutDays.find((d) => d.id === s.workoutDayId);
+  if (activeSession) {
+    const stale =
+      activeSession.status === "IN_PROGRESS" &&
+      isStaleAt(
+        lastActivityAt(
+          activeSession,
+          latestSetTime === null ? [] : [{ completedAt: latestSetTime }],
+        ),
+        now,
+      );
+    if (!stale) {
       currentSession = {
-        id: s.id,
-        status: s.status,
-        sequenceIndex: s.sequenceIndex,
-        workoutDayName: day?.name ?? "Workout",
-        isRestDay: day?.isRestDay ?? false,
+        id: activeSession.id,
+        status: activeSession.status,
+        sequenceIndex: activeSession.sequenceIndex,
+        workoutDayName: activeDay?.name ?? "Workout",
+        isRestDay: activeDay?.isRestDay ?? false,
       };
     }
   }
 
-  // Newest closed block with at least one completed session. Empty blocks
-  // (e.g. opened by unarchive and closed again by the next archive, or a
-  // version activated and replaced without training) are never "recent".
-  const blocks = await listTrainingBlocksForProgram(primary.id);
-  let closed: TrainingBlockRecord | null = null;
-  for (const b of blocks) {
-    if (b.status === "ACTIVE") continue;
-    if ((await countCompletedSessionsInBlock(b.id)) > 0) {
-      closed = b;
-      break;
-    }
-  }
+  const stalePending =
+    activeSession !== null && activeSession.status === "IN_PROGRESS" && currentSession === null;
+  const today = block
+    ? buildTodayPlan({
+        now,
+        days: todayDays,
+        prescriptions: todayPrescriptions,
+        exercises,
+        blockSessions,
+        pending: currentSession === null ? null : activeSession,
+        staleHasRecords: stalePending && latestSetTime !== null,
+        staleSessionId: stalePending ? activeSession.id : null,
+        history: todayHistory,
+        lastCompletedAt: lastCompletedSessionAt,
+      })
+    : null;
+
   const recentClosedBlock: IdentitySummaryClosedBlock | null = closed
     ? { id: closed.id, status: closed.status, startedAt: closed.startedAt, endedAt: closed.endedAt }
     : null;
-
-  // --- Stats (primary-Program scope, lifetime) -----------------------------
-  const [sessionsCompleted, totalSetsLogged, versions] = await Promise.all([
-    countCompletedSessionsForProgram(primary.id),
-    countPerformanceRecordsForProgram(primary.id),
-    listVersionsByProgram(primary.id),
-  ]);
 
   return {
     primaryProgram: {
@@ -230,12 +285,31 @@ export async function getMyIdentitySummary(
     recentClosedBlock,
     lastCompletedSessionAt,
     currentSession,
+    today,
+    weekProgress: weekProgressOf(block !== null, blockSessions, activeVersionStructure, now),
     stats: {
       sessionsCompleted,
       totalSetsLogged,
-      versionsCommitted: versions.length,
+      versionsCommitted,
     },
   };
+}
+
+/** Past 7 days, not a calendar week: a server cannot know the lifter's time zone, and "last 7 days" is a fact in any of them. */
+function weekProgressOf(
+  hasBlock: boolean,
+  sessions: readonly { status: string; completedAt: Date | null }[],
+  structure: ProgramStructure | null,
+  now: Date,
+): { completed: number; planned: number } | null {
+  if (!hasBlock || structure === null) return null;
+  const planned = trainingDayCount(structure);
+  if (planned === 0) return null;
+  const since = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const completed = sessions.filter(
+    (s) => s.status === "COMPLETED" && s.completedAt !== null && s.completedAt.getTime() >= since,
+  ).length;
+  return { completed, planned };
 }
 
 /**
@@ -255,25 +329,29 @@ export async function getPrimaryProgramId(
     includeArchived: false,
   });
   const primary = await pickPrimaryProgram(programs);
-  return primary?.id ?? null;
+  return primary?.program.id ?? null;
 }
 
 // ---- Helpers -------------------------------------------------------------
 
+/**
+ * The primary program and its ACTIVE block (null when it has none). Each
+ * program's block is looked up at the same time, not one after another.
+ */
 async function pickPrimaryProgram(
   programs: ProgramRecord[],
-): Promise<ProgramRecord | null> {
+): Promise<{ program: ProgramRecord; block: TrainingBlockRecord | null } | null> {
   if (programs.length === 0) return null;
 
   // Prefer one with an ACTIVE block.
-  const withActiveBlock: {
-    program: ProgramRecord;
-    block: TrainingBlockRecord;
-  }[] = [];
-  for (const p of programs) {
-    const block = await findActiveTrainingBlockForProgram(p.id);
-    if (block) withActiveBlock.push({ program: p, block });
-  }
+  const blocks = await Promise.all(
+    programs.map((p) => findActiveTrainingBlockForProgram(p.id)),
+  );
+  const withActiveBlock: { program: ProgramRecord; block: TrainingBlockRecord }[] = [];
+  programs.forEach((program, i) => {
+    const block = blocks[i];
+    if (block) withActiveBlock.push({ program, block });
+  });
 
   if (withActiveBlock.length > 0) {
     withActiveBlock.sort((a, b) => {
@@ -282,12 +360,13 @@ async function pickPrimaryProgram(
       return b.program.createdAt.getTime() - a.program.createdAt.getTime();
     });
     const first = withActiveBlock[0];
-    if (first) return first.program;
+    if (first) return first;
   }
 
   // Otherwise the most recently created non-archived Program.
   const sorted = [...programs].sort(
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   );
-  return sorted[0] ?? null;
+  const newest = sorted[0];
+  return newest ? { program: newest, block: null } : null;
 }

@@ -21,6 +21,7 @@ import type { ProgramStructure } from "@training/domain";
 import type { ExerciseRecord } from "@training/db";
 import { TRPCProvider, trpc } from "@/src/lib/trpc";
 import { AssessmentDisplay } from "@/components/assessment/AssessmentDisplay";
+import { startTrainingAction } from "@/app/train/actions";
 import { StructureEditor } from "./StructureEditor";
 import { SimulateChangePanel } from "./SimulateChangePanel";          // NEW
 import styles from "./build.module.css";
@@ -127,6 +128,8 @@ function BuilderClientInner({
   );
   const [isDirty, setIsDirty] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Set when a commit lands: the next step is training, not a message to read.
+  const [committed, setCommitted] = useState<{ versionNumber: number; first: boolean } | null>(null);
   const [staleInfo, setStaleInfo] = useState<{
     baseVersionId: string;
     currentVersionId: string | null;
@@ -142,6 +145,17 @@ function BuilderClientInner({
       ? `Edit of v${initialActiveVersionNumber}`
       : `Draft ${drafts.length + 1}`;
 
+  // What the assessment below reads is the SAVED draft, so the empty state is
+  // judged on that, not on unsaved edits.
+  const selectedSaved = drafts.find((d) => d.id === selectedDraftId) ?? null;
+  const savedStructure =
+    selectedSaved !== null && isProgramStructure(selectedSaved.structure)
+      ? selectedSaved.structure
+      : null;
+  const savedDayCount = savedStructure?.workoutDays.length ?? 0;
+  const savedExerciseCount =
+    savedStructure?.workoutDays.reduce((n, d) => n + d.prescriptions.length, 0) ?? 0;
+
   // ── Queries ──────────────────────────────────────────────────────────────
 
   const previewQuery = trpc.analysis.previewAnalyze.useQuery(
@@ -156,6 +170,7 @@ function BuilderClientInner({
       setDrafts((prev) => [...prev, created]);
       selectDraft(created);
       setNewDraftLabel("");
+      setCommitted(null);
     },
     onError: (err) => setErrorMessage(err.message),
   });
@@ -192,10 +207,8 @@ function BuilderClientInner({
       setSelectedDraftId(null);
       setLocalStructure(null);
       setIsDirty(false);
-      setErrorMessage(
-        `Committed as version ${version.versionNumber}. ` +
-          `It is now the version you train.`,
-      );
+      setErrorMessage(null);
+      setCommitted({ versionNumber: version.versionNumber, first: version.versionNumber === 1 });
       void utils.draft.listForProgram.invalidate({ programId });
       router.refresh(); 
     },
@@ -366,6 +379,19 @@ function BuilderClientInner({
       </aside>
 
       <section className={styles.editor}>
+        {committed ? (
+          <div className={styles.committedBox} role="status">
+            <p className={styles.committedText}>
+              Committed as version {committed.versionNumber}. It is now the version you train.
+            </p>
+            <form action={startTrainingAction}>
+              <input type="hidden" name="programId" value={programId} />
+              <button type="submit" className={styles.startButton}>
+                {committed.first ? "Start your first session" : "Start training"}
+              </button>
+            </form>
+          </div>
+        ) : null}
         {errorMessage ? (
           <p className={styles.errorBanner}>{errorMessage}</p>
         ) : null}
@@ -395,7 +421,7 @@ function BuilderClientInner({
         {selectedDraft === null || localStructure === null ? (
           <div className={styles.emptyState}>
             <p className={styles.muted}>
-              Select a draft on the left, or create one to start building.
+              Select a draft, or create one, to start building.
             </p>
           </div>
         ) : (
@@ -468,6 +494,14 @@ function BuilderClientInner({
         ) : null}
         {selectedDraftId === null ? (
           <p className={styles.muted}>Select a draft to see its assessment.</p>
+        ) : savedExerciseCount === 0 ? (
+          // An empty program has nothing to assess, and a wall of "Low" cards
+          // is not an assessment: say what to do instead.
+          <p className={styles.muted}>
+            {savedDayCount === 0
+              ? "Add your first day to see an assessment."
+              : "Add exercises to a day to see an assessment."}
+          </p>
         ) : previewQuery.isLoading ? (
           <p className={styles.muted}>Loading…</p>
         ) : previewQuery.isError ? (

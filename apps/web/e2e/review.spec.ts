@@ -127,21 +127,32 @@ async function commitV2(page: Page, programHref: string): Promise<void> {
 }
 
 /**
- * Captures the current TrainingBlock's id by reading the "Review block"
- * link's href off the /app dashboard. Assumes the caller has just
- * committed and is looking at /app with an active block.
+ * Captures the current TrainingBlock's id from the program's history page,
+ * which lists every block with its Review link. (The dashboard offers "Review
+ * block" only once a block has a session in it.) Call it right after a commit,
+ * when the program has exactly one block.
  */
-async function captureActiveBlockId(page: Page): Promise<string> {
-  await page.goto("/app");
-  const reviewLink = page.getByRole("link", { name: "Review block" });
+async function captureActiveBlockId(page: Page, programHref: string): Promise<string> {
+  await page.goto(`${programHref}/history`);
+  const reviewLink = page.locator('a[href^="/app/review/"]').first();
   await expect(reviewLink).toBeVisible();
   const href = await reviewLink.getAttribute("href");
-  if (!href) throw new Error("Review block link has no href");
+  if (!href) throw new Error("Review link has no href");
   const match = /\/app\/review\/([^/]+)$/.exec(href);
   if (!match || !match[1]) {
-    throw new Error(`Unexpected Review block href: ${href}`);
+    throw new Error(`Unexpected Review href: ${href}`);
   }
   return match[1];
+}
+
+/** The commit-time assessment is folded away by default; open it. */
+async function openCommitTimeAssessment(page: Page): Promise<void> {
+  const heading = page.getByRole("heading", { name: "Assessment at commit time" });
+  await expect(heading).toBeVisible();
+  await heading.click();
+  await expect(
+    page.getByText(/What you saw when you started this block\. Not recomputed\./),
+  ).toBeVisible();
 }
 
 test("Review of an ACTIVE block shows the partial banner and the commit-time assessment", async ({
@@ -155,18 +166,18 @@ test("Review of an ACTIVE block shows the partial banner and the commit-time ass
   const programHref = await createProgram(page, programName);
   await commitV1(page, programHref);
 
-  const blockId = await captureActiveBlockId(page);
+  const blockId = await captureActiveBlockId(page, programHref);
   await page.goto(`/app/review/${blockId}`);
   await expect(page).toHaveURL(new RegExp(`/app/review/${blockId}$`));
 
   // Partial banner is present — the block is still ACTIVE.
   await expect(page.getByText(/This block is still in progress/)).toBeVisible();
 
-  // The default view is the commit-time snapshot, not a live recompute.
-  await expect(page.getByRole("heading", { name: "Assessment at commit time" })).toBeVisible();
-  await expect(
-    page.getByText(/What you saw when you started this block\. Not recomputed\./),
-  ).toBeVisible();
+  // Review opens with the lifter's own numbers; the commit-time critique is
+  // folded away. The default view is the commit-time snapshot, not a live
+  // recompute.
+  await expect(page.getByRole("heading", { name: "What you did" })).toBeVisible();
+  await openCommitTimeAssessment(page);
 
   // The opt-in recompute is present but collapsed — the phase file
   // requires it be available, not that it render by default.
@@ -183,7 +194,7 @@ test("Review of a closed block omits the partial banner", async ({ page }) => {
 
   // Capture v1's block id before committing v2 — after the second commit
   // the dashboard only surfaces v2's block, so we must save the URL now.
-  const v1BlockId = await captureActiveBlockId(page);
+  const v1BlockId = await captureActiveBlockId(page, programHref);
 
   // Commit v2 — closes v1's block, opens v2's.
   await commitV2(page, programHref);
@@ -196,9 +207,6 @@ test("Review of a closed block omits the partial banner", async ({ page }) => {
   // No partial banner — v1's block is now closed.
   await expect(page.getByText(/This block is still in progress/)).not.toBeVisible();
 
-  // The commit-time assessment is still rendered.
-  await expect(page.getByRole("heading", { name: "Assessment at commit time" })).toBeVisible();
-  await expect(
-    page.getByText(/What you saw when you started this block\. Not recomputed\./),
-  ).toBeVisible();
+  // The commit-time assessment is still rendered (folded away until opened).
+  await openCommitTimeAssessment(page);
 });

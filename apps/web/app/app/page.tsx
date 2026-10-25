@@ -16,10 +16,12 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { appRouter } from "@training/api";
+import { appRouter, type TodayPlan } from "@training/api";
 import { auth } from "@/src/server/auth";
 import { AppNav } from "@/components/nav/AppNav";
 import { AccountMenu } from "@/components/nav/AccountMenu";
+import { startTrainingAction } from "@/app/train/actions";
+import { loadUnitLabel } from "@/src/lib/loadLabels";
 import styles from "./dashboard.module.css";
 
 export const dynamic = "force-dynamic";
@@ -42,8 +44,15 @@ export default async function DashboardPage() {
     caller.progress.getForUser(),
   ]);
 
-  const { primaryProgram, currentSession, stats, recentClosedBlock, lastCompletedSessionAt } =
-    identity;
+  const {
+    primaryProgram,
+    currentSession,
+    stats,
+    recentClosedBlock,
+    lastCompletedSessionAt,
+    today,
+    weekProgress,
+  } = identity;
 
   return (
     <>
@@ -61,32 +70,45 @@ export default async function DashboardPage() {
           <EmptyState />
         ) : (
           <>
-            <ProgramHero
-              program={primaryProgram}
-              currentSession={currentSession}
-            />
+            {today !== null ? (
+              <TodayCard programId={primaryProgram.id} programName={primaryProgram.name} today={today} />
+            ) : (
+              <ProgramHero
+                program={primaryProgram}
+                currentSession={currentSession}
+              />
+            )}
+
+            {weekProgress !== null ? (
+              <p className={styles.weekLine}>
+                {weekProgress.completed <= weekProgress.planned
+                  ? `Past 7 days: ${weekProgress.completed} of ${weekProgress.planned} ${
+                      weekProgress.planned === 1 ? "session" : "sessions"
+                    }`
+                  : `Past 7 days: ${weekProgress.completed} sessions (${weekProgress.planned} planned)`}
+              </p>
+            ) : null}
+
+            <WhereYouStand lifts={progress.slice(0, 3)} />
+
+            {primaryProgram.currentBlock && today?.comebackDays == null ? (
+              <WelcomeBack lastCompletedSessionAt={lastCompletedSessionAt} />
+            ) : null}
+
+            {primaryProgram.currentBlock && primaryProgram.currentBlock.sessionsCompleted > 0 ? (
+              <BlockStrip
+                blockId={primaryProgram.currentBlock.id}
+                status={primaryProgram.currentBlock.status}
+                startedAt={primaryProgram.currentBlock.startedAt}
+                plannedLengthWeeks={primaryProgram.currentBlock.plannedLengthWeeks}
+                anticipationCueText={primaryProgram.currentBlock.anticipationCue.text}
+              />
+            ) : null}
 
             <StatsRow
               sessionsCompleted={stats.sessionsCompleted}
               totalSetsLogged={stats.totalSetsLogged}
-              versionsCommitted={stats.versionsCommitted}
             />
-
-            <WhereYouStand lifts={progress.slice(0, 3)} />
-
-            {primaryProgram.currentBlock ? (
-              <WelcomeBack lastCompletedSessionAt={lastCompletedSessionAt} />
-            ) : null}
-
-            {primaryProgram.currentBlock ? (
-            <BlockStrip
-  blockId={primaryProgram.currentBlock.id}
-  status={primaryProgram.currentBlock.status}
-  startedAt={primaryProgram.currentBlock.startedAt}
-  plannedLengthWeeks={primaryProgram.currentBlock.plannedLengthWeeks}
-  anticipationCueText={primaryProgram.currentBlock.anticipationCue.text}
-/>
-            ) : null}
 
             {recentClosedBlock ? <RecentBlock block={recentClosedBlock} /> : null}
 
@@ -219,19 +241,13 @@ function ProgramHero({ program, currentSession }: ProgramHeroProps) {
 interface StatsRowProps {
   sessionsCompleted: number;
   totalSetsLogged: number;
-  versionsCommitted: number;
 }
 
-function StatsRow({
-  sessionsCompleted,
-  totalSetsLogged,
-  versionsCommitted,
-}: StatsRowProps) {
+function StatsRow({ sessionsCompleted, totalSetsLogged }: StatsRowProps) {
   return (
     <section className={styles.statsRow} aria-label="Lifetime stats">
       <Stat label="Sessions completed" value={sessionsCompleted} />
       <Stat label="Sets logged" value={totalSetsLogged} />
-      <Stat label="Versions committed" value={versionsCommitted} />
     </section>
   );
 }
@@ -250,9 +266,10 @@ interface BlockStripProps {
   status: "ACTIVE" | "COMPLETED" | "ABANDONED";
   startedAt: Date;
   plannedLengthWeeks: number | null;
-  anticipationCueText: string;   // ← add
+  anticipationCueText: string;
 }
 
+/** Shown once a block has a session in it: an empty block says nothing and offers no review. */
 function BlockStrip({
   blockId,
   status,
@@ -266,19 +283,25 @@ function BlockStrip({
   );
   const weeksIn = Math.floor(daysIn / 7);
 
+  // "0 weeks in" says nothing on day one; the week count appears from week 1.
   const durationText =
-    plannedLengthWeeks !== null
-      ? `${weeksIn} of ${plannedLengthWeeks} weeks planned`
-      : `${weeksIn} ${weeksIn === 1 ? "week" : "weeks"} in`;
+    weeksIn === 0
+      ? null
+      : plannedLengthWeeks !== null
+        ? `${weeksIn} of ${plannedLengthWeeks} weeks planned`
+        : `${weeksIn} ${weeksIn === 1 ? "week" : "weeks"} in`;
 
   return (
     <section className={styles.blockStrip}>
       <div className={styles.blockStripText}>
         <p className={styles.blockStripTitle}>This block</p>
-        <p className={styles.muted}>
-          {status === "ACTIVE" ? "In progress" : status.toLowerCase()} ·{" "}
-          {durationText}
-        </p>
+        {status !== "ACTIVE" || durationText ? (
+          <p className={styles.muted}>
+            {[status === "ACTIVE" ? null : status.toLowerCase(), durationText]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        ) : null}
         <p className={styles.muted}>{anticipationCueText}</p>
       </div>
       <Link
@@ -318,6 +341,126 @@ function WhereYouStand({
       <Link href="/app/progress" className={styles.standingAll}>
         See all progress →
       </Link>
+    </section>
+  );
+}
+
+/**
+ * The Today card (ARCH-062): what the lifter is doing today with a target for
+ * every lift, or, for a few hours after a session, what they just did and
+ * what is next. Facts from their own logs; no streak, no schedule.
+ */
+function TodayCard({
+  programId,
+  programName,
+  today,
+}: {
+  programId: string;
+  programName: string;
+  today: TodayPlan;
+}) {
+  const startForm = (label: string) => (
+    <form action={startTrainingAction}>
+      <input type="hidden" name="programId" value={programId} />
+      <button type="submit" className={styles.primaryButton}>
+        {label}
+      </button>
+    </form>
+  );
+
+  if (today.state === "JUST_FINISHED" && today.finished) {
+    const { finished } = today;
+    return (
+      <section className={styles.hero} aria-labelledby="today-heading">
+        <p className={styles.heroEyebrow}>Done</p>
+        <h2 id="today-heading" className={styles.heroTitle}>
+          {finished.dayName}
+        </h2>
+        {finished.prs.length > 0 ? (
+          <ul className={styles.todayList}>
+            {finished.prs.map((pr) => (
+              <li key={pr.exerciseName}>
+                {pr.exerciseName}: new PR, {pr.load} {pr.unit} × {pr.reps}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={styles.heroMeta}>Session logged.</p>
+        )}
+        {today.nextDayName ? (
+          <p className={styles.heroMeta}>Next: {today.nextDayName}</p>
+        ) : null}
+        <div className={styles.heroActions}>
+          {today.nextDayName ? startForm(`Start ${today.nextDayName}`) : null}
+          <Link
+            href={`/train/session/${finished.sessionId}/summary`}
+            className={styles.secondaryButton}
+          >
+            View summary
+          </Link>
+          <Link href={`/app/programs/${programId}`} className={styles.secondaryButton}>
+            View program
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
+  const minutes = today.estimatedMinutes;
+  return (
+    <section className={styles.hero} aria-labelledby="today-heading">
+      <p className={styles.heroEyebrow}>{today.state === "IN_PROGRESS" ? "In progress" : "Today"}</p>
+      <h2 id="today-heading" className={styles.heroTitle}>
+        {today.dayName}
+      </h2>
+      <p className={styles.heroMeta}>
+        {today.isRestDay
+          ? "Rest day. No training scheduled."
+          : `About ${minutes} min · ${today.exercises.length} ${today.exercises.length === 1 ? "exercise" : "exercises"}`}
+        {" · "}
+        {programName}
+      </p>
+      {today.comebackDays !== null ? (
+        <p className={styles.todayComeback}>
+          Welcome back. Today runs about 10% lighter on purpose.
+        </p>
+      ) : null}
+      {today.exercises.length > 0 ? (
+        <ul className={styles.todayList}>
+          {today.exercises.map((e) => {
+            const reps = e.repsLow === e.repsHigh ? `${e.repsHigh}` : `${e.repsLow}–${e.repsHigh}`;
+            const target =
+              e.targetWeight === null
+                ? "first time"
+                : e.targetWeight === 0
+                  ? `${reps} reps`
+                  : `${e.targetWeight} ${loadUnitLabel(e.unit, e.equipment).replace("per dumbbell", "each")} × ${reps}`;
+            return (
+              <li key={e.prescriptionId} className={styles.todayExercise}>
+                <span className={styles.todayName}>{e.name}</span>
+                <span className={styles.todayTarget}>{target}</span>
+                {e.last && e.last.load !== null && e.last.reps !== null ? (
+                  <span className={styles.todayLast}>
+                    last {e.last.load === 0 ? "bodyweight" : e.last.load} × {e.last.reps}
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      <div className={styles.heroActions}>
+        {today.state === "IN_PROGRESS" && today.sessionId ? (
+          <Link href={`/train/session/${today.sessionId}`} className={styles.primaryButton}>
+            Continue
+          </Link>
+        ) : (
+          startForm(today.isRestDay ? "Open rest day" : "Start")
+        )}
+        <Link href={`/app/programs/${programId}`} className={styles.secondaryButton}>
+          View program
+        </Link>
+      </div>
     </section>
   );
 }

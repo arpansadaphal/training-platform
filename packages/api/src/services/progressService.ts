@@ -15,7 +15,9 @@ import { TRPCError } from "@trpc/server";
 import {
   findPreviousCompletedSessionOfDay,
   listAllInvolvements,
-  listCompletedPerformancesForExercises,
+  listSessionsForBlock,
+  listWorkoutDayRowsForVersion,
+  listCompletedPerformancesForDay,
   listCompletedPerformancesForUser,
   listExercisePerformancesForSession,
   listExercises,
@@ -29,53 +31,15 @@ import {
   convertLoad,
   progressVerdictLine,
   type ExerciseSessionRecord,
-  type LoggedSet,
   type MuscleInvolvement,
   type ProgressVerdict,
-  type SessionSets,
   type SessionSummary,
   type SummaryExerciseInput,
   type WeightUnit,
 } from "@training/domain";
-import { getSessionContext } from "./sessionService";
-
-function unitOf(loadScheme: unknown): WeightUnit {
-  const scheme = loadScheme as { type?: string; unit?: string } | null;
-  return scheme?.type === "FIXED_WEIGHT" && scheme.unit === "lb" ? "lb" : "kg";
-}
-
-function toSet(row: ExercisePerformanceRecord, unit: WeightUnit): LoggedSet {
-  return {
-    reps: row.actualReps,
-    load:
-      row.actualLoad === null
-        ? null
-        : convertLoad(row.actualLoad, unitOf(row.loadScheme), unit),
-    rpe: row.actualRpe,
-  };
-}
-
-/** Groups rows by Session into the domain's SessionSets, loads expressed in `unit`. */
-function groupBySession(
-  rows: readonly ExercisePerformanceRecord[],
-  unit: WeightUnit,
-): SessionSets[] {
-  const bySession = new Map<string, SessionSets>();
-  for (const row of rows) {
-    if (row.sessionCompletedAt === null) continue;
-    let entry = bySession.get(row.sessionId);
-    if (entry === undefined) {
-      entry = {
-        sessionId: row.sessionId,
-        date: row.sessionCompletedAt.toISOString(),
-        sets: [],
-      };
-      bySession.set(row.sessionId, entry);
-    }
-    (entry.sets as LoggedSet[]).push(toSet(row, unit));
-  }
-  return [...bySession.values()];
-}
+import { getSessionContextOf, replayRotationPointer } from "./sessionService";
+import { loadOwnedSessionOrThrow } from "./loadOwnedExecution";
+import { groupBySession, toSet, unitOf } from "./exerciseHistory";
 
 // ─── Progress view ──────────────────────────────────────────────────────────
 
@@ -151,7 +115,10 @@ export async function getProgressForUser(
 
 export interface SessionSummaryView {
   sessionId: string;
+  programId: string;
   programName: string;
+  /** The day the rotation trains next, or null. */
+  nextDayName: string | null;
   dayName: string;
   /** ISO. */
   completedAt: string;
@@ -168,7 +135,19 @@ export async function getSessionSummary(
   userId: string,
   sessionId: string,
 ): Promise<SessionSummaryView> {
-  const ctx = await getSessionContext(userId, sessionId);
+  // Three steps, not nine: the context, the finished session's sets and the
+  // exercise history are read side by side (the history is keyed by the
+  // session's workout day, so it does not wait for the prescriptions), then
+  // the previous same-day session is found. Its sets are already in the
+  // history, so they are not read again.
+  const owned = await loadOwnedSessionOrThrow(userId, sessionId);
+  const [ctx, currentRows, historyRows, involvements, muscleGroups] = await Promise.all([
+    getSessionContextOf(owned),
+    listExercisePerformancesForSession(sessionId),
+    listCompletedPerformancesForDay(userId, owned.workoutDayId, sessionId),
+    listAllInvolvements(),
+    listMuscleGroups(),
+  ]);
   const { session } = ctx;
   if (session.status !== "COMPLETED" || session.completedAt === null) {
     throw new TRPCError({
@@ -181,24 +160,33 @@ export async function getSessionSummary(
   const prescriptions = ctx.workoutDay.prescriptions;
   const exerciseIds = [...new Set(prescriptions.map((p) => p.exerciseId))];
 
-  const previousSession = await findPreviousCompletedSessionOfDay(
-    userId,
-    ctx.program.id,
-    ctx.workoutDay.name,
-    completedAt,
-    sessionId,
-  );
+  const [previousSession, blockDays, blockSessions] = await Promise.all([
+    findPreviousCompletedSessionOfDay(
+      userId,
+      ctx.program.id,
+      ctx.workoutDay.name,
+      completedAt,
+      sessionId,
+    ),
+    listWorkoutDayRowsForVersion(ctx.block.programVersionId),
+    listSessionsForBlock(ctx.block.id),
+  ]);
+  const previousRows =
+    previousSession === null
+      ? ([] as ExercisePerformanceRecord[])
+      : historyRows.filter((r) => r.sessionId === previousSession.id);
 
-  const [currentRows, previousRows, historyRows, involvements, muscleGroups] =
-    await Promise.all([
-      listExercisePerformancesForSession(sessionId),
-      previousSession === null
-        ? Promise.resolve([] as ExercisePerformanceRecord[])
-        : listExercisePerformancesForSession(previousSession.id),
-      listCompletedPerformancesForExercises(userId, exerciseIds, sessionId),
-      listAllInvolvements(),
-      listMuscleGroups(),
-    ]);
+  // The day the rotation trains next, named on the summary's exit.
+  const dayIndexOf = (dayId: string) => blockDays.findIndex((d) => d.id === dayId);
+  const nextDay =
+    blockDays[
+      replayRotationPointer(
+        blockDays.length,
+        blockSessions
+          .filter((x) => x.status === "COMPLETED" || x.status === "SKIPPED")
+          .map((x) => dayIndexOf(x.workoutDayId)),
+      )
+    ] ?? null;
 
   const muscleName = new Map(muscleGroups.map((m) => [m.id, m.name]));
   const involvementsByExercise = new Map<string, MuscleInvolvement[]>();
@@ -232,6 +220,13 @@ export async function getSessionSummary(
       previous: previousRows
         .filter((r) => r.exerciseId === exerciseId)
         .map((r) => toSet(r, unit)),
+      // Last time logged fewer sets of this lift than planned AND fewer than
+      // today: today's volume is mostly extra sets, and a percent against that
+      // says nothing about progress. Short both times is like for like.
+      previousIsComplete:
+        previousRows.filter((r) => r.exerciseId === exerciseId).length >=
+          exercisePrescriptions.reduce((n, p) => n + p.targetSets, 0) ||
+        previousRows.filter((r) => r.exerciseId === exerciseId).length >= own.length,
       priorBestE1rm:
         earlier.length === 0 ? null : Math.max(...earlier.map((r) => r.estimated1RM)),
     };
@@ -250,7 +245,9 @@ export async function getSessionSummary(
 
   return {
     sessionId,
+    programId: ctx.program.id,
     programName: ctx.program.name,
+    nextDayName: nextDay === null ? null : nextDay.name,
     dayName: ctx.workoutDay.name,
     completedAt: completedAt.toISOString(),
     summary,

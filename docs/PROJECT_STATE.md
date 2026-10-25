@@ -1,4 +1,45 @@
+## Active roadmap
+
+**Product-depth roadmap** (`docs/plans/2026-10-24-product-depth-roadmap.md`). 4 projects + Week 1 foundation. **Week 1 and Project 1 are built** (branch `product-depth-week1-project1`, on top of `phase-a3a1-session-ux`, 2026-10-25). Next, in order: Project 4 (training record), Project 3 (onboarding + templates, needs ARCH-059 accepted). Project 2 (cues + illustrations) stays deferred until illustration assets are properly sourced.
+
+## Recent sessions
+
+- 2026-10-25: Week 1 + Project 1 of the product-depth roadmap. Handoff: `docs/handoffs/2026-10-25-week1-project1.md`.
+
 ## Current phase
+
+**Week 1 + Project 1 are complete; Project 4 (the training record) is next.** See the active roadmap for the 4-project product-depth plan. Order: Week 1 (perf + UX) → Project 1 (targets + Today) → Project 4 (journal) → Project 3 (onboarding + templates). Project 2 (cues + illustrations) deferred until illustration assets are properly sourced.
+
+**Week 1 + Project 1 shipped (2026-10-25).** No schema change. `analysis/`, `assessment/` and `goal-profiles/` have no diff; `calibration.test.ts` passes 22/22 and `calibration-before.txt` is unchanged. ARCH-062 is in effect.
+
+*Perf.* Measured with `packages/api/src/services/queryBudget.test.ts` (Prisma calls / longest chain of calls that each waited for the one before) and, through a latency-injecting Postgres proxy (20 ms round trip), wall time of the database work:
+
+| Flow | Before | After | Wall at 20 ms RTT, before → after |
+|---|---|---|---|
+| Session page | 22 / 15 | 13 / 3 | 859 → 203 ms |
+| Log a set (write path) | 5 / 5 | 2 / 2 | 189 → 100 ms |
+| `/app` (now also builds the Today card) | 13 / 11 | 18 / 3 | 479 → 211 ms |
+| Mark complete → summary | 13 / 9 | 16 / 4 | 548 → 161 ms |
+| `/app/progress` | 2 / 1 | 3 / 1 | 171 → 73 ms |
+
+Each Prisma call costs about 3 round trips (prepare + execute), so database wait ≈ 10 × RTT for the session page: ~50 ms at 5 ms, ~300 ms at 30 ms, ~1 s at 100 ms, ~2.3 s at 225 ms. **The Vercel function region against the Neon region (ap-southeast-1) still decides whether the session page is usable in under a second; this is the founder's dashboard check.** Tap-to-visible for a set is ~25 ms (optimistic), with the save landing ~1.1 s later under an injected 800 ms server delay.
+
+What changed: reads that hang off a Session's own ids run side by side as flat queries (`repositories/sessionContext.ts`, `listCompletedPerformancesOf` in `performanceRecord.ts`); nested `select`s on hot paths were replaced because Prisma runs each nesting level as another sequential statement (155 ms nested vs 51 ms flat, measured); `loadOwnedSessionOrThrow` is one statement (`findSessionOwnedBy`); exercises, muscle groups and involvements are cached per process for 10 minutes (`clearReferenceDataCache()`); `logSet` is an ownership-and-membership check plus an insert.
+
+*Optimistic logging.* A tapped set is on screen at once, saved in the background with a client id (a retried tap is the same set: primary-key conflict returns the existing owned record, never another user's) and its tap time (`completedAt`, believed only if within 12 h back / 5 min forward), retried with backoff, marked saving / saved / not saved; Mark complete waits for sets still saving; leaving with unsaved sets warns.
+
+*The 10 UX fixes (§7.4):* (1) a set needs reps; (2) reps placeholder is the range; (3) Review no longer reports a load above plan (`LOAD_ABOVE` is not produced; `LOAD_BELOW` still is), "planned so far" counts days due (`floor(days × perWeek / 7) + 1`), and `computeAdherence` keeps records paired with their session across rest days (a latent mis-pairing bug); (4) "Start your first session" after the first commit; (5) an empty draft says "Add your first day to see an assessment"; (6) summary: Done + next day named + "Start X now", muscles under one set hidden, no percent against a lift logged short last time unless today was short too, verdict leads with facts (no "Solid session."); (7) finished exercises fold, next card scrolls in; (8) Delete set undoes by re-logging the same set (id, place, time), Skip session is held 6 s with Undo before the request is sent (no state-machine change); (9) the plan line says "3 sets × 8–12 · stop with 2–3 reps left", logged sets say "2-3 reps left"; (10) the dashboard drops "versions committed", "0 weeks in" and the Review button on an empty block and shows "Past 7 days: 1 of 2 sessions"; Review opens with "What you did" (lift verdicts, sessions), folds the commit-time critique, and puts engine and threshold versions under "Details".
+
+*Project 1 (ARCH-062).* `packages/domain/src/progress/{nextTargets,startingWeight,loadSteps}.ts` (pure, 33 boundary tests); `targetsService`, `todayService`, `exerciseHistory` in `packages/api`. Session screen: a target and reason per lift, the weight list opens on it and offers it as the top row, nothing is filled in; a first-ever loaded exercise runs "find your starting weight" (the effort picker is replaced by "How many more could you have done?" and a suggested next weight). Dashboard: the Today card (Today / In progress / Done with PRs and next day), comeback line after 10+ days off.
+
+**Not done / watch:**
+- No rest timer, cues or pictures (Project 2). No journal (Project 4). No onboarding or templates (Project 3).
+- A target is computed per exercise from earlier COMPLETED sessions in any program; a lifter who changes a program's reps range mid-history is judged against the new range.
+- "Past 7 days" is a rolling 7 days, not a calendar week (the server does not know the lifter's time zone).
+- The Done card lasts 6 hours after a session (`JUST_FINISHED_MS`, the same as the stale window).
+- A bodyweight exercise with no history is not "first time": it shows the rep range and keeps the effort picker.
+- The Builder still overflows at 375 px (496 px page); out of scope.
+- **Never run `next build` (it is part of `turbo typecheck`) while a dev server is running from the same `apps/web`: it overwrites `.next` and the dev server then serves pages whose client JavaScript never hydrates.** Use `tsc --noEmit` per package.
 
 **Phase A2 ("lazy-lifter friction fixes") is done on branch `phase-a2-friction-fixes`, awaiting review and merge.** It follows Phase A (merged to `main`, PR #23) and implements the 2026-10-21 lazy-lifter diagnostic's recommendations 1–6, 9, 11 and 12, plus the founder's session timer and auto-close. Deferred: per-exercise progress (7), starter templates (8), back-dating sessions (10). Phase B is **not started**.
 
@@ -29,7 +70,7 @@ Phase A2 shipped:
 - Dashboard stats row fits at 375px.
 
 **Cross-references for what comes next:**
-- **Register:** ARCH-055 to ARCH-058 added in this batch. ARCH-058 was not in the original brief: the ReviewData contract comment requires a decision entry for the shape change, and the row-id bug needed recording. **Next free ID is ARCH-061** (ARCH-059 and ARCH-060 were logged on 2026-10-22 as *Proposed*, not in effect, by the strategy plan).
+- **Register:** ARCH-055 to ARCH-058 added in this batch. ARCH-058 was not in the original brief: the ReviewData contract comment requires a decision entry for the shape change, and the row-id bug needed recording. **Next free ID is ARCH-063** (ARCH-059 and ARCH-060 were logged on 2026-10-22 as *Proposed*, not in effect, by the strategy plan; ARCH-061 and ARCH-062 are in effect).
 - **Deferred from the diagnostic:** per-exercise progress trend (7), novice starter templates (8), back-dating a session (10).
 - **Mid-block correction semantics remain deferred** (see Unresolved decisions). Phase A2 makes the old block reachable after a correction commit, which removes most of the "progress wiped" cost.
 - **Phase B candidates still open:** exercise swap mid-session (`PerformanceRecord.performedExerciseId`), per-exercise cues, per-exercise "tried something different" notes. The day picker shipped here.
@@ -243,9 +284,9 @@ Phase-1 through Phase-7 items are preserved from the previous state of this file
   - `packages/db` — 4 files, 9 tests
   - `packages/api` — **19 files, 175 tests** (Phase A3a.1 added `restDay.test.ts` (4): the flag is stored and rotates, rest days never count as skipped or in the session log, the commit-time assessment equals the program without the rest day, a rest day with exercises is rejected; and a 3-session summary test in `progressService.test.ts`; Phase A3a added `progressService.test.ts` (7): Progress rows and verdict, summary vs the previous same-day session, PR baseline, revisit stability, ownership; Phase A2 added `phaseA2.test.ts` (21, including the patch): day picker, auto-close, set edit/delete, hints, Review row-id join and new kinds, unarchive/blocks, identity)
   - `packages/domain` — **34 files, 340 tests** (Phase A3a.1 added `session/__tests__/loggingOptions.test.ts` (7), `structure/__tests__/restDay.test.ts` (5: rest days leave every axis and the assessment unchanged) and `copy/__tests__/axisSentence.test.ts` (7, with the banned-phrase lint over every band, muscle and value); Phase A3a added `progress/__tests__/progress.test.ts` (18): e1RM, top set, history and PR flags, verdict boundaries, session summary, banned-phrase lint over all new copy; Phase A added `assessment/__tests__/provisional-fit.test.ts` (5) and `goal-profiles/__tests__/evidence.test.ts` (10), which pins the evidence tiers)
-  - **Total Vitest**: **66 files, 588 tests**
+  - **Total Vitest after the product-depth batch (Week 1 + Project 1)**: **70 files, 649 tests** (api 22 files / 201, domain 35 / 375, db 4 / 9, config 1 / 3, ai 8 / 61). New: `queryBudget.test.ts` (call and chain ceilings), `nextTargets.test.ts` in api (14, targets / Today / summary exit against the database), `reviewAdherence.test.ts` (6), `domain/progress/__tests__/nextTargets.test.ts` (33), plus write-path tests in `performanceService.test.ts`.
 - **Playwright** (all passing where runnable):
-  - `e2e/landing.spec.ts`, `e2e/builder.spec.ts`, `e2e/builder-simulate.spec.ts`, `e2e/training.spec.ts`, `e2e/landing-dashboard.spec.ts`, `e2e/review.spec.ts`, `e2e/coach.spec.ts`, `e2e/progress-mobile.spec.ts` (Phase A3a: Progress, verdict and summary at 375px, including no horizontal scroll and 44px targets on the new screens and the session screen), `e2e/session-ux.spec.ts` (Phase A3a.1: the pre-start gate, both pickers opening centered on the plan and submitting, the lb list, at 375px), `e2e/rest-day.spec.ts` (Phase A3a.1: Builder button, rotation, day picker, the rest-day screen at 375px, and the plain-language lines in Builder and Review). All 16 specs pass (1 skipped as designed) against a dev server started with `MODEL_PROVIDER=mock MOCK_SCENARIO=coach-regression`. **Start that server with `pnpm --filter web exec next dev`, not `pnpm dev`: Turbo drops those variables and the Coach step of `regression.spec` then fails.**
+  - `e2e/landing.spec.ts`, `e2e/builder.spec.ts`, `e2e/builder-simulate.spec.ts`, `e2e/training.spec.ts`, `e2e/landing-dashboard.spec.ts`, `e2e/review.spec.ts`, `e2e/coach.spec.ts`, `e2e/progress-mobile.spec.ts` (Phase A3a: Progress, verdict and summary at 375px, including no horizontal scroll and 44px targets on the new screens and the session screen), `e2e/session-ux.spec.ts` (Phase A3a.1: the pre-start gate, both pickers opening centered on the plan and submitting, the lb list, at 375px), `e2e/rest-day.spec.ts` (Phase A3a.1: Builder button, rotation, day picker, the rest-day screen at 375px, and the plain-language lines in Builder and Review). **After the product-depth batch: 17 tests in 13 files pass** (new: the second-session target test in `session-ux.spec.ts`; `e2e/blocks.ts` finds Review from the program's history because the dashboard offers "Review block" only after a completed session). Earlier: all 16 specs pass (1 skipped as designed) against a dev server started with `MODEL_PROVIDER=mock MOCK_SCENARIO=coach-regression`. **Start that server with `pnpm --filter web exec next dev`, not `pnpm dev`: Turbo drops those variables and the Coach step of `regression.spec` then fails.**
 - `pnpm turbo run typecheck` → clean; `pnpm lint` → 0 errors (1 pre-existing warning in `invariant.test.ts`); `check:provisional-banner` → PASS
 - Playwright (Phase A): all 12 specs pass (1 skipped as designed) when run against a dev server with CI's `MODEL_PROVIDER=mock MOCK_SCENARIO=coach-regression`. Spec changes: the draft-label selector moved from `getByPlaceholder("Option B")` to `getByLabel("New draft label")` (9 call sites; the placeholder is now the default label); `review.spec` `commitV2` targets the new day's picker (drafts now start from v1); `regression.spec` asserts the ARCH-054 banner copy. With the local `.env.local` (`MODEL_PROVIDER=gemini`), the Coach regression step fails because a live model does not reliably propose a change; that step is CI-mock-only by design.
 - `pnpm turbo run test` → all packages pass. Known pre-existing flake: under `--force`, `@training/db`'s own tests can race `@training/db#build` (`prisma generate`), because other packages' `test` depends on `^build` and db's does not; a rerun passes.
@@ -261,4 +302,4 @@ Phase-1 through Phase-7 items are preserved from the previous state of this file
 3. **Phase 9 operational items** (`docs/LAUNCH_CHECKLIST.md`): Sentry alert rules, Upstash verification, Neon backups.
 4. **Deferred:** E4 (band-level severity), E10 (UI-enforced classification gate).
 
-**Register:** ARCH-001 through ARCH-058 and ARCH-061 in effect; ARCH-059 and ARCH-060 proposed (not in effect); next free ID is **ARCH-062**.
+**Register:** ARCH-001 through ARCH-058, ARCH-061 and ARCH-062 in effect; ARCH-059 and ARCH-060 proposed (not in effect); next free ID is **ARCH-063**.

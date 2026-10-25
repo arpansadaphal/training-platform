@@ -85,7 +85,14 @@ export interface ClientReviewData {
   }>;
 }
 
+export interface ClientLift {
+  exerciseId: string;
+  verdictLine: string;
+}
+
 interface Props {
+  /** The lifter's lifts, most recently trained first, each with its plain verdict line. */
+  lifts: ClientLift[];
   data: ClientReviewData;
 }
 
@@ -101,7 +108,7 @@ export function ReviewClient(props: Props) {
 
 // ── Inner ────────────────────────────────────────────────────────────────
 
-function ReviewClientInner({ data }: Props) {
+function ReviewClientInner({ data, lifts }: Props) {
   const [showRecompute, setShowRecompute] = useState(false);
 
   // Opt-in. `enabled: showRecompute` means this query fires only when the
@@ -141,36 +148,21 @@ function ReviewClientInner({ data }: Props) {
         </p>
       ) : null}
 
-      {/* ── 0. Block summary (ARCH-058): always shown, below threshold too ── */}
-      <section className={styles.section} aria-label="Block summary">
+      {/* ── 0. What you did: the lifter's own numbers lead (ARCH-058 summary stays) ── */}
+      <section className={styles.section} aria-label="What you did">
+        <h2 className={styles.sectionHeading}>What you did</h2>
         <p className={styles.summaryLine}>{summaryLine(completedSessions, summary)}</p>
+        {lifts.length > 0 ? (
+          <ul className={styles.liftList}>
+            {lifts.map((lift) => (
+              <li key={lift.exerciseId}>{lift.verdictLine}</li>
+            ))}
+          </ul>
+        ) : null}
+        {sessionLog.length > 0 ? <SessionLogList entries={sessionLog} /> : null}
       </section>
 
-      {/* ── 1. Assessment at commit time (ARCH-015 default) ───────────── */}
-      <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionHeading}>Assessment at commit time</h2>
-          <p className={styles.sectionMeta}>
-            {new Date(data.snapshot.computedAtIso).toLocaleDateString(
-              undefined,
-              { year: "numeric", month: "short", day: "numeric" },
-            )}
-            {" · engine "}
-            <code>{data.snapshot.engineVersion}</code>
-            {" · thresholds "}
-            <code>{data.snapshot.thresholdsVersion}</code>
-          </p>
-        </div>
-        <p className={styles.sectionSub}>
-          What you saw when you started this block. Not recomputed.
-        </p>
-        <AssessmentDisplay
-          result={data.snapshot.assessment as AssessmentResult}
-          fitScore={data.snapshot.fitScore as FitScoreResult}
-        />
-      </section>
-
-      {/* ── 2. Adherence ─────────────────────────────────────────────── */}
+      {/* ── 1. Adherence ─────────────────────────────────────────────── */}
       <section className={styles.section}>
         <h2 className={styles.sectionHeading}>Adherence</h2>
         <div className={styles.adherenceGrid}>
@@ -228,13 +220,6 @@ function ReviewClientInner({ data }: Props) {
         )}
       </section>
 
-      {sessionLog.length > 0 ? (
-        <section className={styles.section}>
-          <h2 className={styles.sectionHeading}>Sessions</h2>
-          <SessionLogList entries={sessionLog} />
-        </section>
-      ) : null}
-
       {/* ── 3. Observations ──────────────────────────────────────────── */}
       <section className={styles.section}>
         <h2 className={styles.sectionHeading}>Observations</h2>
@@ -258,6 +243,35 @@ function ReviewClientInner({ data }: Props) {
             ))}
           </ul>
         )}
+      </section>
+
+      {/* ── 2. Assessment at commit time (ARCH-015 default), collapsed ─────── */}
+      <section className={styles.section}>
+        <details className={styles.assessmentDetails}>
+          <summary className={styles.assessmentSummary}>
+            <h2 className={styles.sectionHeading}>Assessment at commit time</h2>
+          </summary>
+          <p className={styles.sectionSub}>
+            What you saw when you started this block. Not recomputed.
+          </p>
+          <AssessmentDisplay
+            result={data.snapshot.assessment as AssessmentResult}
+            fitScore={data.snapshot.fitScore as FitScoreResult}
+          />
+          <details className={styles.versionDetails}>
+            <summary>Details</summary>
+            <p className={styles.sectionMeta}>
+              {new Date(data.snapshot.computedAtIso).toLocaleDateString(
+                undefined,
+                { year: "numeric", month: "short", day: "numeric" },
+              )}
+              {" · engine "}
+              <code>{data.snapshot.engineVersion}</code>
+              {" · thresholds "}
+              <code>{data.snapshot.thresholdsVersion}</code>
+            </p>
+          </details>
+        </details>
       </section>
 
       {/* ── 4. Opt-in recompute (visually distinct, below divider) ───── */}

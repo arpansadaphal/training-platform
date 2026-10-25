@@ -21,66 +21,68 @@
 
 import { TRPCError } from "@trpc/server";
 import {
+  countPrescriptionsOfOwnedSession,
   createPerformanceRecord,
   createPerformanceRecordsBatch,
   deletePerformanceRecord,
-  findPerformanceRecordById,
-  updatePerformanceRecord,
-  findTrainingBlockById,
-  findVersionWithStructure,
+  findOwnedPerformanceRecord,
+  isPrimaryKeyConflict,
+  listOwnedPerformanceRecordsByIds,
   listPerformanceRecordsForSession,
+  updatePerformanceRecord,
   type PerformanceRecordRecord,
-  type SessionRecord,
 } from "@training/db";
 import { loadOwnedSessionOrThrow } from "./loadOwnedExecution";
 
-interface SessionStructure {
-  workoutDayId: string;
-  prescriptionIds: ReadonlySet<string>;
+/**
+ * Proves, in one statement, that `sessionId` is the caller's and that every
+ * prescription belongs to its workout day. On success that is the whole check
+ * (a logged set is this plus one insert: two database calls, down from five).
+ * Only when it fails do we spend more calls working out why, so the error the
+ * caller sees is unchanged: NOT_FOUND for a Session that is missing or not
+ * theirs (ARCH-040), BAD_REQUEST for a prescription from another day.
+ */
+async function assertPrescriptionsInOwnedSession(
+  userId: string,
+  sessionId: string,
+  prescriptionIds: readonly string[],
+  badRequestMessage: string,
+): Promise<void> {
+  const distinct = [...new Set(prescriptionIds)];
+  const matched = await countPrescriptionsOfOwnedSession(userId, sessionId, distinct);
+  if (matched === distinct.length) return;
+  await loadOwnedSessionOrThrow(userId, sessionId);
+  throw new TRPCError({ code: "BAD_REQUEST", message: badRequestMessage });
 }
 
 /**
- * Loads the session's structural context (the workout day of the version the
- * session was generated from) and returns the set of prescription ids
- * belonging to that day. One lookup, reused by both logSet and logBatch.
- *
- * Failing loud on a missing block/version/day is a data-integrity response,
- * not a user-facing error — the invariant is that a Session's workoutDayId
- * always resolves within its block's version structure.
+ * A client may stamp a set with the time it was tapped, so a set that waited
+ * out a bad signal, or an undone delete, keeps its real place in the session.
+ * Only a plausible stamp is believed: not in the future (5 minutes of clock
+ * skew allowed) and not older than a session can be (the 6 h staleness window
+ * and some slack). Anything else is the server's now.
  */
-async function loadSessionStructure(
-  session: SessionRecord,
-): Promise<SessionStructure> {
-  const block = await findTrainingBlockById(session.trainingBlockId);
-  if (!block) {
-    throw new Error(
-      `Session ${session.id} references missing TrainingBlock ${session.trainingBlockId}`,
-    );
-  }
-  const version = await findVersionWithStructure(block.programVersionId);
-  if (!version) {
-    throw new Error(
-      `TrainingBlock ${block.id} references missing ProgramVersion ${block.programVersionId}`,
-    );
-  }
-  const day = version.workoutDays.find((d) => d.id === session.workoutDayId);
-  if (!day) {
-    throw new Error(
-      `Session ${session.id} references WorkoutDay ${session.workoutDayId} not present in its version's structure.`,
-    );
-  }
-  return {
-    workoutDayId: day.id,
-    prescriptionIds: new Set(day.prescriptions.map((p) => p.id)),
-  };
+const COMPLETED_AT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const COMPLETED_AT_SKEW_MS = 5 * 60 * 1000;
+
+function believableCompletedAt(claimed: Date | undefined, now: Date): Date | undefined {
+  if (claimed === undefined) return undefined;
+  const t = claimed.getTime();
+  if (Number.isNaN(t)) return undefined;
+  if (t > now.getTime() + COMPLETED_AT_SKEW_MS) return undefined;
+  if (t < now.getTime() - COMPLETED_AT_MAX_AGE_MS) return undefined;
+  return new Date(Math.min(t, now.getTime()));
 }
 
 export interface LogSetInput {
+  /** Client-chosen id: a retry of the same tap is the same set, never a second one. */
+  id?: string;
   exercisePrescriptionId: string;
   setIndex: number;
   actualReps?: number | null;
   actualLoad?: number | null;
   actualRpe?: number | null;
+  completedAt?: Date;
 }
 
 export async function logSet(
@@ -88,33 +90,45 @@ export async function logSet(
   sessionId: string,
   input: LogSetInput,
 ): Promise<PerformanceRecordRecord> {
-  const session = await loadOwnedSessionOrThrow(userId, sessionId);
-  const structure = await loadSessionStructure(session);
+  await assertPrescriptionsInOwnedSession(
+    userId,
+    sessionId,
+    [input.exercisePrescriptionId],
+    "The prescription is not part of this session's workout day.",
+  );
 
-  if (!structure.prescriptionIds.has(input.exercisePrescriptionId)) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message:
-        "The prescription is not part of this session's workout day.",
+  const completedAt = believableCompletedAt(input.completedAt, new Date());
+  try {
+    return await createPerformanceRecord({
+      ...(input.id ? { id: input.id } : {}),
+      sessionId,
+      exercisePrescriptionId: input.exercisePrescriptionId,
+      setIndex: input.setIndex,
+      actualReps: input.actualReps ?? null,
+      actualLoad: input.actualLoad ?? null,
+      actualRpe: input.actualRpe ?? null,
+      ...(completedAt ? { completedAt } : {}),
     });
+  } catch (err) {
+    // A retry whose first attempt landed: hand back that set. Another user's
+    // id (or another Session's) is not ours to return.
+    if (input.id && isPrimaryKeyConflict(err)) {
+      const existing = await findOwnedPerformanceRecord(userId, sessionId, input.id);
+      if (existing) return existing;
+      throw new TRPCError({ code: "CONFLICT", message: "That set id is already in use." });
+    }
+    throw err;
   }
-
-  return createPerformanceRecord({
-    sessionId: session.id,
-    exercisePrescriptionId: input.exercisePrescriptionId,
-    setIndex: input.setIndex,
-    actualReps: input.actualReps ?? null,
-    actualLoad: input.actualLoad ?? null,
-    actualRpe: input.actualRpe ?? null,
-  });
 }
 
 export interface LogBatchEntry {
+  id?: string;
   exercisePrescriptionId: string;
   setIndex: number;
   actualReps?: number | null;
   actualLoad?: number | null;
   actualRpe?: number | null;
+  completedAt?: Date;
 }
 
 export interface LogBatchInput {
@@ -136,29 +150,44 @@ export async function logBatch(
 ): Promise<PerformanceRecordRecord[]> {
   if (input.entries.length === 0) return [];
 
-  const session = await loadOwnedSessionOrThrow(userId, sessionId);
-  const structure = await loadSessionStructure(session);
+  await assertPrescriptionsInOwnedSession(
+    userId,
+    sessionId,
+    input.entries.map((e) => e.exercisePrescriptionId),
+    "A prescription in the batch is not part of this session's workout day.",
+  );
 
-  for (const entry of input.entries) {
-    if (!structure.prescriptionIds.has(entry.exercisePrescriptionId)) {
+  const now = new Date();
+  const ids = input.entries.flatMap((e) => (e.id ? [e.id] : []));
+  try {
+    return await createPerformanceRecordsBatch(
+      input.entries.map((e) => {
+        const completedAt = believableCompletedAt(e.completedAt, now);
+        return {
+          ...(e.id ? { id: e.id } : {}),
+          sessionId,
+          exercisePrescriptionId: e.exercisePrescriptionId,
+          setIndex: e.setIndex,
+          actualReps: e.actualReps ?? null,
+          actualLoad: e.actualLoad ?? null,
+          actualRpe: e.actualRpe ?? null,
+          ...(completedAt ? { completedAt } : {}),
+        };
+      }),
+    );
+  } catch (err) {
+    // A retried batch whose first attempt landed (the transaction is
+    // all-or-nothing, so every id is there or none is): hand those sets back.
+    if (ids.length === input.entries.length && isPrimaryKeyConflict(err)) {
+      const existing = await listOwnedPerformanceRecordsByIds(userId, sessionId, ids);
+      if (existing.length === ids.length) return existing;
       throw new TRPCError({
-        code: "BAD_REQUEST",
-        message:
-          "A prescription in the batch is not part of this session's workout day.",
+        code: "CONFLICT",
+        message: "A set id in that batch is already in use.",
       });
     }
+    throw err;
   }
-
-  return createPerformanceRecordsBatch(
-    input.entries.map((e) => ({
-      sessionId: session.id,
-      exercisePrescriptionId: e.exercisePrescriptionId,
-      setIndex: e.setIndex,
-      actualReps: e.actualReps ?? null,
-      actualLoad: e.actualLoad ?? null,
-      actualRpe: e.actualRpe ?? null,
-    })),
-  );
 }
 
 /**
@@ -187,9 +216,13 @@ async function loadEditableRecordOrThrow(
   sessionId: string,
   recordId: string,
 ): Promise<PerformanceRecordRecord> {
-  const session = await loadOwnedSessionOrThrow(userId, sessionId);
-  const record = await findPerformanceRecordById(recordId);
-  if (!record || record.sessionId !== session.id) {
+  // Two flat reads in parallel (the Session, and the record filtered by the same
+  // ownership) instead of Session -> block -> record in a row.
+  const [session, record] = await Promise.all([
+    loadOwnedSessionOrThrow(userId, sessionId),
+    findOwnedPerformanceRecord(userId, sessionId, recordId),
+  ]);
+  if (!record) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Logged set not found" });
   }
   if (session.status !== "IN_PROGRESS") {

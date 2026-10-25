@@ -43,6 +43,7 @@
 // playwright.config.ts is what actually makes this spec complete quickly in
 // CI; the outer ceiling is a fail-fast guard.
 
+import { currentReviewHref } from "./blocks";
 import { test, expect, type Page } from "@playwright/test";
 
 // ── Step helpers ───────────────────────────────────────────────────────
@@ -107,21 +108,9 @@ async function buildAndCommitV1(page: Page, programHref: string): Promise<void> 
 }
 
 async function trainOneSession(page: Page): Promise<void> {
-  await page.goto("/app");
-
-  const cta = page
-    .getByRole("link", {
-      name: /continue session|start (next )?session/i,
-    })
-    .or(
-      page.getByRole("button", {
-        name: /continue session|start (next )?session/i,
-      }),
-    )
-    .first();
-  await expect(cta).toBeVisible({ timeout: 30_000 });
-  await cta.click();
-  await expect(page).toHaveURL(/\/train$/, { timeout: 30_000 });
+  // /train is the one start surface that is the same in every state of the
+  // dashboard's Today card (Start, Continue, or Done with the next day).
+  await page.goto("/train");
 
   const startTrainingButton = page.getByRole("button", {
     name: /^start training$/i,
@@ -152,9 +141,10 @@ async function trainOneSession(page: Page): Promise<void> {
   await expect(logButton).toBeVisible({ timeout: 15_000 });
   await logButton.click();
 
-  await expect(page.getByText(/set logged/i)).toBeVisible({
+  await expect(page.getByText(/Set 1: 3 reps/)).toBeVisible({
     timeout: 15_000,
   });
+  await expect(page.getByText("Saving…", { exact: true })).toHaveCount(0);
 
   await completeButton.click();
 
@@ -164,20 +154,12 @@ async function trainOneSession(page: Page): Promise<void> {
 }
 
 async function openReviewAndRecompute(page: Page): Promise<void> {
-  await page.goto("/app");
-
-  const reviewLink = page.getByRole("link", {
-    name: "Review block",
-    exact: true,
-  });
-  await expect(reviewLink).toBeVisible({ timeout: 30_000 });
-
-  const reviewHref = await reviewLink.getAttribute("href");
-  if (!reviewHref || !reviewHref.startsWith("/app/review/")) {
-    throw new Error(`Review block link has unexpected href: ${reviewHref ?? "(null)"}`);
-  }
+  const reviewHref = await currentReviewHref(page);
   await page.goto(reviewHref);
   await expect(page).toHaveURL(/\/app\/review\/[^/]+$/);
+  // The commit-time assessment, with its provisional banner, is folded away
+  // on Review until opened.
+  await page.getByRole("heading", { name: "Assessment at commit time" }).click();
 
   await expect(
     page.getByRole("note", {

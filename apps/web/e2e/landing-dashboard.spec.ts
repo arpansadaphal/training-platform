@@ -110,9 +110,10 @@ test("Landing dashboard: primary program surfaces as the identity/progress conte
   // Identity greeting present.
   await expect(page.getByRole("heading", { name: /Hi,|Welcome back/ })).toBeVisible();
 
-  // Program name is the primary heading — not "Dashboard", not a feature
-  // card in a grid.
-  await expect(page.getByRole("heading", { name: programName })).toBeVisible();
+  // The Today card is the primary content: today's day as the heading, the
+  // program named beneath it — not "Dashboard", not a feature card in a grid.
+  await expect(page.getByRole("heading", { name: "Day 1" })).toBeVisible();
+  await expect(page.getByText(programName)).toBeVisible();
 
   // Lifetime-stats region present.
   await expect(page.getByRole("region", { name: "Lifetime stats" })).toBeVisible();
@@ -122,17 +123,13 @@ test("Landing dashboard: primary program surfaces as the identity/progress conte
       .getByText("Sessions completed", { exact: true }),
   ).toBeVisible();
 
-  // A primary CTA is present, and it points at the training surface.
-  // (Before any session exists, the CTA is "Start next session" — the
-  // block was opened automatically by the commit, per ARCH-039.)
-  await expect(page.getByRole("link", { name: "Start next session" })).toBeVisible();
+  // A primary CTA is present. Before any session exists it is "Start" on the
+  // Today card, and it goes straight to the session (the block was opened by
+  // the commit, per ARCH-039). A day with no history says "first time".
+  await expect(page.getByText("first time").first()).toBeVisible();
 
   // ── Train one session to completion ──────────────────────────────────
-  await page.getByRole("link", { name: "Start next session" }).click();
-  await expect(page).toHaveURL(/\/train$/);
-
-  const programCard = page.locator("li").filter({ hasText: programName });
-  await programCard.getByRole("button", { name: "Start training" }).click();
+  await page.getByRole("button", { name: "Start", exact: true }).click();
   await expect(page).toHaveURL(/\/train\/session\/[^/]+$/);
 
   await page.getByRole("button", { name: "Start session" }).click();
@@ -141,7 +138,7 @@ test("Landing dashboard: primary program surfaces as the identity/progress conte
   const repsInput = page.getByLabel("Reps").first();
   await repsInput.fill("8");
   await page.getByRole("button", { name: "Log one set" }).first().click();
-  await expect(page.getByText(/Set logged\./)).toBeVisible();
+  await expect(page.getByText(/Set 1: 8 reps/)).toBeVisible();
 
   await page.getByRole("button", { name: "Mark complete" }).click();
   // Phase A2: if any exercise has no logged sets, the app asks first.
@@ -156,7 +153,9 @@ test("Landing dashboard: primary program surfaces as the identity/progress conte
   // ── Back to /app: the identity surface is intact, stats reflect the
   //    completed session ────────────────────────────────────────────────
   await page.goto("/app");
-  await expect(page.getByRole("heading", { name: programName })).toBeVisible();
+  // Just finished: the card says Done and what is next.
+  await expect(page.getByText("Done", { exact: true })).toBeVisible();
+  await expect(page.getByText(programName)).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Lifetime stats" })).toBeVisible();
 
   // The block strip is present with a Review link — the entry point into

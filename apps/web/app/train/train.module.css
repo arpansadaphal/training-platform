@@ -482,3 +482,152 @@
   font-size: 1.15rem;
   font-weight: 600;
 }
+
+/* Product-depth roadmap, Week 1 + Project 1: optimistic logging, targets, folded exercises. */
+.timerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+}
+
+.saveStatus {
+  margin: 0.25rem 0 0.75rem;
+  min-height: 1.25rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.saveStatusFailed {
+  color: #c53030;
+  font-weight: 600;
+}
+
+.linkButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 0.25rem;
+  background: transparent;
+  border: 0;
+  color: var(--accent, #047857);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.setState {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.setStateFailed {
+  color: #c53030;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.logHint {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.skipUndoText {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+/* The target: shown, never filled in. */
+.targetLine {
+  margin: 0.35rem 0 0.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.targetReason {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.preStartTarget {
+  color: var(--muted);
+}
+
+/* A finished exercise is one line; tapping it opens the sets again. */
+.exerciseCardDone {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.doneHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.15rem 0.75rem;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.6rem 0;
+  background: transparent;
+  border: 0;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.doneName {
+  font-weight: 600;
+}
+
+.doneSummary {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* "How many more could you have done?" while finding a starting weight. */
+.repsLeftPanel {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+}
+
+.repsLeftQuestion {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.repsLeftButtons {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.repsLeftButton {
+  min-height: 48px;
+  padding: 0;
+  white-space: nowrap;
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.suggestion {
+  margin: 0.5rem 0;
+}

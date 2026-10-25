@@ -25,6 +25,7 @@ import {
   getLastTimeHints,
   getOrCreateNext,
   getSessionContext,
+  getSessionPage,
   getCurrentSession,
   getTrainingOptions,
   startSpecificDay,
@@ -60,6 +61,11 @@ export const sessionRouter = router({
   getLastTimeHints: protectedProcedure
     .input(z.object({ sessionId: sessionIdSchema }))
     .query(({ ctx, input }) => getLastTimeHints(ctx.user.id, input.sessionId)),
+
+  // Everything the session page renders, in one call (two steps of reads).
+  getPage: protectedProcedure
+    .input(z.object({ sessionId: sessionIdSchema }))
+    .query(({ ctx, input }) => getSessionPage(ctx.user.id, input.sessionId)),
 
   getContext: protectedProcedure
     .input(z.object({ sessionId: sessionIdSchema }))

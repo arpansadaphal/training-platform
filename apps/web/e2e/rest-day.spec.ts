@@ -1,3 +1,4 @@
+import { currentReviewHref } from "./blocks";
 import { test, expect, type Page } from "@playwright/test";
 
 /**
@@ -75,8 +76,8 @@ test("rest day: build, rotate, pick, move past (375px for the session part)", as
   await card.getByRole("button", { name: "Open rest day" }).click();
   await expect(page).toHaveURL(/\/train\/session\/[^/]+$/);
   await page.goto("/app");
-  await expect(page.getByText(/Next up: rest day/)).toBeVisible();
-  await page.getByRole("link", { name: "Open rest day" }).click();
+  await expect(page.getByText(/Rest day\. No training scheduled\./)).toBeVisible();
+  await page.getByRole("button", { name: "Open rest day" }).click();
   await expect(page).toHaveURL(/\/train\/session\/[^/]+$/);
 
   // ── The rest-day screen ────────────────────────────────────────────────
@@ -92,9 +93,10 @@ test("rest day: build, rotate, pick, move past (375px for the session part)", as
   await expect(page.getByText(/Rest day done\./)).toBeVisible();
 
   // ── Review: the rest day did not count as a skipped session ───────────
-  await page.goto("/app");
-  await page.getByRole("link", { name: "Review block" }).click();
+  await page.goto(await currentReviewHref(page));
   await expect(page.getByText(/No systematic deviations|Adherence/i).first()).toBeVisible();
+  // The commit-time assessment is folded away on Review until opened.
+  await page.getByRole("heading", { name: "Assessment at commit time" }).click();
   await expect(page.getByText(/ (volume|frequency) is /).first()).toBeVisible();
   await expect(page.getByText(/sessions? skipped/i)).toHaveCount(0);
 });

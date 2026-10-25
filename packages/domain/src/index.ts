@@ -163,6 +163,19 @@ export {
 } from "./progress/verdict";
 export type { ProgressVerdict, ProgressVerdictKind } from "./progress/verdict";
 export { computeSessionSummary } from "./progress/sessionSummary";
+export {
+  computeNextTargets, judgeSession,
+  COMEBACK_AFTER_DAYS, LIGHTER_BY, DELOAD_AFTER_MISSES,
+} from "./progress/nextTargets";
+export type {
+  NextTarget, NextTargetInput, TargetKind, TargetPrescription,
+  SessionOutcome, SessionJudgement,
+} from "./progress/nextTargets";
+export { loadStepFor, roundToGrid, floorToGrid, GRID } from "./progress/loadSteps";
+export {
+  REPS_LEFT_ANSWERS, repsLeftText, stopWithText, suggestWeight, startingWeightFromSession,
+} from "./progress/startingWeight";
+export type { RepsLeftAnswer } from "./progress/startingWeight";
 export type {
   SessionSummary, SessionSummaryInput, SummaryExerciseInput,
   MuscleInvolvement, MuscleVolumeDelta, NewPersonalRecord,

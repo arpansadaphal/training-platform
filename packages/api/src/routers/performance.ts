@@ -29,6 +29,17 @@ const sessionIdSchema = z.string().min(1);
 const prescriptionIdSchema = z.string().min(1);
 
 const logSetFieldsSchema = z.object({
+  // Client-chosen so a retried tap is the same set (see performanceService.logSet).
+  id: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{8,40}$/)
+    .optional(),
+  // When the set was tapped; believed only if plausible (performanceService).
+  completedAt: z
+    .string()
+    .datetime({ offset: true })
+    .transform((s) => new Date(s))
+    .optional(),
   exercisePrescriptionId: prescriptionIdSchema,
   setIndex: z.number().int().nonnegative(),
   // Optional/nullable — a user may log only reps, only load, only RPE, or

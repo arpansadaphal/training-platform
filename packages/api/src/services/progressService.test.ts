@@ -156,7 +156,7 @@ describe("Phase A3a session summary", () => {
     expect(view.summary.newPRs).toHaveLength(1);
     expect(view.summary.newPRs[0]).toMatchObject({ weight: 105, reps: 5, unit: "kg" });
     expect(view.summary.verdict).toBe(
-      "Session complete. New PR on " + view.summary.newPRs[0]!.exerciseName + ". Total volume up 5% from last time.",
+      "New PR on " + view.summary.newPRs[0]!.exerciseName + ". Total volume up 5% from last time. 3 of 6 planned sets logged.",
     );
   });
 
