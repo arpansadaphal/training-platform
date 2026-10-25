@@ -484,6 +484,8 @@ function SessionClientInner({
   const logSetMutation = trpc.performance.logSet.useMutation();
   const logBatchMutation = trpc.performance.logBatch.useMutation();
   const deleteSetMutation = trpc.performance.deleteSet.useMutation();
+  // The answer to "how many more could you have done?" is a quiet edit: no banner.
+  const answerMutation = trpc.performance.updateSet.useMutation();
 
   const updateSetMutation = trpc.performance.updateSet.useMutation({
     onSuccess: (updated) => {
@@ -838,7 +840,7 @@ function SessionClientInner({
     patchRecord(rec.id, { actualRpe: rpe });
     await inflight.current.get(rec.id);
     try {
-      await updateSetMutation.mutateAsync({
+      await answerMutation.mutateAsync({
         sessionId: context.session.id,
         recordId: rec.id,
         changes: { actualRpe: rpe },
@@ -1326,13 +1328,15 @@ function SessionClientInner({
                             {suggestion === answered?.actualLoad
                               ? `Next set: stay at ${suggestion} ${unitLabel}.`
                               : `Next set: try ${suggestion} ${unitLabel}.`}{" "}
-                            <button
-                              type="button"
-                              className={styles.linkButton}
-                              onClick={() => setInputValue(p.id, "load", String(suggestion))}
-                            >
-                              Use {suggestion} {logUnit(p)}
-                            </button>
+                            {vals.load === String(suggestion) ? null : (
+                              <button
+                                type="button"
+                                className={styles.linkButton}
+                                onClick={() => setInputValue(p.id, "load", String(suggestion))}
+                              >
+                                Use {suggestion} {logUnit(p)}
+                              </button>
+                            )}
                           </p>
                         ) : null}
 

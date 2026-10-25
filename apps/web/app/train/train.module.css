@@ -617,6 +617,8 @@
 
 .repsLeftButton {
   min-height: 48px;
+  padding: 0;
+  white-space: nowrap;
   background: transparent;
   color: var(--fg);
   border: 1px solid var(--border);
