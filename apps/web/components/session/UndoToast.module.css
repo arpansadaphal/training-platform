@@ -1,0 +1,40 @@
+/* A bottom toast: above the phone tab bar and its safe area, centered on wider screens. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  padding: 0.25rem 0.5rem 0.25rem 1rem;
+  background: #1f2933;
+  color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.message {
+  font-size: 0.95rem;
+}
+
+.action {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 0.75rem;
+  background: transparent;
+  color: #9ae6b4;
+  border: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 40rem) {
+  .toast {
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 0.75rem);
+  }
+}

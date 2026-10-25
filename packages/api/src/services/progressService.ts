@@ -39,44 +39,7 @@ import {
 } from "@training/domain";
 import { getSessionContextOf } from "./sessionService";
 import { loadOwnedSessionOrThrow } from "./loadOwnedExecution";
-
-function unitOf(loadScheme: unknown): WeightUnit {
-  const scheme = loadScheme as { type?: string; unit?: string } | null;
-  return scheme?.type === "FIXED_WEIGHT" && scheme.unit === "lb" ? "lb" : "kg";
-}
-
-function toSet(row: ExercisePerformanceRecord, unit: WeightUnit): LoggedSet {
-  return {
-    reps: row.actualReps,
-    load:
-      row.actualLoad === null
-        ? null
-        : convertLoad(row.actualLoad, unitOf(row.loadScheme), unit),
-    rpe: row.actualRpe,
-  };
-}
-
-/** Groups rows by Session into the domain's SessionSets, loads expressed in `unit`. */
-function groupBySession(
-  rows: readonly ExercisePerformanceRecord[],
-  unit: WeightUnit,
-): SessionSets[] {
-  const bySession = new Map<string, SessionSets>();
-  for (const row of rows) {
-    if (row.sessionCompletedAt === null) continue;
-    let entry = bySession.get(row.sessionId);
-    if (entry === undefined) {
-      entry = {
-        sessionId: row.sessionId,
-        date: row.sessionCompletedAt.toISOString(),
-        sets: [],
-      };
-      bySession.set(row.sessionId, entry);
-    }
-    (entry.sets as LoggedSet[]).push(toSet(row, unit));
-  }
-  return [...bySession.values()];
-}
+import { groupBySession, toSet, unitOf } from "./exerciseHistory";
 
 // ─── Progress view ──────────────────────────────────────────────────────────
 

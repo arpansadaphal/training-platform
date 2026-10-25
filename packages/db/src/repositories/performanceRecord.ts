@@ -201,6 +201,21 @@ export async function findOwnedPerformanceRecord(
   return row === null ? null : toRecord(row);
 }
 
+/** Those of `ids` that are sets of `sessionId`, when that Session is `userId`'s (a retried batch). */
+export async function listOwnedPerformanceRecordsByIds(
+  userId: string,
+  sessionId: string,
+  ids: readonly string[],
+): Promise<PerformanceRecordRecord[]> {
+  if (ids.length === 0) return [];
+  const rows = await prisma.performanceRecord.findMany({
+    where: { id: { in: [...ids] }, sessionId, session: { trainingBlock: { userId } } },
+    orderBy: [{ completedAt: "asc" }, { setIndex: "asc" }],
+    select: PERFORMANCE_RECORD_SELECT,
+  });
+  return rows.map(toRecord);
+}
+
 export async function findPerformanceRecordById(
   id: string,
 ): Promise<PerformanceRecordRecord | null> {
@@ -336,46 +351,78 @@ export async function listCompletedPerformancesForExercises(
   return joinExerciseRecords(rows, prescriptions, sessions);
 }
 
+type ExerciseFilter = { exercise: { prescriptions: { some: { workoutDay: object } } } };
+
 /**
- * The same history, for "the exercises of this workout day" without first
- * reading the day's prescriptions: the day is a relation filter. This is what
- * lets a session page ask for its last-time hints in the same step as it asks
- * for the day itself.
+ * The user's COMPLETED-session history for "the exercises that match a
+ * relation filter", as three flat reads side by side (see above). The filter
+ * is a relation, not a list of ids, so a caller can ask before it has read the
+ * prescriptions that name those exercises.
  */
-export async function listCompletedPerformancesForDay(
+async function listCompletedPerformancesOf(
   userId: string,
-  workoutDayId: string,
-  excludeSessionId: string,
+  ofExercise: ExerciseFilter,
+  excludeSessionId: string | null,
 ): Promise<ExercisePerformanceRecord[]> {
-  const ofDay = { exercise: { prescriptions: { some: { workoutDayId } } } } as const;
+  const notExcluded = excludeSessionId === null ? {} : { not: excludeSessionId };
   const [rows, prescriptions, sessions] = await Promise.all([
     prisma.performanceRecord.findMany({
       where: {
-        sessionId: { not: excludeSessionId },
+        sessionId: notExcluded,
         session: { status: "COMPLETED", trainingBlock: { userId } },
-        exercisePrescription: ofDay,
+        exercisePrescription: ofExercise,
       },
       orderBy: [...NEWEST_SESSION_FIRST],
       select: PERFORMANCE_RECORD_SELECT,
     }),
     prisma.exercisePrescription.findMany({
       where: {
-        ...ofDay,
+        ...ofExercise,
         workoutDay: { programVersion: { program: { ownerUserId: userId } } },
       },
       select: PRESCRIPTION_FACTS_SELECT,
     }),
     prisma.session.findMany({
       where: {
-        id: { not: excludeSessionId },
+        id: notExcluded,
         status: "COMPLETED",
         trainingBlock: { userId },
-        performanceRecords: { some: { exercisePrescription: ofDay } },
+        performanceRecords: { some: { exercisePrescription: ofExercise } },
       },
       select: { id: true, completedAt: true },
     }),
   ]);
   return joinExerciseRecords(rows, prescriptions, sessions);
+}
+
+/**
+ * History for "the exercises of this workout day", without first reading the
+ * day's prescriptions: the day is a relation filter. This is what lets a
+ * session page ask for its last-time hints and targets in the same step as it
+ * asks for the day itself.
+ */
+export async function listCompletedPerformancesForDay(
+  userId: string,
+  workoutDayId: string,
+  excludeSessionId: string,
+): Promise<ExercisePerformanceRecord[]> {
+  return listCompletedPerformancesOf(
+    userId,
+    { exercise: { prescriptions: { some: { workoutDay: { id: workoutDayId } } } } },
+    excludeSessionId,
+  );
+}
+
+/** The same, for every exercise in a program version (the dashboard's Today card). */
+export async function listCompletedPerformancesForVersion(
+  userId: string,
+  programVersionId: string,
+): Promise<ExercisePerformanceRecord[]> {
+  return listCompletedPerformancesOf(
+    userId,
+    { exercise: { prescriptions: { some: { workoutDay: { programVersionId } } } } },
+    null,
+  );
 }
 
 /**

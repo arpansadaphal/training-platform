@@ -27,6 +27,20 @@
 //     dumbbell exercises). Logged weights are read in the plan's unit: lb if
 //     the plan says lb, kg otherwise. Only the number is stored.
 //
+// Product-depth roadmap (Week 1 + Project 1, ARCH-062):
+//   - Logging is optimistic: a tapped set is on screen at once, saved in the
+//     background with the client's own id (a retry is the same set) and its
+//     tap time, retried on a bad connection, and marked "saving" / "saved" /
+//     "not saved". Mark complete waits for sets still saving.
+//   - A set needs reps before it can be logged; weight may be bodyweight.
+//   - Each exercise states a TARGET from the lifter's own history (ARCH-062).
+//     It is shown, offered as the weight list's top row and where it opens,
+//     and never filled in: the no-prefill rule still holds for reps and weight.
+//   - A first-ever exercise runs "find your starting weight": after each set,
+//     "How many more could you have done?", and a suggested next weight.
+//   - Finished exercises fold to one line; the next one scrolls into view.
+//   - Delete set and Skip session act at once and offer Undo (no confirm).
+//
 // Phase A2 additions:
 //   - A session clock ("Session time: MM:SS") and per-set "since last" gaps
 //     while IN_PROGRESS, read from startedAt / completedAt. Client-side only.
@@ -50,14 +64,23 @@
 
 "use client";
 
-import { useEffect, useState, type FocusEvent } from "react";
+import { useEffect, useRef, useState, type FocusEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ExerciseRecord } from "@training/db";
 import { TRPCProvider, trpc } from "@/src/lib/trpc";
 import { loadUnitLabel } from "@/src/lib/loadLabels";
-import { convertLoad, nearestRpeOption } from "@training/domain";
+import {
+  REPS_LEFT_ANSWERS,
+  convertLoad,
+  nearestRpeOption,
+  repsLeftText,
+  startingWeightFromSession,
+  stopWithText,
+  suggestWeight,
+} from "@training/domain";
 import { RpePicker, WeightPicker } from "@/components/session/LoggingPickers";
+import { UndoToast, type ToastState } from "@/components/session/UndoToast";
 import styles from "../../train.module.css";
 
 type SessionStatus = "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED";
@@ -110,6 +133,25 @@ type ClientPerformanceRecord = {
   completedAt: Date | string;
 };
 
+/** Where a set stands while it is being saved in the background. Absent = saved long ago. */
+type SaveState = "saving" | "saved" | "failed";
+type ClientRecord = ClientPerformanceRecord & {
+  _state?: SaveState;
+  /** Logged by "Log N remaining": every set shares one tap time, so no rest gap is shown. */
+  _batch?: boolean;
+};
+
+/** ARCH-062: what to lift, from the lifter's own earlier sets (sessionService.getSessionPage). */
+export interface ClientTarget {
+  prescriptionId: string;
+  kind: "FIRST_TIME" | "START" | "UP" | "HOLD" | "DELOAD" | "COMEBACK" | "MORE_REPS";
+  weight: number | null;
+  repsLow: number;
+  repsHigh: number;
+  reason: string;
+  unit: "kg" | "lb";
+}
+
 /** Display-only "last time" hint (sessionService.getLastTimeHints). */
 export interface ClientLastTimeHint {
   exerciseId: string;
@@ -130,6 +172,7 @@ interface Props {
   initialRecords: ClientPerformanceRecord[];
   initialObservations: ClientObservation[];
   lastTimeHints: ClientLastTimeHint[];
+  targets: ClientTarget[];
   /** ARCH-057: sessions the start that led here auto-saved (COMPLETED), for the banner. */
   autoSaved: { sessionId: string; dayName: string; completedAtIso: string }[];
 }
@@ -188,33 +231,92 @@ function logUnit(p: ClientPrescription): string {
 }
 
 /**
- * A human-readable description of a prescription's plan, shown above the log
- * inputs as a reference. Intentionally tolerant of a Decimal-serialized
- * targetRpe (string) from the wire — the RSC path gives a number, the tRPC
- * path would give a string; both are handled.
+ * The plan as a sentence: "3 sets × 8–12 · stop with 2–3 reps left". Effort is
+ * told in reps left, the picker's own words, not as RPE and RIR together. The
+ * plan's weight is not shown: with a history, the TARGET says what to lift
+ * (ARCH-062), and a plan weight the lifter has moved past would contradict it.
+ * Tolerant of a Decimal-serialized targetRpe (string) from the wire.
  */
 function describePlan(p: ClientPrescription, equipment: string | null): string {
   const reps =
     p.targetRepsLow === p.targetRepsHigh
       ? `${p.targetRepsHigh}`
-      : `${p.targetRepsLow}-${p.targetRepsHigh}`;
+      : `${p.targetRepsLow}–${p.targetRepsHigh}`;
   const rpe = p.targetRpe !== null && p.targetRpe !== undefined ? Number(p.targetRpe) : null;
-  const rpePart = rpe !== null ? ` @ RPE ${rpe} (${Math.max(0, 10 - rpe)} RIR)` : "";
+  const stop = stopWithText(rpe !== null && Number.isFinite(rpe) ? rpe : null);
   const scheme = p.loadScheme as { type?: string; percent?: unknown } | null;
-  const planned = plannedWeight(p);
-  const weightPart = planned
-    ? ` · ${planned.weight} ${loadUnitLabel(planned.unit, equipment)}`
-    : scheme?.type === "BODYWEIGHT"
-      ? // Before Phase A2 every exercise defaulted to bodyweight; on loaded
-        // equipment that default was never the lifter's choice, so show it
-        // as unspecified rather than as a claim.
-        equipment && equipment !== "bodyweight"
-        ? " · —"
-        : " · bodyweight"
-      : scheme?.type === "PERCENT_1RM" && typeof scheme.percent === "number"
-        ? ` · ${scheme.percent > 1 ? scheme.percent : Math.round(scheme.percent * 100)}% 1RM`
+  const loadPart =
+    scheme?.type === "PERCENT_1RM" && typeof scheme.percent === "number"
+      ? ` · ${scheme.percent > 1 ? scheme.percent : Math.round(scheme.percent * 100)}% 1RM`
+      : scheme?.type === "BODYWEIGHT" && (!equipment || equipment === "bodyweight")
+        ? " · bodyweight"
         : "";
-  return `${p.targetSets} × ${reps}${rpePart}${weightPart}`;
+  return `${p.targetSets} sets × ${reps}${stop ? ` · ${stop.replace("-", "–")}` : ""}${loadPart}`;
+}
+
+/** "50 kg" / "bodyweight". */
+function weightText(weight: number, unitLabel: string): string {
+  return weight === 0 ? "bodyweight" : `${weight} ${unitLabel}`;
+}
+
+/** The bold line over an exercise: "Target: 50 kg × 8–12". */
+function targetHeadline(t: ClientTarget, unitLabel: string, finding: boolean): string {
+  if (finding) return "First time: find your starting weight.";
+  const reps = t.repsLow === t.repsHigh ? `${t.repsHigh}` : `${t.repsLow}–${t.repsHigh}`;
+  if (t.weight === null) return `Target: ${reps} reps`;
+  if (t.weight === 0) return `Target: ${reps} reps`;
+  return `Target: ${weightText(t.weight, unitLabel)} × ${reps}`;
+}
+
+/** The short form on the pre-start list: "50 kg × 8–12", or "first time". */
+function targetShort(t: ClientTarget, unitLabel: string, finding: boolean): string {
+  if (finding) return "first time";
+  const reps = t.repsLow === t.repsHigh ? `${t.repsHigh}` : `${t.repsLow}–${t.repsHigh}`;
+  if (t.weight === null || t.weight === 0) return `${reps} reps`;
+  return `${weightText(t.weight, unitLabel)} × ${reps}`;
+}
+
+/** One line for a finished exercise: "3 × 10 · 40 kg", or "10, 10, 8 reps · 40–45 kg". */
+function summarizeSets(sets: readonly ClientPerformanceRecord[], unitLabel: string): string {
+  const reps = sets.map((r) => r.actualReps).filter((n): n is number => n !== null);
+  const loads = sets.map((r) => r.actualLoad).filter((n): n is number => n !== null);
+  const uniform = reps.length === sets.length && reps.every((n) => n === reps[0]);
+  const repsText = uniform && reps.length > 0 ? `${sets.length} × ${reps[0]}` : `${reps.join(", ")} reps`;
+  if (loads.length === 0) return repsText;
+  const lo = Math.min(...loads);
+  const hi = Math.max(...loads);
+  if (hi === 0) return `${repsText} · bodyweight`;
+  return `${repsText} · ${lo === hi ? `${lo}` : `${lo}–${hi}`} ${unitLabel}`;
+}
+
+/** A set's id, chosen on the device so a retried save is the same set. */
+function newId(): string {
+  const c = globalThis.crypto;
+  if (c && typeof c.randomUUID === "function") return c.randomUUID().replace(/-/g, "");
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/** How long Skip session can be undone before it is sent. */
+const SKIP_UNDO_MS = 6000;
+const RETRY_DELAYS_MS = [1500, 4000, 9000];
+
+/** A failure worth retrying: no answer from the server, or the server's own trouble. */
+function isRetryable(err: unknown): boolean {
+  const status = (err as { data?: { httpStatus?: unknown } | null } | null)?.data?.httpStatus;
+  if (typeof status === "number") return status >= 500 || status === 408 || status === 429;
+  return true;
+}
+
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const delay = RETRY_DELAYS_MS[attempt];
+      if (delay === undefined || !isRetryable(err)) throw err;
+      await new Promise((resolve) => window.setTimeout(resolve, delay));
+    }
+  }
 }
 
 /**
@@ -303,14 +405,17 @@ function SessionClientInner({
   initialRecords,
   initialObservations,
   lastTimeHints,
+  targets,
   autoSaved,
 }: Props) {
   const router = useRouter();
   const hintByExercise = new Map(lastTimeHints.map((h) => [h.exerciseId, h]));
+  const targetByRx = new Map(targets.map((t) => [t.prescriptionId, t]));
 
-  const [records, setRecords] = useState<ClientPerformanceRecord[]>(
-    initialRecords,
-  );
+  const [records, setRecords] = useState<ClientRecord[]>(initialRecords);
+  // Async code (retries, undo) needs the latest sets, not the render it began in.
+  const recordsRef = useRef<ClientRecord[]>(records);
+  recordsRef.current = records;
   const [observations, setObservations] =
     useState<ClientObservation[]>(initialObservations);
   const [inputs, setInputs] = useState<Record<string, InputValues>>(() => {
@@ -335,12 +440,28 @@ function SessionClientInner({
   // "Mark complete" with unlogged exercises asks first; this holds their names.
   const [unloggedPrompt, setUnloggedPrompt] = useState<string[] | null>(null);
   const [autoSavedDismissed, setAutoSavedDismissed] = useState(false);
+  const [toast, setToast] = useState<ToastState | null>(null);
+  // Exercises the lifter opened again after finishing them.
+  const [reopened, setReopened] = useState<ReadonlySet<string>>(new Set());
+  const [completing, setCompleting] = useState(false);
+  // Skip session acts at once and can be undone until this timer fires.
+  const [skipPending, setSkipPending] = useState(false);
+  const skipTimer = useRef<number | null>(null);
+  const skipFiredRef = useRef(false);
+  // A moment of "Saved" after the last background save lands.
+  const [justSaved, setJustSaved] = useState(false);
 
   const exerciseNameById = new Map(exercises.map((e) => [e.id, e.name]));
   const equipmentById = new Map(exercises.map((e) => [e.id, e.equipment]));
 
-  function recordsFor(prescriptionId: string): ClientPerformanceRecord[] {
-    return records.filter((r) => r.exercisePrescriptionId === prescriptionId);
+  function recordsFor(prescriptionId: string): ClientRecord[] {
+    return records
+      .filter((r) => r.exercisePrescriptionId === prescriptionId)
+      .sort(
+        (a, b) =>
+          toDate(a.completedAt).getTime() - toDate(b.completedAt).getTime() ||
+          a.setIndex - b.setIndex,
+      );
   }
 
   function setInputValue(
@@ -354,52 +475,23 @@ function SessionClientInner({
     }));
   }
 
+  function patchRecord(id: string, patch: Partial<ClientRecord>) {
+    setRecords((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
+
   // ── Mutations ────────────────────────────────────────────────────────────
 
-  const logSetMutation = trpc.performance.logSet.useMutation({
-    onSuccess: (created) => {
-      setRecords((prev) => [...prev, created]);
-      setStatusMessage("Set logged.");
-      setErrorMessage(null);
-      // Inputs are NOT cleared — logging successive identical sets should be
-      // a single tap each. The user edits values only when the next set
-      // differs (which is exactly the deviation case Review cares about).
-    },
-    onError: (err) => {
-      setErrorMessage(err.message);
-      setStatusMessage(null);
-    },
-  });
-
-  const logBatchMutation = trpc.performance.logBatch.useMutation({
-    onSuccess: (created) => {
-      setRecords((prev) => [...prev, ...created]);
-      setStatusMessage(`${created.length} sets logged.`);
-      setErrorMessage(null);
-    },
-    onError: (err) => {
-      setErrorMessage(err.message);
-      setStatusMessage(null);
-    },
-  });
+  const logSetMutation = trpc.performance.logSet.useMutation();
+  const logBatchMutation = trpc.performance.logBatch.useMutation();
+  const deleteSetMutation = trpc.performance.deleteSet.useMutation();
 
   const updateSetMutation = trpc.performance.updateSet.useMutation({
     onSuccess: (updated) => {
-      setRecords((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      setRecords((prev) =>
+        prev.map((r) => (r.id === updated.id ? { ...r, ...updated, _state: r._state } : r)),
+      );
       setEditing(null);
       setStatusMessage("Set updated.");
-      setErrorMessage(null);
-    },
-    onError: (err) => {
-      setErrorMessage(err.message);
-      setStatusMessage(null);
-    },
-  });
-
-  const deleteSetMutation = trpc.performance.deleteSet.useMutation({
-    onSuccess: ({ id }) => {
-      setRecords((prev) => prev.filter((r) => r.id !== id));
-      setStatusMessage("Set deleted.");
       setErrorMessage(null);
     },
     onError: (err) => {
@@ -431,6 +523,7 @@ function SessionClientInner({
       router.push(`/train/session/${context.session.id}/summary`);
     },
     onError: (err) => {
+      setCompleting(false);
       setErrorMessage(err.message);
       setStatusMessage(null);
     },
@@ -443,6 +536,7 @@ function SessionClientInner({
       router.refresh();
     },
     onError: (err) => {
+      setSkipPending(false);
       setErrorMessage(err.message);
       setStatusMessage(null);
     },
@@ -461,38 +555,186 @@ function SessionClientInner({
     },
   });
 
+  // ── Saving sets in the background ────────────────────────────────────────
+
+  // Saves still running, by set id. Mark complete waits for these.
+  const inflight = useRef(new Map<string, Promise<void>>());
+  // Deletes still running, so an Undo cannot overtake its own delete.
+  const deleting = useRef(new Map<string, Promise<void>>());
+
+  function noteSaved() {
+    setJustSaved(true);
+    window.setTimeout(() => setJustSaved(false), 2000);
+  }
+
+  function entryOf(rec: ClientRecord) {
+    return {
+      id: rec.id,
+      exercisePrescriptionId: rec.exercisePrescriptionId,
+      setIndex: rec.setIndex,
+      actualReps: rec.actualReps,
+      actualLoad: rec.actualLoad,
+      actualRpe: rec.actualRpe,
+      completedAt: toDate(rec.completedAt).toISOString(),
+    };
+  }
+
+  /** Saves one set (the record is already on screen). Safe to call again: the id makes a retry the same set. */
+  function persistOne(rec: ClientRecord): Promise<void> {
+    const existing = inflight.current.get(rec.id);
+    if (existing) return existing;
+    patchRecord(rec.id, { _state: "saving" });
+    const run = (async () => {
+      try {
+        const saved = await withRetry(() =>
+          logSetMutation.mutateAsync({ sessionId: context.session.id, entry: entryOf(rec) }),
+        );
+        setRecords((prev) =>
+          prev.map((r) => (r.id === rec.id ? { ...r, ...saved, _state: "saved" } : r)),
+        );
+        window.setTimeout(() => patchRecord(rec.id, { _state: undefined }), 1500);
+        setErrorMessage(null);
+        noteSaved();
+      } catch {
+        patchRecord(rec.id, { _state: "failed" });
+      } finally {
+        inflight.current.delete(rec.id);
+      }
+    })();
+    inflight.current.set(rec.id, run);
+    return run;
+  }
+
+  /** Saves several sets as one batch (Log N remaining). */
+  function persistBatch(recs: ClientRecord[]): void {
+    const ids = recs.map((r) => r.id);
+    recs.forEach((r) => patchRecord(r.id, { _state: "saving" }));
+    const run = (async () => {
+      try {
+        const saved = await withRetry(() =>
+          logBatchMutation.mutateAsync({
+            sessionId: context.session.id,
+            entries: recs.map(entryOf),
+          }),
+        );
+        const byId = new Map(saved.map((s) => [s.id, s]));
+        setRecords((prev) =>
+          prev.map((r) => (byId.has(r.id) ? { ...r, ...byId.get(r.id)!, _state: "saved" } : r)),
+        );
+        window.setTimeout(() => ids.forEach((id) => patchRecord(id, { _state: undefined })), 1500);
+        setErrorMessage(null);
+        noteSaved();
+      } catch {
+        ids.forEach((id) => patchRecord(id, { _state: "failed" }));
+      } finally {
+        ids.forEach((id) => inflight.current.delete(id));
+      }
+    })();
+    ids.forEach((id) => inflight.current.set(id, run));
+  }
+
+  function retryFailed() {
+    for (const r of recordsRef.current) {
+      if (r._state === "failed") void persistOne(r);
+    }
+  }
+
+  // Back on the network: try the sets that did not save.
+  useEffect(() => {
+    const onOnline = () => retryFailed();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+    // retryFailed reads the latest sets through a ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Leaving with sets unsaved would lose them: ask first.
+  const unsavedCount = records.filter((r) => r._state === "saving" || r._state === "failed").length;
+  useEffect(() => {
+    if (unsavedCount === 0) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsavedCount]);
+
+  /** Waits for every save in flight; false when something still has not saved. */
+  async function flushSaves(): Promise<boolean> {
+    await Promise.all([...inflight.current.values()]);
+    return !recordsRef.current.some((r) => r._state === "failed");
+  }
+
   // ── Handlers ─────────────────────────────────────────────────────────────
+
+  /** The reps a set needs before it can be logged. */
+  function repsOf(vals: InputValues): number | null {
+    const reps = parseNullableNumber(vals.reps);
+    return reps !== null && reps > 0 ? reps : null;
+  }
+
+  function isFindingWeight(p: ClientPrescription): boolean {
+    const t = targetByRx.get(p.id);
+    return (
+      t !== undefined &&
+      t.kind === "FIRST_TIME" &&
+      t.weight === null &&
+      equipmentById.get(p.exerciseId) !== "bodyweight"
+    );
+  }
+
+  function newRecord(p: ClientPrescription, vals: InputValues, setIndex: number, at: Date, batch: boolean): ClientRecord {
+    return {
+      id: newId(),
+      sessionId: context.session.id,
+      exercisePrescriptionId: p.id,
+      setIndex,
+      actualReps: repsOf(vals),
+      actualLoad: parseNullableNumber(vals.load),
+      // While finding a starting weight, effort comes from the question after the set.
+      actualRpe: isFindingWeight(p) ? null : parseNullableNumber(vals.rpe),
+      completedAt: at,
+      _state: "saving",
+      ...(batch ? { _batch: true } : {}),
+    };
+  }
 
   function handleLogOne(p: ClientPrescription) {
     const vals = inputs[p.id];
-    if (!vals) return;
-    const nextIndex = recordsFor(p.id).length;
-    logSetMutation.mutate({
-      sessionId: context.session.id,
-      entry: {
-        exercisePrescriptionId: p.id,
-        setIndex: nextIndex,
-        actualReps: parseNullableNumber(vals.reps),
-        actualLoad: parseNullableNumber(vals.load),
-        actualRpe: parseNullableNumber(vals.rpe),
-      },
-    });
+    if (!vals || repsOf(vals) === null) return;
+    const rec = newRecord(p, vals, recordsFor(p.id).length, new Date(), false);
+    setRecords((prev) => [...prev, rec]);
+    setStatusMessage(null);
+    void persistOne(rec);
   }
 
   function handleLogRemaining(p: ClientPrescription) {
     const vals = inputs[p.id];
-    if (!vals) return;
+    if (!vals || repsOf(vals) === null) return;
     const already = recordsFor(p.id).length;
     const remaining = Math.max(0, p.targetSets - already);
     if (remaining === 0) return;
-    const entries = Array.from({ length: remaining }, (_, i) => ({
-      exercisePrescriptionId: p.id,
-      setIndex: already + i,
-      actualReps: parseNullableNumber(vals.reps),
-      actualLoad: parseNullableNumber(vals.load),
-      actualRpe: parseNullableNumber(vals.rpe),
-    }));
-    logBatchMutation.mutate({ sessionId: context.session.id, entries });
+    const at = new Date();
+    const recs = Array.from({ length: remaining }, (_, i) =>
+      newRecord(p, vals, already + i, at, true),
+    );
+    setRecords((prev) => [...prev, ...recs]);
+    setStatusMessage(null);
+    persistBatch(recs);
+  }
+
+  async function completeNow() {
+    setCompleting(true);
+    setUnloggedPrompt(null);
+    const allSaved = await flushSaves();
+    if (!allSaved) {
+      setCompleting(false);
+      setErrorMessage(
+        "Some sets have not saved yet. Check your connection, then try Mark complete again.",
+      );
+      return;
+    }
+    markCompletedMutation.mutate({ sessionId: context.session.id });
   }
 
   function handleMarkComplete() {
@@ -503,7 +745,7 @@ function SessionClientInner({
       setUnloggedPrompt(unlogged);
       return;
     }
-    markCompletedMutation.mutate({ sessionId: context.session.id });
+    void completeNow();
   }
 
   function handleSaveEdit() {
@@ -519,10 +761,70 @@ function SessionClientInner({
     });
   }
 
-  function handleDeleteSet(recordId: string) {
-    if (!window.confirm("Delete this set?")) return;
-    deleteSetMutation.mutate({ sessionId: context.session.id, recordId });
+  /** Puts a deleted set back exactly as it was: same id, place and time. */
+  async function restoreSet(rec: ClientRecord) {
+    await deleting.current.get(rec.id)?.catch(() => undefined);
+    const back: ClientRecord = { ...rec, _state: "saving" };
+    setRecords((prev) => [...prev.filter((r) => r.id !== rec.id), back]);
+    void persistOne(back);
   }
+
+  function handleDeleteSet(rec: ClientRecord) {
+    setRecords((prev) => prev.filter((r) => r.id !== rec.id));
+    setToast({
+      key: Date.now(),
+      message: "Set deleted.",
+      actionLabel: "Undo",
+      onAction: () => void restoreSet(rec),
+    });
+    const run = deleteSetMutation
+      .mutateAsync({ sessionId: context.session.id, recordId: rec.id })
+      .then(() => undefined)
+      .catch((err: { message?: string }) => {
+        // The delete did not happen: the set belongs back on screen.
+        setRecords((prev) => (prev.some((r) => r.id === rec.id) ? prev : [...prev, { ...rec, _state: undefined }]));
+        setErrorMessage(err.message ?? "Could not delete that set.");
+        setToast(null);
+      })
+      .finally(() => deleting.current.delete(rec.id));
+    deleting.current.set(rec.id, run);
+  }
+
+  /** Skip acts at once on screen; the request goes out after a few seconds unless undone. */
+  function commitSkip() {
+    if (skipFiredRef.current) return;
+    skipFiredRef.current = true;
+    skipTimer.current = null;
+    markSkippedMutation.mutate({ sessionId: context.session.id });
+  }
+
+  function requestSkip() {
+    setSkipPending(true);
+    skipFiredRef.current = false;
+    skipTimer.current = window.setTimeout(commitSkip, SKIP_UNDO_MS);
+  }
+
+  function undoSkip() {
+    if (skipTimer.current !== null) window.clearTimeout(skipTimer.current);
+    skipTimer.current = null;
+    setSkipPending(false);
+  }
+
+  // Leaving the page makes the skip final: the lifter chose it.
+  useEffect(
+    () => () => {
+      if (skipTimer.current !== null) {
+        window.clearTimeout(skipTimer.current);
+        skipTimer.current = null;
+        if (!skipFiredRef.current) {
+          skipFiredRef.current = true;
+          markSkippedMutation.mutate({ sessionId: context.session.id });
+        }
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   function handleSaveObservation() {
     const content = observationText.trim();
@@ -532,6 +834,39 @@ function SessionClientInner({
       content,
     });
   }
+
+  /** "How many more could you have done?" answered for a set. */
+  async function answerRepsLeft(rec: ClientRecord, rpe: number) {
+    patchRecord(rec.id, { actualRpe: rpe });
+    await inflight.current.get(rec.id);
+    try {
+      await updateSetMutation.mutateAsync({
+        sessionId: context.session.id,
+        recordId: rec.id,
+        changes: { actualRpe: rpe },
+      });
+    } catch {
+      patchRecord(rec.id, { actualRpe: null });
+    }
+  }
+
+  // Finished exercises fold to one line; when one finishes, the next unfinished card comes into view.
+  const doneKey = context.workoutDay.prescriptions
+    .filter((p) => recordsFor(p.id).length >= p.targetSets)
+    .map((p) => p.id)
+    .join(",");
+  const seenDone = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = seenDone.current;
+    seenDone.current = doneKey;
+    if (previous === null || previous.split(",").filter(Boolean).length >= doneKey.split(",").filter(Boolean).length) return;
+    const t = window.setTimeout(() => {
+      document
+        .querySelector<HTMLElement>('[data-exercise-card][data-done="false"]')
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [doneKey]);
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -546,6 +881,11 @@ function SessionClientInner({
     month: "short",
     day: "numeric",
   });
+  const comeback = targets.some((t) => t.kind === "COMEBACK");
+  // The first exercise still to do: the one that explains why Log is greyed out.
+  const activeId = workoutDay.prescriptions.find((p) => recordsFor(p.id).length < p.targetSets)?.id ?? null;
+  const failedCount = records.filter((r) => r._state === "failed").length;
+  const savingCount = records.filter((r) => r._state === "saving").length;
 
   // "Since last" gaps: each set against the previous set logged in this
   // session (any exercise), the first against startedAt.
@@ -584,13 +924,49 @@ function SessionClientInner({
           </button>
         </div>
       ) : null}
-      {inProgress && startedAt ? <SessionTimer startedAt={startedAt} /> : null}
+      {inProgress && startedAt ? (
+        <div className={styles.timerRow}>
+          <SessionTimer startedAt={startedAt} />
+          <p
+            className={`${styles.saveStatus} ${failedCount > 0 ? styles.saveStatusFailed : ""}`}
+            role="status"
+            aria-live="polite"
+          >
+            {failedCount > 0 ? (
+              <>
+                {failedCount === 1 ? "1 set isn't saved yet." : `${failedCount} sets aren't saved yet.`}{" "}
+                <button type="button" className={styles.linkButton} onClick={retryFailed}>
+                  Retry
+                </button>
+              </>
+            ) : savingCount > 0 ? (
+              "Saving…"
+            ) : justSaved ? (
+              "Saved ✓"
+            ) : null}
+          </p>
+        </div>
+      ) : null}
 
       {errorMessage ? (
         <p className={styles.errorBanner}>{errorMessage}</p>
       ) : null}
       {statusMessage ? (
         <p className={styles.successBanner}>{statusMessage}</p>
+      ) : null}
+      {comeback && !skipPending && (planned || inProgress) ? (
+        <p className={styles.statusBanner}>
+          Welcome back. Today runs about 10% lighter on purpose.
+        </p>
+      ) : null}
+
+      {skipPending ? (
+        <div className={styles.statusBanner} role="status">
+          <p className={styles.skipUndoText}>Session skipped.</p>
+          <button type="button" className={styles.smallSecondaryButton} onClick={undoSkip}>
+            Undo
+          </button>
+        </div>
       ) : null}
 
       {session.status === "COMPLETED" ? (
@@ -646,7 +1022,7 @@ function SessionClientInner({
         </section>
       ) : null}
 
-      {planned ? (
+      {planned && !skipPending ? (
         <section className={styles.preStart} aria-label="Before you start">
           <p className={styles.preStartDate} suppressHydrationWarning>
             {todayText}
@@ -666,17 +1042,28 @@ function SessionClientInner({
             </p>
           ) : (
             <ul className={styles.preStartList} aria-label="Exercises">
-              {workoutDay.prescriptions.map((p) => (
-                <li key={p.id}>{exerciseNameById.get(p.exerciseId) ?? p.exerciseId}</li>
-              ))}
+              {workoutDay.prescriptions.map((p) => {
+                const t = targetByRx.get(p.id);
+                const equipment = equipmentById.get(p.exerciseId) ?? null;
+                return (
+                  <li key={p.id}>
+                    <span>{exerciseNameById.get(p.exerciseId) ?? p.exerciseId}</span>
+                    {t ? (
+                      <span className={styles.preStartTarget}>
+                        {" "}
+                        · {targetShort(t, loadUnitLabel(t.unit, equipment), isFindingWeight(p))}
+                      </span>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           )}
           <div className={styles.sessionActions}>
             <button
               type="button"
               className={styles.skipButton}
-              onClick={() => markSkippedMutation.mutate({ sessionId: session.id })}
-              disabled={markSkippedMutation.isPending}
+              onClick={requestSkip}
             >
               Skip session
             </button>
@@ -684,7 +1071,7 @@ function SessionClientInner({
         </section>
       ) : null}
 
-      {inProgress && !restDay ? (
+      {inProgress && !restDay && !skipPending ? (
         <>
           {workoutDay.prescriptions.length === 0 ? (
             <p className={styles.emptyState}>
@@ -700,201 +1087,342 @@ function SessionClientInner({
                 const vals = inputs[p.id] ?? { reps: "", load: "", rpe: "" };
                 const equipment = equipmentById.get(p.exerciseId) ?? null;
                 const unitLabel = loadUnitLabel(logUnit(p), equipment);
+                const unit = logUnit(p) === "lb" ? "lb" : "kg";
                 const plan = plannedWeight(p);
                 const hint = hintByExercise.get(p.exerciseId);
+                const target = targetByRx.get(p.id);
+                const finding = isFindingWeight(p);
+                const done = remaining === 0;
+                const expanded = !done || reopened.has(p.id);
+                const lastSet = logged[logged.length - 1];
+                // Finding a starting weight: ask after the latest set, then suggest the next weight.
+                const asking = finding && lastSet !== undefined && lastSet.actualRpe === null && lastSet._state !== "failed";
+                const answered = [...logged].reverse().find((r) => r.actualRpe !== null);
+                const suggestion =
+                  finding && answered
+                    ? suggestWeight({
+                        load: answered.actualLoad,
+                        reps: answered.actualReps,
+                        repsLeft: Math.max(0, 10 - (answered.actualRpe ?? 10)),
+                        repsLow: p.targetRepsLow,
+                        repsHigh: p.targetRepsHigh,
+                        unit,
+                      })
+                    : null;
+                const baseline =
+                  finding && done
+                    ? startingWeightFromSession({
+                        sets: logged.map((r) => ({ reps: r.actualReps, load: r.actualLoad, rpe: r.actualRpe })),
+                        repsLow: p.targetRepsLow,
+                        repsHigh: p.targetRepsHigh,
+                        unit,
+                      })
+                    : null;
+                const pickerTarget = finding ? suggestion : target && target.weight !== null && target.weight > 0 ? target.weight : null;
+                const canLog = repsOf(vals) !== null;
                 return (
-                  <li key={p.id} className={styles.exerciseCard}>
-                    <div className={styles.exerciseHeader}>
-                      <span className={styles.exerciseName}>{name}</span>
-                      <span className={styles.exercisePlan}>
-                        {describePlan(p, equipment)} · {logged.length}/{p.targetSets} logged
-                      </span>
-                    </div>
-                    {hint ? (
-                      <p className={styles.lastTimeHint} suppressHydrationWarning>
-                        {formatHint(hint, loadUnitLabel(hint.unit, equipment))}
-                      </p>
-                    ) : null}
-
-                    {logged.length > 0 ? (
-                      <ul className={styles.setList}>
-                        {logged.map((r, i) =>
-                          editing?.id === r.id ? (
-                            <li key={r.id} className={styles.setItem}>
-                              <span className={styles.setEditRow}>
-                                <span className={styles.setEditTitle}>Set {i + 1}</span>
-                                <span className={styles.setEditFields}>
-                                  <span className={styles.setEditField}>
-                                    <span className={styles.setEditCaption}>Reps</span>
-                                    <input
-                                      type="number"
-                                      inputMode="numeric"
-                                      aria-label="Edit reps"
-                                      className={styles.setEditInput}
-                                      value={editing.reps}
-                                      onChange={(e) => setEditing({ ...editing, reps: e.target.value })}
-                                    />
-                                  </span>
-                                  <span className={styles.setEditField}>
-                                    <span className={styles.setEditCaption}>Weight ({unitLabel})</span>
-                                    <WeightPicker
-                                      label={`Edit weight (${unitLabel})`}
-                                      unit={logUnit(p) === "lb" ? "lb" : "kg"}
-                                      unitText={logUnit(p)}
-                                      value={editing.load}
-                                      onChange={(v) => setEditing({ ...editing, load: v })}
-                                      plannedWeight={plan ? plan.weight : null}
-                                      lastWeight={null}
-                                    />
-                                  </span>
-                                  <span className={`${styles.setEditField} ${styles.setEditFieldWide}`}>
-                                    <span className={styles.setEditCaption}>Effort (RPE)</span>
-                                    <RpePicker
-                                      label="Edit effort (RPE)"
-                                      value={editing.rpe}
-                                      onChange={(v) => setEditing({ ...editing, rpe: v })}
-                                    />
-                                  </span>
-                                </span>
-                                <span className={styles.setEditButtons}>
-                                  <button
-                                    type="button"
-                                    className={styles.smallButton}
-                                    onClick={handleSaveEdit}
-                                    disabled={updateSetMutation.isPending}
-                                  >
-                                    Save
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={styles.smallSecondaryButton}
-                                    onClick={() => setEditing(null)}
-                                  >
-                                    Cancel
-                                  </button>
-                                </span>
-                              </span>
-                            </li>
-                          ) : (
-                            <li key={r.id} className={styles.setItem}>
-                              Set {i + 1}:{" "}
-                              {r.actualReps !== null
-                                ? `${r.actualReps} reps`
-                                : "reps not recorded"}
-                              {r.actualLoad !== null
-                                ? r.actualLoad === 0
-                                  ? " @ bodyweight"
-                                  : ` @ ${r.actualLoad} ${unitLabel}`
-                                : ""}
-                              {r.actualRpe !== null
-                                ? ` @ RPE ${r.actualRpe}`
-                                : ""}
-                              {inProgress && gapSecondsById.has(r.id) ? (
-                                <span className={styles.setGap}>
-                                  {" "}
-                                  ({formatGap(gapSecondsById.get(r.id)!)} since last)
-                                </span>
-                              ) : null}
-                              {inProgress ? (
-                                <span className={styles.setControls}>
-                                  <button
-                                    type="button"
-                                    className={styles.iconButton}
-                                    aria-label={`Edit set ${i + 1}`}
-                                    onClick={() =>
-                                      setEditing({
-                                        id: r.id,
-                                        reps: r.actualReps === null ? "" : String(r.actualReps),
-                                        load: r.actualLoad === null ? "" : String(r.actualLoad),
-                                        rpe: r.actualRpe === null ? "" : String(r.actualRpe),
-                                      })
-                                    }
-                                  >
-                                    ✎
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={styles.iconButton}
-                                    aria-label={`Delete set ${i + 1}`}
-                                    onClick={() => handleDeleteSet(r.id)}
-                                    disabled={deleteSetMutation.isPending}
-                                  >
-                                    ×
-                                  </button>
-                                </span>
-                              ) : null}
-                            </li>
-                          ),
-                        )}
-                      </ul>
-                    ) : null}
-
-                    {remaining > 0 ? (
+                  <li
+                    key={p.id}
+                    className={`${styles.exerciseCard} ${done && !expanded ? styles.exerciseCardDone : ""}`}
+                    data-exercise-card
+                    data-done={done ? "true" : "false"}
+                  >
+                    {done ? (
+                      <button
+                        type="button"
+                        className={styles.doneHeader}
+                        aria-expanded={expanded}
+                        onClick={() =>
+                          setReopened((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(p.id)) next.delete(p.id);
+                            else next.add(p.id);
+                            return next;
+                          })
+                        }
+                      >
+                        <span className={styles.doneName}>✓ {name}</span>
+                        <span className={styles.doneSummary}>{summarizeSets(logged, unitLabel)}</span>
+                      </button>
+                    ) : (
+                      <div className={styles.exerciseHeader}>
+                        <span className={styles.exerciseName}>{name}</span>
+                        <span className={styles.exercisePlan}>
+                          {describePlan(p, equipment)} · {logged.length}/{p.targetSets} logged
+                        </span>
+                      </div>
+                    )}
+                    {!done || expanded ? (
                       <>
-                        <div className={styles.inputRow} onFocusCapture={revealLogButtons}>
-                          <label className={styles.inputField}>
-                            <span className={styles.inputLabel}>Reps</span>
-                            <input
-                              type="number"
-                              inputMode="numeric"
-                              className={styles.numberInput}
-                              value={vals.reps}
-                              onChange={(e) =>
-                                setInputValue(p.id, "reps", e.target.value)
-                              }
-                              placeholder={String(p.targetRepsHigh)}
-                            />
-                          </label>
-                          <div className={styles.inputField}>
-                            <span className={styles.inputLabel}>Weight ({unitLabel})</span>
-                            <WeightPicker
-                              label={`Weight (${unitLabel})`}
-                              unit={logUnit(p) === "lb" ? "lb" : "kg"}
-                              unitText={logUnit(p)}
-                              value={vals.load}
-                              onChange={(v) => setInputValue(p.id, "load", v)}
-                              plannedWeight={plan ? plan.weight : null}
-                              lastWeight={lastWeightFor(p, logged, hint)}
-                              testId={`weight-${p.id}`}
-                            />
+                        {target ? (
+                          <p className={styles.targetLine}>
+                            <strong>{targetHeadline(target, loadUnitLabel(target.unit, equipment), finding)}</strong>
+                            <span className={styles.targetReason}>
+                              {finding && logged.length === 0
+                                ? "Start light and tell us how each set felt."
+                                : finding
+                                  ? null
+                                  : target.reason}
+                            </span>
+                          </p>
+                        ) : null}
+                        {hint ? (
+                          <p className={styles.lastTimeHint} suppressHydrationWarning>
+                            {formatHint(hint, loadUnitLabel(hint.unit, equipment))}
+                          </p>
+                        ) : null}
+
+                        {logged.length > 0 ? (
+                          <ul className={styles.setList}>
+                            {logged.map((r, i) =>
+                              editing?.id === r.id ? (
+                                <li key={r.id} className={styles.setItem}>
+                                  <span className={styles.setEditRow}>
+                                    <span className={styles.setEditTitle}>Set {i + 1}</span>
+                                    <span className={styles.setEditFields}>
+                                      <span className={styles.setEditField}>
+                                        <span className={styles.setEditCaption}>Reps</span>
+                                        <input
+                                          type="number"
+                                          inputMode="numeric"
+                                          aria-label="Edit reps"
+                                          className={styles.setEditInput}
+                                          value={editing.reps}
+                                          onChange={(e) => setEditing({ ...editing, reps: e.target.value })}
+                                        />
+                                      </span>
+                                      <span className={styles.setEditField}>
+                                        <span className={styles.setEditCaption}>Weight ({unitLabel})</span>
+                                        <WeightPicker
+                                          label={`Edit weight (${unitLabel})`}
+                                          unit={unit}
+                                          unitText={logUnit(p)}
+                                          value={editing.load}
+                                          onChange={(v) => setEditing({ ...editing, load: v })}
+                                          plannedWeight={plan ? plan.weight : null}
+                                          targetWeight={pickerTarget}
+                                          targetLabel={finding ? "Suggested" : "Target"}
+                                          lastWeight={null}
+                                        />
+                                      </span>
+                                      <span className={`${styles.setEditField} ${styles.setEditFieldWide}`}>
+                                        <span className={styles.setEditCaption}>Effort (RPE)</span>
+                                        <RpePicker
+                                          label="Edit effort (RPE)"
+                                          value={editing.rpe}
+                                          onChange={(v) => setEditing({ ...editing, rpe: v })}
+                                        />
+                                      </span>
+                                    </span>
+                                    <span className={styles.setEditButtons}>
+                                      <button
+                                        type="button"
+                                        className={styles.smallButton}
+                                        onClick={handleSaveEdit}
+                                        disabled={updateSetMutation.isPending}
+                                      >
+                                        Save
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className={styles.smallSecondaryButton}
+                                        onClick={() => setEditing(null)}
+                                      >
+                                        Cancel
+                                      </button>
+                                    </span>
+                                  </span>
+                                </li>
+                              ) : (
+                                <li key={r.id} className={styles.setItem}>
+                                  Set {i + 1}:{" "}
+                                  {r.actualReps !== null
+                                    ? `${r.actualReps} reps`
+                                    : "reps not recorded"}
+                                  {r.actualLoad !== null
+                                    ? r.actualLoad === 0
+                                      ? " @ bodyweight"
+                                      : ` @ ${r.actualLoad} ${unitLabel}`
+                                    : ""}
+                                  {r.actualRpe !== null ? ` · ${repsLeftText(r.actualRpe)}` : ""}
+                                  {inProgress && gapSecondsById.has(r.id) ? (
+                                    <span className={styles.setGap}>
+                                      {" "}
+                                      {r._batch && gapSecondsById.get(r.id)! < 2
+                                        ? "(logged together)"
+                                        : `(${formatGap(gapSecondsById.get(r.id)!)} since last)`}
+                                    </span>
+                                  ) : null}
+                                  {r._state === "saving" ? (
+                                    <span className={styles.setState}> · saving…</span>
+                                  ) : null}
+                                  {r._state === "saved" ? (
+                                    <span className={styles.setState}> · saved ✓</span>
+                                  ) : null}
+                                  {r._state === "failed" ? (
+                                    <span className={styles.setStateFailed}>
+                                      {" "}
+                                      · not saved{" "}
+                                      <button
+                                        type="button"
+                                        className={styles.linkButton}
+                                        onClick={() => void persistOne(r)}
+                                      >
+                                        Retry
+                                      </button>
+                                    </span>
+                                  ) : null}
+                                  {inProgress && (r._state === undefined || r._state === "saved") ? (
+                                    <span className={styles.setControls}>
+                                      <button
+                                        type="button"
+                                        className={styles.iconButton}
+                                        aria-label={`Edit set ${i + 1}`}
+                                        onClick={() =>
+                                          setEditing({
+                                            id: r.id,
+                                            reps: r.actualReps === null ? "" : String(r.actualReps),
+                                            load: r.actualLoad === null ? "" : String(r.actualLoad),
+                                            rpe: r.actualRpe === null ? "" : String(r.actualRpe),
+                                          })
+                                        }
+                                      >
+                                        ✎
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className={styles.iconButton}
+                                        aria-label={`Delete set ${i + 1}`}
+                                        onClick={() => handleDeleteSet(r)}
+                                      >
+                                        ×
+                                      </button>
+                                    </span>
+                                  ) : null}
+                                </li>
+                              ),
+                            )}
+                          </ul>
+                        ) : null}
+
+                        {asking && lastSet ? (
+                          <div className={styles.repsLeftPanel} role="group" aria-label="How many more could you have done?">
+                            <p className={styles.repsLeftQuestion}>How many more could you have done?</p>
+                            <div className={styles.repsLeftButtons}>
+                              {REPS_LEFT_ANSWERS.map((a) => (
+                                <button
+                                  key={a.id}
+                                  type="button"
+                                  className={styles.repsLeftButton}
+                                  onClick={() => void answerRepsLeft(lastSet, a.rpe)}
+                                >
+                                  {a.id}
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                          <div className={`${styles.inputField} ${styles.inputFieldWide}`}>
-                            <span className={styles.inputLabel}>Effort (RPE)</span>
-                            <RpePicker
-                              label="Effort (RPE)"
-                              value={vals.rpe}
-                              onChange={(v) => setInputValue(p.id, "rpe", v)}
-                              testId={`rpe-${p.id}`}
-                            />
-                          </div>
-                        </div>
-                        <div className={styles.actionRow}>
-                          <button
-                            type="button"
-                            data-log-actions
-                            className={styles.primaryButton}
-                            onClick={() => handleLogOne(p)}
-                            disabled={logSetMutation.isPending}
-                          >
-                            Log one set
-                          </button>
-                          {remaining > 1 ? (
+                        ) : null}
+
+                        {finding && !asking && suggestion !== null && remaining > 0 ? (
+                          <p className={styles.suggestion}>
+                            {suggestion === answered?.actualLoad
+                              ? `Next set: stay at ${suggestion} ${unitLabel}.`
+                              : `Next set: try ${suggestion} ${unitLabel}.`}{" "}
                             <button
                               type="button"
-                              className={styles.secondaryButton}
-                              onClick={() => handleLogRemaining(p)}
-                              disabled={logBatchMutation.isPending}
+                              className={styles.linkButton}
+                              onClick={() => setInputValue(p.id, "load", String(suggestion))}
                             >
-                              Log {remaining} remaining sets
+                              Use {suggestion} {logUnit(p)}
                             </button>
-                          ) : null}
-                        </div>
+                          </p>
+                        ) : null}
+
+                        {finding && done && baseline !== null ? (
+                          <p className={styles.suggestion}>
+                            Baseline recorded. Next time, start at {baseline} {unitLabel}.
+                          </p>
+                        ) : null}
+
+                        {remaining > 0 ? (
+                          <>
+                            <div className={styles.inputRow} onFocusCapture={revealLogButtons}>
+                              <label className={styles.inputField}>
+                                <span className={styles.inputLabel}>Reps</span>
+                                <input
+                                  type="number"
+                                  inputMode="numeric"
+                                  className={styles.numberInput}
+                                  value={vals.reps}
+                                  onChange={(e) =>
+                                    setInputValue(p.id, "reps", e.target.value)
+                                  }
+                                  placeholder={
+                                    p.targetRepsLow === p.targetRepsHigh
+                                      ? String(p.targetRepsHigh)
+                                      : `${p.targetRepsLow}–${p.targetRepsHigh}`
+                                  }
+                                />
+                              </label>
+                              <div className={styles.inputField}>
+                                <span className={styles.inputLabel}>Weight ({unitLabel})</span>
+                                <WeightPicker
+                                  label={`Weight (${unitLabel})`}
+                                  unit={unit}
+                                  unitText={logUnit(p)}
+                                  value={vals.load}
+                                  onChange={(v) => setInputValue(p.id, "load", v)}
+                                  plannedWeight={plan ? plan.weight : null}
+                                  targetWeight={pickerTarget}
+                                  targetLabel={finding ? "Suggested" : "Target"}
+                                  lastWeight={lastWeightFor(p, logged, hint)}
+                                  testId={`weight-${p.id}`}
+                                />
+                              </div>
+                              {finding ? null : (
+                                <div className={`${styles.inputField} ${styles.inputFieldWide}`}>
+                                  <span className={styles.inputLabel}>Effort (RPE)</span>
+                                  <RpePicker
+                                    label="Effort (RPE)"
+                                    value={vals.rpe}
+                                    onChange={(v) => setInputValue(p.id, "rpe", v)}
+                                    testId={`rpe-${p.id}`}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                            <div className={styles.actionRow}>
+                              <button
+                                type="button"
+                                data-log-actions
+                                className={styles.primaryButton}
+                                onClick={() => handleLogOne(p)}
+                                disabled={!canLog}
+                              >
+                                Log one set
+                              </button>
+                              {remaining > 1 ? (
+                                <button
+                                  type="button"
+                                  className={styles.secondaryButton}
+                                  onClick={() => handleLogRemaining(p)}
+                                  disabled={!canLog}
+                                >
+                                  Log {remaining} remaining sets
+                                </button>
+                              ) : null}
+                            </div>
+                            {canLog || p.id !== activeId ? null : (
+                              <p className={styles.logHint}>Enter the reps you did to log a set.</p>
+                            )}
+                          </>
+                        ) : (
+                          <p className={styles.muted}>
+                            All {p.targetSets} sets logged.
+                          </p>
+                        )}
                       </>
-                    ) : (
-                      <p className={styles.muted}>
-                        All {p.targetSets} sets logged.
-                      </p>
-                    )}
+                    ) : null}
                   </li>
                 );
               })}
@@ -910,11 +1438,8 @@ function SessionClientInner({
                 <button
                   type="button"
                   className={styles.primaryButton}
-                  onClick={() => {
-                    setUnloggedPrompt(null);
-                    markCompletedMutation.mutate({ sessionId: session.id });
-                  }}
-                  disabled={markCompletedMutation.isPending}
+                  onClick={() => void completeNow()}
+                  disabled={completing || markCompletedMutation.isPending}
                 >
                   Complete anyway
                 </button>
@@ -935,20 +1460,19 @@ function SessionClientInner({
                 type="button"
                 className={styles.primaryButton}
                 onClick={handleMarkComplete}
-                disabled={markCompletedMutation.isPending}
+                disabled={completing || markCompletedMutation.isPending}
               >
-                {markCompletedMutation.isPending
-                  ? "Completing…"
+                {completing || markCompletedMutation.isPending
+                  ? savingCount > 0
+                    ? "Saving sets…"
+                    : "Completing…"
                   : "Mark complete"}
               </button>
             ) : null}
             <button
               type="button"
               className={styles.skipButton}
-              onClick={() =>
-                markSkippedMutation.mutate({ sessionId: session.id })
-              }
-              disabled={markSkippedMutation.isPending}
+              onClick={requestSkip}
             >
               Skip session
             </button>
@@ -995,6 +1519,8 @@ function SessionClientInner({
         ) : null}
       </section>
       )}
+
+      <UndoToast toast={toast} onDismiss={() => setToast(null)} />
     </>
   );
 }
@@ -1038,7 +1564,7 @@ function CompletedLog({
                   <li key={r.id} className={styles.setItem}>
                     Set {i + 1}: {r.actualReps !== null ? `${r.actualReps} reps` : "reps not recorded"}
                     {r.actualLoad !== null ? (r.actualLoad === 0 ? " @ bodyweight" : ` @ ${r.actualLoad} ${unit}`) : ""}
-                    {r.actualRpe !== null ? ` @ RPE ${r.actualRpe}` : ""}
+                    {r.actualRpe !== null ? ` · ${repsLeftText(r.actualRpe)}` : ""}
                     <span className={styles.setGap} suppressHydrationWarning>
                       {" "}· {hhmm(r.completedAt)}
                     </span>

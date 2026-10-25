@@ -47,11 +47,17 @@ import {
   findLatestSetTimeInOpenSessions,
   findRecentClosedBlockWithSessions,
   countVersionsOfProgram,
+  listCompletedPerformancesForVersion,
+  listExercises,
+  listPrescriptionRowsForVersion,
+  listSessionsForBlock,
+  listWorkoutDayRowsForVersion,
   type TrainingBlockRecord,
   type ProgramRecord,
 } from "@training/db";
 import { trainingDayCount, type ProgramStructure } from "@training/domain";
 import { isStaleAt, lastActivityAt } from "./sessionService";
+import { buildTodayPlan, type TodayPlan } from "./todayService";
 import {
   buildAnticipationCue,
   type AnticipationCue,
@@ -70,6 +76,8 @@ export interface IdentitySummaryCurrentBlock {
   plannedLengthWeeks: number | null;
   /** Phase 10c. */
   anticipationCue: AnticipationCue;
+  /** COMPLETED Sessions in this block. */
+  sessionsCompleted: number;
 }
 
 export interface IdentitySummaryCurrentSession {
@@ -109,6 +117,10 @@ export interface IdentitySummary {
   lastCompletedSessionAt: Date | null;
   /** Read-only: an existing PLANNED / IN_PROGRESS Session, or null. Never creates one. */
   currentSession: IdentitySummaryCurrentSession | null;
+  /** The Today card (ARCH-062): today's day with a target per lift, or what was just done. */
+  today: TodayPlan | null;
+  /** Sessions completed in the last 7 days against the training days a week the program has; null with no block. */
+  weekProgress: { completed: number; planned: number } | null;
   stats: IdentitySummaryStats;
 }
 
@@ -136,6 +148,8 @@ export async function getMyIdentitySummary(
       recentClosedBlock: null,
       lastCompletedSessionAt,
       currentSession: null,
+      today: null,
+      weekProgress: null,
       stats: {
         sessionsCompleted: 0,
         totalSetsLogged: 0,
@@ -162,6 +176,11 @@ export async function getMyIdentitySummary(
     sessionsCompleted,
     totalSetsLogged,
     versionsCommitted,
+    todayDays,
+    todayPrescriptions,
+    blockSessions,
+    todayHistory,
+    exercises,
   ] = await Promise.all([
     primary.activeVersionId ? findVersionById(primary.activeVersionId) : Promise.resolve(null),
     block ? countCompletedSessionsInBlock(block.id) : Promise.resolve(0),
@@ -175,6 +194,13 @@ export async function getMyIdentitySummary(
     countCompletedSessionsForProgram(primary.id),
     countPerformanceRecordsForProgram(primary.id),
     countVersionsOfProgram(primary.id),
+    // The Today card: the version being trained, its history, and the block's
+    // sessions, all keyed off ids already in hand.
+    block ? listWorkoutDayRowsForVersion(block.programVersionId) : Promise.resolve([]),
+    block ? listPrescriptionRowsForVersion(block.programVersionId) : Promise.resolve([]),
+    block ? listSessionsForBlock(block.id) : Promise.resolve([]),
+    block ? listCompletedPerformancesForVersion(userId, block.programVersionId) : Promise.resolve([]),
+    listExercises(),
   ]);
 
   let activeVersionInfo: IdentitySummaryActiveVersion | null = null;
@@ -195,6 +221,7 @@ export async function getMyIdentitySummary(
       status: block.status,
       startedAt: block.startedAt,
       plannedLengthWeeks: block.plannedLengthWeeks,
+      sessionsCompleted: sessionsCompletedInBlock,
       anticipationCue: buildAnticipationCue({
         plannedLengthWeeks: block.plannedLengthWeeks,
         sessionsPerWeek: activeVersionStructure ? trainingDayCount(activeVersionStructure) : 0,
@@ -227,6 +254,23 @@ export async function getMyIdentitySummary(
     }
   }
 
+  const stalePending =
+    activeSession !== null && activeSession.status === "IN_PROGRESS" && currentSession === null;
+  const today = block
+    ? buildTodayPlan({
+        now,
+        days: todayDays,
+        prescriptions: todayPrescriptions,
+        exercises,
+        blockSessions,
+        pending: currentSession === null ? null : activeSession,
+        staleHasRecords: stalePending && latestSetTime !== null,
+        staleSessionId: stalePending ? activeSession.id : null,
+        history: todayHistory,
+        lastCompletedAt: lastCompletedSessionAt,
+      })
+    : null;
+
   const recentClosedBlock: IdentitySummaryClosedBlock | null = closed
     ? { id: closed.id, status: closed.status, startedAt: closed.startedAt, endedAt: closed.endedAt }
     : null;
@@ -241,12 +285,31 @@ export async function getMyIdentitySummary(
     recentClosedBlock,
     lastCompletedSessionAt,
     currentSession,
+    today,
+    weekProgress: weekProgressOf(block !== null, blockSessions, activeVersionStructure, now),
     stats: {
       sessionsCompleted,
       totalSetsLogged,
       versionsCommitted,
     },
   };
+}
+
+/** Past 7 days, not a calendar week: a server cannot know the lifter's time zone, and "last 7 days" is a fact in any of them. */
+function weekProgressOf(
+  hasBlock: boolean,
+  sessions: readonly { status: string; completedAt: Date | null }[],
+  structure: ProgramStructure | null,
+  now: Date,
+): { completed: number; planned: number } | null {
+  if (!hasBlock || structure === null) return null;
+  const planned = trainingDayCount(structure);
+  if (planned === 0) return null;
+  const since = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const completed = sessions.filter(
+    (s) => s.status === "COMPLETED" && s.completedAt !== null && s.completedAt.getTime() >= since,
+  ).length;
+  return { completed, planned };
 }
 
 /**

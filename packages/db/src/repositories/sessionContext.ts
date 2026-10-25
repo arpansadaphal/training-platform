@@ -130,3 +130,39 @@ export async function findRecentClosedBlockWithSessions(programId: string) {
 export async function countVersionsOfProgram(programId: string): Promise<number> {
   return prisma.programVersion.count({ where: { programId } });
 }
+
+/** Every workout day of a version, in rotation order (the dashboard's Today card). */
+export async function listWorkoutDayRowsForVersion(
+  programVersionId: string,
+): Promise<WorkoutDayRow[]> {
+  return prisma.workoutDay.findMany({
+    where: { programVersionId },
+    orderBy: { orderIndex: "asc" },
+    select: { id: true, programVersionId: true, orderIndex: true, name: true, isRestDay: true },
+  });
+}
+
+/** Every prescription of a version, tagged with its day. */
+export async function listPrescriptionRowsForVersion(
+  programVersionId: string,
+): Promise<Array<PrescriptionRow & { workoutDayId: string }>> {
+  const rows = await prisma.exercisePrescription.findMany({
+    where: { workoutDay: { programVersionId } },
+    orderBy: [{ workoutDayId: "asc" }, { orderIndex: "asc" }],
+    select: {
+      id: true,
+      workoutDayId: true,
+      orderIndex: true,
+      exerciseId: true,
+      targetSets: true,
+      targetRepsLow: true,
+      targetRepsHigh: true,
+      targetRpe: true,
+      loadScheme: true,
+    },
+  });
+  return rows.map((r) => ({
+    ...r,
+    targetRpe: r.targetRpe === null ? null : Number(r.targetRpe),
+  }));
+}

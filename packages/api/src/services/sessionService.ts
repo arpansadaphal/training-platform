@@ -43,6 +43,7 @@ import {
   findTrainingBlockById,
   findVersionWithStructure,
   findWorkoutDayRow,
+  findLatestCompletedSessionForUser,
   listCompletedPerformancesForDay,
   listExercises,
   listObservationsForSession,
@@ -63,6 +64,11 @@ import {
   type TrainingBlockRecord,
 } from "@training/db";
 import { loadOwnedProgramOrThrow } from "./loadOwnedProgram";
+import {
+  computeTargetsForPrescriptions,
+  wholeDaysSince,
+  type PrescriptionTarget,
+} from "./targetsService";
 import {
   loadOwnedSessionOrThrow,
   loadOwnedTrainingBlockOrThrow,
@@ -649,8 +655,8 @@ export interface SessionPageData {
   records: PerformanceRecordRecord[];
   observations: ObservationRecord[];
   lastTimeHints: LastTimeHint[];
-  /** Earlier sets of this day's exercises, newest Session first. Targets are computed from these. */
-  history: ExercisePerformanceRecord[];
+  /** ARCH-062: what to lift, per prescription, from the lifter's own earlier sets. */
+  targets: PrescriptionTarget[];
 }
 
 /**
@@ -667,19 +673,26 @@ export async function getSessionPage(
     loadOwnedSessionOrThrow(userId, sessionId),
     listExercises(),
   ]);
-  const [context, records, observations, history] = await Promise.all([
+  const [context, records, observations, history, lastCompleted] = await Promise.all([
     loadContextFor(session, exercises),
     listPerformanceRecordsForSession(sessionId),
     listObservationsForSession(sessionId),
     listCompletedPerformancesForDay(userId, session.workoutDayId, sessionId),
+    findLatestCompletedSessionForUser(userId),
   ]);
+  const targets = computeTargetsForPrescriptions({
+    prescriptions: context.workoutDay.prescriptions,
+    equipmentByExerciseId: new Map(exercises.map((e) => [e.id, e.equipment])),
+    history,
+    daysSinceLastTraining: wholeDaysSince(lastCompleted?.completedAt ?? null, new Date()),
+  });
   return {
     context,
     exercises,
     records,
     observations,
     lastTimeHints: lastTimeHintsFromRows(history),
-    history,
+    targets,
   };
 }
 

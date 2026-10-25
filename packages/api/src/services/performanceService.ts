@@ -27,6 +27,7 @@ import {
   deletePerformanceRecord,
   findOwnedPerformanceRecord,
   isPrimaryKeyConflict,
+  listOwnedPerformanceRecordsByIds,
   listPerformanceRecordsForSession,
   updatePerformanceRecord,
   type PerformanceRecordRecord,
@@ -157,21 +158,36 @@ export async function logBatch(
   );
 
   const now = new Date();
-  return createPerformanceRecordsBatch(
-    input.entries.map((e) => {
-      const completedAt = believableCompletedAt(e.completedAt, now);
-      return {
-        ...(e.id ? { id: e.id } : {}),
-        sessionId,
-        exercisePrescriptionId: e.exercisePrescriptionId,
-        setIndex: e.setIndex,
-        actualReps: e.actualReps ?? null,
-        actualLoad: e.actualLoad ?? null,
-        actualRpe: e.actualRpe ?? null,
-        ...(completedAt ? { completedAt } : {}),
-      };
-    }),
-  );
+  const ids = input.entries.flatMap((e) => (e.id ? [e.id] : []));
+  try {
+    return await createPerformanceRecordsBatch(
+      input.entries.map((e) => {
+        const completedAt = believableCompletedAt(e.completedAt, now);
+        return {
+          ...(e.id ? { id: e.id } : {}),
+          sessionId,
+          exercisePrescriptionId: e.exercisePrescriptionId,
+          setIndex: e.setIndex,
+          actualReps: e.actualReps ?? null,
+          actualLoad: e.actualLoad ?? null,
+          actualRpe: e.actualRpe ?? null,
+          ...(completedAt ? { completedAt } : {}),
+        };
+      }),
+    );
+  } catch (err) {
+    // A retried batch whose first attempt landed (the transaction is
+    // all-or-nothing, so every id is there or none is): hand those sets back.
+    if (ids.length === input.entries.length && isPrimaryKeyConflict(err)) {
+      const existing = await listOwnedPerformanceRecordsByIds(userId, sessionId, ids);
+      if (existing.length === ids.length) return existing;
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "A set id in that batch is already in use.",
+      });
+    }
+    throw err;
+  }
 }
 
 /**

@@ -98,7 +98,7 @@ export function OptionSheet({
 
   const fixed = (o: SheetOption) => (
     <button
-      key={o.value}
+      key={`${o.value}|${o.text}`}
       type="button"
       className={`${styles.fixedOption} ${o.value === selected ? styles.chosen : ""}`}
       onClick={() => choose(o.value)}
