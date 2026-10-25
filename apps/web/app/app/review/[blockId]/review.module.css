@@ -320,3 +320,49 @@
 }
 
 
+
+/* Product-depth roadmap: Review leads with the lifter's own numbers; the commit-time critique folds away. */
+.liftList {
+  margin: 0.5rem 0 1rem;
+  padding-left: 1.1rem;
+  line-height: 1.7;
+}
+
+.assessmentDetails > summary {
+  list-style: none;
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.assessmentDetails > summary::-webkit-details-marker {
+  display: none;
+}
+
+.assessmentDetails > summary::after {
+  content: "+";
+  margin-left: auto;
+  font-size: 1.25rem;
+}
+
+.assessmentDetails[open] > summary::after {
+  content: "−";
+}
+
+.assessmentSummary h2 {
+  margin: 0;
+}
+
+.versionDetails {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: var(--muted, #666);
+}
+
+.versionDetails > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}

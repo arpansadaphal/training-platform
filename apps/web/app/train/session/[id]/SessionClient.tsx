@@ -645,7 +645,6 @@ function SessionClientInner({
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
     // retryFailed reads the latest sets through a ref.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Leaving with sets unsaved would lose them: ask first.
@@ -822,7 +821,6 @@ function SessionClientInner({
         }
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 

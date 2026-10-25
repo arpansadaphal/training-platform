@@ -12,6 +12,7 @@ import { notFound, redirect } from "next/navigation";
 import { TRPCError } from "@trpc/server";
 import { appRouter } from "@training/api";
 import { auth } from "@/src/server/auth";
+import { startTrainingAction } from "@/app/train/actions";
 import { fmtDuration, fmtLoad, fmtVolume } from "@/src/lib/progressFormat";
 import styles from "./summary.module.css";
 
@@ -67,6 +68,8 @@ export default async function SessionSummaryPage({ params }: PageProps) {
 
   const { summary } = view;
   const volumeChange = summary.volumeChangePercent;
+  // A muscle that got under one set is not worth a row.
+  const muscles = summary.volumeDeltaPerMuscle.filter((m) => m.sets >= 1);
 
   return (
     <main className={styles.page}>
@@ -122,7 +125,7 @@ export default async function SessionSummaryPage({ params }: PageProps) {
         </section>
       ) : null}
 
-      {summary.volumeDeltaPerMuscle.length > 0 ? (
+      {muscles.length > 0 ? (
         <details className={styles.muscles} open>
           <summary className={styles.musclesSummary}>Sets by muscle</summary>
           <table className={styles.table}>
@@ -134,7 +137,7 @@ export default async function SessionSummaryPage({ params }: PageProps) {
               </tr>
             </thead>
             <tbody>
-              {summary.volumeDeltaPerMuscle.map((m) => (
+              {muscles.map((m) => (
                 <tr key={m.muscle}>
                   <th scope="row">{titleCase(m.muscle)}</th>
                   <td>{fmtLoad(m.sets)}</td>
@@ -150,12 +153,20 @@ export default async function SessionSummaryPage({ params }: PageProps) {
       ) : null}
 
       <div className={styles.actions}>
-        <Link href="/train" className={styles.primary}>
-          Log another session
+        <Link href="/app" className={styles.primary}>
+          Done
         </Link>
-        <Link href="/app" className={styles.secondary}>
-          Back to dashboard
-        </Link>
+        {view.nextDayName ? (
+          <>
+            <p className={styles.nextUp}>Next: {view.nextDayName}</p>
+            <form action={startTrainingAction}>
+              <input type="hidden" name="programId" value={view.programId} />
+              <button type="submit" className={styles.secondary}>
+                Start {view.nextDayName} now
+              </button>
+            </form>
+          </>
+        ) : null}
       </div>
     </main>
   );

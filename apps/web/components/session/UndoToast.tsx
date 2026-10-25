@@ -33,7 +33,6 @@ export function UndoToast({
     const id = window.setTimeout(onDismiss, TOAST_MS);
     return () => window.clearTimeout(id);
     // The key, not the callback, decides when the timer restarts.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast?.key]);
 
   if (toast === null) return null;

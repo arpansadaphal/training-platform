@@ -319,4 +319,19 @@ describe("performanceService", () => {
     expect(back.id).toBe(set.id);
     expect(back.completedAt.getTime()).toBe(at.getTime());
   });
+
+  it("logBatch with client ids is idempotent: a retried batch returns the same sets", async () => {
+    const { sessionId, prescriptionId } = await setupSession(user);
+    const entries = [0, 1, 2].map((i) => ({
+      id: `client-batch-0000000${i}`,
+      exercisePrescriptionId: prescriptionId,
+      setIndex: i,
+      actualReps: 10,
+      actualLoad: 40,
+    }));
+    const first = await logBatch(user.id, sessionId, { entries });
+    const retry = await logBatch(user.id, sessionId, { entries });
+    expect(retry.map((r) => r.id).sort()).toEqual(first.map((r) => r.id).sort());
+    expect(await listMyRecordsForSession(user.id, sessionId)).toHaveLength(3);
+  });
 });

@@ -56,9 +56,10 @@ export default async function ReviewPage({ params }: PageProps) {
 
   // Get-or-create the Coach conversation scoped to this block's program
   // version. The panel needs a conversationId before it can render.
-  const coachConversation = await caller.coach.openConversationForBlock({
-    trainingBlockId: blockId,
-  });
+  const [coachConversation, progress] = await Promise.all([
+    caller.coach.openConversationForBlock({ trainingBlockId: blockId }),
+    caller.progress.getForUser(),
+  ]);
 
   // Convert to the client-serializable shape. Dates become ISO strings;
   // Json columns (assessment, fitScore) stay as unknown and are cast inside
@@ -112,7 +113,13 @@ export default async function ReviewPage({ params }: PageProps) {
       </nav>
       <div className={styles.layout}>
                <div className={styles.reviewColumn}>
-          <ReviewClient data={clientData} />
+          <ReviewClient
+            data={clientData}
+            lifts={progress.slice(0, 8).map((p) => ({
+              exerciseId: p.exerciseId,
+              verdictLine: p.verdictLine,
+            }))}
+          />
           {!review.isPartial && (
             <div className={styles.reportLinkRow}>
               <Link

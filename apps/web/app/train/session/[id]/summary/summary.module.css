@@ -204,3 +204,22 @@
     flex: 1;
   }
 }
+
+/* "Next: Full Body B", and starting it from here. */
+.nextUp {
+  margin: 0.25rem 0 0;
+  text-align: center;
+  color: var(--muted, #666);
+}
+
+.actions form {
+  display: flex;
+}
+
+.actions form .secondary {
+  flex: 1;
+  width: 100%;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}

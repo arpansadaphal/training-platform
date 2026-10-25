@@ -159,7 +159,7 @@ describe("computeSessionSummary", () => {
       { muscle: "chest", sets: 3, previousSets: 3, delta: 0, volumeChangePercent: expect.closeTo(7.14, 1) },
       { muscle: "triceps", sets: 1.5, previousSets: 1.5, delta: 0, volumeChangePercent: expect.closeTo(7.14, 1) },
     ]);
-    expect(s.verdict).toBe("Solid session. Total volume up 7% from last time.");
+    expect(s.verdict).toBe("Total volume up 7% from last time.");
   });
 
   it("weights a muscle's volume change by involvement and ignores exercises not shared with last time", () => {
@@ -205,7 +205,7 @@ describe("computeSessionSummary", () => {
       volumeChangePercent: null,
     });
     expect(first.verdict).toBe(
-      "Solid session. This is your first logged session of this day, so it sets the baseline.",
+      "This is your first logged session of this day, so it sets the baseline.",
     );
   });
 
@@ -240,13 +240,50 @@ describe("computeSessionSummary", () => {
       exercises: [exercise({ current: [set(100, 5)], priorBestE1rm: null })],
     });
     expect(short.loggedSets).toBe(1);
-    expect(short.verdict.startsWith("Session complete.")).toBe(true);
+    expect(short.verdict).toMatch(/1 of \d+ planned sets logged\.$/);
+    expect(short.verdict).not.toMatch(/Solid|Session complete/);
 
     const empty = computeSessionSummary({
       ...base,
       exercises: [exercise({ current: [] })],
     });
     expect(empty.verdict).toBe("Session complete. No sets were logged.");
+  });
+
+  it("leads with the facts and never grades the session", () => {
+    const full = computeSessionSummary({ ...base, exercises: [exercise({ current: [set(100, 5), set(100, 5), set(100, 5)] })] });
+    expect(full.verdict).not.toMatch(/Solid|Session complete/);
+    // New PR first, then the comparison.
+    const pr = computeSessionSummary({
+      ...base,
+      exercises: [exercise({ current: [set(110, 5), set(110, 5), set(110, 5)] })],
+    });
+    expect(pr.verdict.indexOf("New PR")).toBe(0);
+    expect(pr.verdict).toContain("Total volume up");
+    // Nothing notable: the count of sets, as a fact.
+    const plain = computeSessionSummary({
+      ...base,
+      hasPreviousSession: true,
+      exercises: [exercise({ current: [set(100, 5), set(100, 5), set(100, 5)], previous: [set(100, 5), set(100, 5), set(100, 5)], priorBestE1rm: 999 })],
+    });
+    expect(plain.verdict).toBe("Total volume is about the same as last time.");
+  });
+
+  it("makes no percent comparison against a partly logged previous session", () => {
+    const s = computeSessionSummary({
+      ...base,
+      exercises: [
+        exercise({
+          current: [set(100, 5), set(100, 5), set(100, 5)],
+          previous: [set(100, 5)],
+          previousIsComplete: false,
+        }),
+      ],
+    });
+    expect(s.volumeChangePercent).toBeNull();
+    expect(s.volumeDeltaPerMuscle.every((m) => m.volumeChangePercent === null)).toBe(true);
+    // It is not "the first session" either, and it does not claim a change.
+    expect(s.verdict).not.toMatch(/baseline|up \d+%|down \d+%/);
   });
 
   it("has no duration without a start time, and never a negative one", () => {

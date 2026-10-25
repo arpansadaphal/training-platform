@@ -29,6 +29,12 @@ export interface SummaryExerciseInput {
   current: readonly LoggedSet[];
   /** The previous same-day session's sets of this exercise; empty when it was not in that session. */
   previous: readonly LoggedSet[];
+  /**
+   * False when that session logged fewer sets of this exercise than planned.
+   * Its volume is then not compared: a percent against a fraction of the work
+   * says nothing about progress. Defaults to true.
+   */
+  previousIsComplete?: boolean;
   /** Highest estimated 1RM from sessions completed before this one; null when none. */
   priorBestE1rm: number | null;
 }
@@ -114,7 +120,7 @@ export function computeSessionSummary(
     const nowVol = volumeKg(ex.current, ex.unit);
     totalVolumeKg += nowVol;
 
-    const prevVol = volumeKg(ex.previous, ex.unit);
+    const prevVol = ex.previousIsComplete === false ? 0 : volumeKg(ex.previous, ex.unit);
     if (nowVol > 0 && prevVol > 0) {
       sharedNow += nowVol;
       sharedBefore += prevVol;
@@ -202,9 +208,10 @@ function summaryVerdict(args: {
 }): string {
   if (args.loggedSets === 0) return "Session complete. No sets were logged.";
 
-  const parts: string[] = [
-    args.loggedSets >= args.plannedSets ? "Solid session." : "Session complete.",
-  ];
+  // Facts first, most notable first: records, then how the work compares with
+  // last time. No grade ("Solid session") and no cheering: the numbers are the
+  // reward, and the same words every time stop meaning anything.
+  const parts: string[] = [];
 
   if (args.newPRCount === 1 && args.firstPRName !== null) {
     parts.push(`New PR on ${args.firstPRName}.`);
@@ -221,5 +228,12 @@ function summaryVerdict(args: {
     parts.push("This is your first logged session of this day, so it sets the baseline.");
   }
 
+  if (args.loggedSets < args.plannedSets) {
+    parts.push(`${args.loggedSets} of ${args.plannedSets} planned sets logged.`);
+  }
+
+  if (parts.length === 0) {
+    parts.push(`${args.loggedSets} ${args.loggedSets === 1 ? "set" : "sets"} logged.`);
+  }
   return parts.join(" ");
 }

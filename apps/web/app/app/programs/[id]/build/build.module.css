@@ -424,3 +424,27 @@
   font-size: 0.85rem;
   color: var(--muted);
 }
+
+/* After a commit: the next step is a button, not a message. */
+.committedBox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border, #ccc);
+  border-left: 4px solid var(--accent, #047857);
+  border-radius: 6px;
+}
+
+.committedText {
+  margin: 0;
+  font-weight: 600;
+}
+
+.startButton {
+  width: 100%;
+  min-height: 48px;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
