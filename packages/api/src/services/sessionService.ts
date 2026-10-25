@@ -44,6 +44,8 @@ import {
   findVersionWithStructure,
   findWorkoutDayRow,
   findLatestCompletedSessionForUser,
+  findNotesOfLatestSessionOfDay,
+  findDayOfSessionId,
   listCompletedPerformancesForDay,
   listExercises,
   listObservationsForSession,
@@ -657,6 +659,34 @@ export interface SessionPageData {
   lastTimeHints: LastTimeHint[];
   /** ARCH-062: what to lift, per prescription, from the lifter's own earlier sets. */
   targets: PrescriptionTarget[];
+  /** Project 4: the lifter's own note from the last session of this day, verbatim, or null. */
+  recalledNote: RecalledNote | null;
+}
+
+/** A note written in an earlier session of the same day, echoed as written. */
+export interface RecalledNote {
+  dayName: string;
+  /** ISO. When that session finished. */
+  completedAtIso: string;
+  notes: string[];
+}
+
+/**
+ * The note from the last session of the same day name, for a session that has
+ * not been completed yet. Echoed, never interpreted. The day is read by the
+ * session's id beside the ownership check, so this adds no step to the page.
+ */
+async function recallNoteFor(
+  userId: string,
+  session: SessionRecord,
+  day: { name: string; isRestDay: boolean } | null,
+): Promise<RecalledNote | null> {
+  if (session.status !== "PLANNED" && session.status !== "IN_PROGRESS") return null;
+  if (day === null || day.isRestDay) return null;
+  const found = await findNotesOfLatestSessionOfDay(userId, day.name, session.id);
+  return found === null
+    ? null
+    : { dayName: day.name, completedAtIso: found.completedAt.toISOString(), notes: found.notes };
 }
 
 /**
@@ -669,16 +699,18 @@ export async function getSessionPage(
   userId: string,
   sessionId: string,
 ): Promise<SessionPageData> {
-  const [session, exercises] = await Promise.all([
+  const [session, exercises, day] = await Promise.all([
     loadOwnedSessionOrThrow(userId, sessionId),
     listExercises(),
+    findDayOfSessionId(sessionId),
   ]);
-  const [context, records, observations, history, lastCompleted] = await Promise.all([
+  const [context, records, observations, history, lastCompleted, recalledNote] = await Promise.all([
     loadContextFor(session, exercises),
     listPerformanceRecordsForSession(sessionId),
     listObservationsForSession(sessionId),
     listCompletedPerformancesForDay(userId, session.workoutDayId, sessionId),
     findLatestCompletedSessionForUser(userId),
+    recallNoteFor(userId, session, day),
   ]);
   const targets = computeTargetsForPrescriptions({
     prescriptions: context.workoutDay.prescriptions,
@@ -693,6 +725,7 @@ export async function getSessionPage(
     observations,
     lastTimeHints: lastTimeHintsFromRows(history),
     targets,
+    recalledNote,
   };
 }
 
