@@ -18,7 +18,7 @@ export const AXIS_NAMES: Readonly<Record<AxisType, string>> = {
   VOLUME: "Weekly volume",
   FREQUENCY: "Frequency",
   EXERCISE_SELECTION_BALANCE: "Exercise selection",
-  PROGRESSION_SOUNDNESS: "Progression & effort",
+  PROGRESSION_SOUNDNESS: "Effort & rep ranges",
   RECOVERY_COST: "Recovery cost",
 };
 

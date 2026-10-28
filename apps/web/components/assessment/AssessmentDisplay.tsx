@@ -44,11 +44,14 @@ import { useState } from "react";
 import {
   isClassified,
   provisionalFitBand,
+  ratioLines,
+  RATIO_TIER_NOTE,
   type AssessedAxis,
   type Assessment,
   type AssessmentResult,
   type FitScoreBand,
   type FitScoreResult,
+  type NamedAction,
 } from "@training/domain";
 import { AxisCard } from "./AxisCard";
 import { EvidencePanel } from "./EvidencePanel";
@@ -61,6 +64,12 @@ import styles from "./assessment.module.css";
 interface Props {
   result: AssessmentResult;
   fitScore: FitScoreResult;
+  /**
+   * Named sentences for the actions ("Add 3 sets of Leg Curl on Day 2 → 7.5 sets/week."), matched to the
+   * assessment's actions by rootCauseKey. Absent (a persisted snapshot, which shows what the lifter saw
+   * at commit) means every action reads as its template sentence.
+   */
+  namedActions?: readonly NamedAction[];
 }
 
 function axisKey(axis: AssessedAxis): string {
@@ -79,7 +88,7 @@ function fitLineFor(result: AssessmentResult, fitScore: FitScoreResult): FitLine
   return provisional ? { kind: "PROVISIONAL", band: provisional.band } : null;
 }
 
-export function AssessmentDisplay({ result, fitScore }: Props) {
+export function AssessmentDisplay({ result, fitScore, namedActions }: Props) {
   // ARCH-046: the banner is a property of the configuration, not of any
   // one assessment. `useProvisionalBanner` reads HYPERTROPHY_CONFIG's
   // `validated` flag and returns true while it is false — which, at MVP,
@@ -116,6 +125,7 @@ export function AssessmentDisplay({ result, fitScore }: Props) {
       <AssessmentBody
         a={a}
         fit={fitLineFor(result, fitScore)}
+        namedActions={namedActions}
         onSeeEvidence={openEvidence}
         evidenceOpen={evidenceOpen}
       />
@@ -130,14 +140,18 @@ function plural(n: number, one: string, many: string): string {
 function AssessmentBody({
   a,
   fit,
+  namedActions,
   onSeeEvidence,
   evidenceOpen,
 }: {
   a: Assessment;
   fit: FitLine;
+  namedActions: readonly NamedAction[] | undefined;
   onSeeEvidence: () => void;
   evidenceOpen: boolean;
 }) {
+  const namedText = new Map((namedActions ?? []).map((n) => [n.rootCauseKey, n.description]));
+  const balance = ratioLines(a.ratios);
   return (
     <>
       <section className={styles.overall}>
@@ -216,10 +230,23 @@ function AssessmentBody({
                 className={styles.actionItem}
                 data-root-cause={action.rootCauseKey}
               >
-                <p className={styles.actionDescription}>{action.description}</p>
+                <p className={styles.actionDescription}>
+                  {namedText.get(action.rootCauseKey) ?? action.description}
+                </p>
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+      {balance.length > 0 ? (
+        <section className={styles.section} data-cross-muscle-balance>
+          <h2 className={styles.sectionHeading}>Cross-muscle balance</h2>
+          <ul className={styles.balanceList}>
+            {balance.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <p className={styles.balanceNote}>{RATIO_TIER_NOTE}</p>
         </section>
       ) : null}
     </>

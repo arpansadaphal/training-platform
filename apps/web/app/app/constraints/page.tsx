@@ -54,9 +54,10 @@ export default async function ConstraintsPage() {
       <header className={styles.header}>
         <h1 className={styles.heading}>Constraints</h1>
         <p className={styles.intro}>
-          Durable guidance that shapes your program design and every future
-          assessment. Constraints you record here persist across programs and
-          conversations.
+          Durable guidance stored with your account. The Coach reads these when
+          discussing your program. The deterministic analysis does not
+          currently use them. Constraints you record here persist across
+          programs and conversations.
         </p>
         <p className={styles.introMeta}>
           For something that applies only to a single Coach conversation, tell

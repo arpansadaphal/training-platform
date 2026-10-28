@@ -154,6 +154,16 @@ test("Builder: build a draft, see the unvalidated Assessment state, commit a ver
   ).toBeVisible();
   await expect(assessmentPanel.getByRole("heading", { name: "Overall" })).toBeVisible();
 
+  // Named actions and cross-muscle balance (engine-output session A). One exercise leaves most muscles low,
+  // so the actions list has "Add N sets of <exercise> on <day> → X sets/week." lines, and the balance
+  // section states the weekly hard-set totals. The old axis label must be gone.
+  await expect(
+    assessmentPanel.locator("[data-root-cause]").filter({ hasText: /Add \d sets? of .+ → [\d.]+ sets\/week/ }).first(),
+  ).toBeVisible();
+  await expect(assessmentPanel.getByRole("heading", { name: "Cross-muscle balance" })).toBeVisible();
+  await expect(assessmentPanel.getByText(/Tier 3: a coaching comparison/)).toBeVisible();
+  await expect(assessmentPanel.getByText("Progression & effort")).toHaveCount(0);
+
   // ── Commit, and verify the version on the program page ────────────────
   await page.getByRole("button", { name: "Commit", exact: true }).click();
 
