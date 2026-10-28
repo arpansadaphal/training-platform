@@ -99,3 +99,4 @@ MODEL_PROVIDER=mock
 - [ARCH-060](./ARCH-060.md) — (proposed, not in effect) User-scheduled training reminders and an opt-in weekly progress summary; streaks, guilt copy and unsolicited re-engagement stay forbidden
 - [ARCH-061](./ARCH-061.md) — Rest days: WorkoutDay.isRestDay (additive), in the rotation, stripped before analysis, excluded from adherence
 - [ARCH-062](./ARCH-062.md) — Next-session targets: a fixed double-progression rule (load steps by equipment, comeback after 10+ days, find-your-starting-weight flow), computed on read; the no-prefill rule narrowed to reps and weight inputs
+- [ARCH-063](./ARCH-063.md) — (proposed; Session A parts shipped) Engine output improvements: named equipment-aware actions, cross-muscle ratios and `AnalysisContext` shipped with no calibration change; rank-by-deficit, consolidation and a near-failure check proposed for Session B with a version bump and a coach-parity test
