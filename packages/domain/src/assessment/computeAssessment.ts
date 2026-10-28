@@ -281,6 +281,8 @@ export function computeAssessment(
     computedAt: analysis.computedAt,
     allAssessedAxes: rollUp.assessedAxes,
     fitScoreProjection: config.fitScoreProjection,
+    // Informational; copied through untouched. Nothing above reads it.
+    ...(analysis.ratios ? { ratios: analysis.ratios } : {}),
   };
 
   if (overallValidated) {

@@ -30,6 +30,7 @@
 
 import type {
   AnalysisAxisResult,
+  CrossMuscleRatios,
   AxisStatus,
   FitScoreBand,
   FitScoreProjection,
@@ -125,6 +126,12 @@ export interface Assessment {
    * per 06-assessment-engine.md's signature.
    */
   readonly fitScoreProjection: FitScoreProjection;
+  /**
+   * Cross-muscle balance facts carried from `Analysis.ratios`. Tier 3,
+   * informational, outside the leverage roll-up and the Fit band. Absent on
+   * assessments persisted before this field existed.
+   */
+  readonly ratios?: CrossMuscleRatios;
 }
 
 /**

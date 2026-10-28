@@ -388,7 +388,7 @@ const HYPERTROPHY_EVIDENCE: GoalProfileEvidence = {
       },
       {
         claim:
-          "Axis weights follow evidence strength: Volume high; Progression and Recovery medium; Frequency and Exercise selection low.",
+          "Axis weights follow evidence strength: Volume high; Effort & rep ranges and Recovery medium; Frequency and Exercise selection low.",
         tier: { from: 4, to: 4 },
         sources: [ACSM_2026, PELLAND_2026, "Schoenfeld 2019"],
       },

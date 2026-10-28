@@ -102,7 +102,7 @@ export function actionTemplateFor(
       case "PROGRESSION_SOUNDNESS": {
         if (band === "Issue found") {
           return {
-            description: `Align progression schemes across prescriptions.`,
+            description: `Review effort targets and rep ranges across prescriptions.`,
             rootCauseKey: `progressionSoundness:align-schemes`,
           };
         }

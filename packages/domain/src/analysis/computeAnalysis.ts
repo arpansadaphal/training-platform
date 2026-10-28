@@ -2,7 +2,8 @@
 //
 // The single entry point for the Analysis engine. Pure function: same input -> same output modulo the
 // injected clock (used only for `computedAt`). E9: options.recoveryCostCalculator replaces the provisional
-// recovery-cost calculator for this run.
+// recovery-cost calculator for this run. options.context (AnalysisContext) is accepted and, for now, not read by
+// any calculator: it is the foundation later items build on.
 
 import type { ProgramStructure } from "../types";
 import type {
@@ -17,6 +18,7 @@ import { computeFrequencyAxis } from "./frequency";
 import { computeExerciseSelectionBalanceAxis } from "./exerciseSelectionBalance";
 import { computeProgressionSoundnessAxis } from "./progressionSoundness";
 import { computeRecoveryCostAxis } from "./recoveryCost";
+import { computeCrossMuscleRatios } from "./ratios";
 
 export function computeAnalysis(
   structure: ProgramStructure,
@@ -39,5 +41,6 @@ export function computeAnalysis(
     programVersionId,
     axisResults,
     computedAt: now().toISOString(),
+    ratios: computeCrossMuscleRatios(structure, referenceData, config),
   };
 }

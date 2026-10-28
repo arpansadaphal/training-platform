@@ -70,11 +70,15 @@ export type {
   SeverityWeightTable,
   FitScoreBand,
   FitScoreProjection,
+  AnalysisContext,
+  CrossMuscleRatios,
 } from "./analysis/types";
 
 // --- Analysis engine ---
 
 export { computeAnalysis } from "./analysis/computeAnalysis";
+export { computeCrossMuscleRatios } from "./analysis/ratios";
+export { ratioLines, RATIO_TIER_NOTE } from "./copy/ratioLines";
 export { computeVolumeAxis } from "./analysis/volume";
 export { computeFrequencyAxis } from "./analysis/frequency";
 export { computeExerciseSelectionBalanceAxis } from "./analysis/exerciseSelectionBalance";
@@ -133,6 +137,8 @@ export { rollUpLeverage } from "./assessment/rollup";
 export type { RollUpOutcome, RollUpOk, RollUpBlocked } from "./assessment/rollup";
 export { actionTemplateFor } from "./assessment/actionTemplates";
 export type { ActionTemplateResult } from "./assessment/actionTemplates";
+export { nameActions } from "./assessment/namedActions";
+export type { NamedAction, NamedActionSuggestion } from "./assessment/namedActions";
 
 // --- Launch gate ---
 

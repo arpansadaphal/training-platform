@@ -112,6 +112,31 @@ export interface Analysis {
   readonly programVersionId: string | null;
   readonly axisResults: readonly AnalysisAxisResult[];
   readonly computedAt: string;
+  /**
+   * Informational cross-muscle ratios (analysis/ratios.ts). Tier 3, never an
+   * input to any band, severity, leverage or Fit. Optional because analyses
+   * persisted before this field existed do not carry it.
+   */
+  readonly ratios?: CrossMuscleRatios;
+}
+
+// ---------------------------------------------------------------------------
+// Cross-muscle ratios (informational; outside the roll-up and the Fit band)
+// ---------------------------------------------------------------------------
+
+/**
+ * Each pair holds two weekly hard-set totals and `ratio = first / second`
+ * (null when `second` is 0: the totals still state the fact). A pair is null
+ * when both totals are 0.
+ */
+export interface CrossMuscleRatios {
+  readonly pushPull: { pushSets: number; pullSets: number; ratio: number | null } | null;
+  readonly armsLegs: { armSets: number; legSets: number; ratio: number | null } | null;
+  readonly quadsHamstrings: {
+    quadSets: number;
+    hamstringSets: number;
+    ratio: number | null;
+  } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -370,8 +395,22 @@ export interface GoalProfileConfig {
 // computeAnalysis options
 // ---------------------------------------------------------------------------
 
+/**
+ * What the engine may know about the lifter beyond the program. Passed in, never
+ * stored. Foundation only: no axis, band or action reads it yet (later items
+ * will), so supplying or omitting it leaves every output identical.
+ */
+export interface AnalysisContext {
+  readonly daysPerWeek?: number;
+  readonly trainingAgeMonths?: number;
+  readonly equipment?: "commercial_gym" | "home_dumbbells" | "bodyweight_only";
+  readonly minutesPerSession?: number;
+}
+
 export interface ComputeAnalysisOptions {
   programVersionId?: string | null;
+  /** Optional lifter context. Not read by any calculator today; see AnalysisContext. */
+  context?: AnalysisContext;
   /**
    * Injectable clock, used only so a determinism test can compare two runs
    * byte-for-byte. Production callers omit it and get `new Date()`.

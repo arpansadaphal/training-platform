@@ -6,6 +6,8 @@ import { computeAnalysis } from "../../src/analysis/computeAnalysis";
 import { computeAssessment } from "../../src/assessment/computeAssessment";
 import { provisionalFitBand } from "../../src/assessment/provisionalFit";
 import { evaluateProgressionChecks } from "../../src/analysis/progressionSoundness";
+import { nameActions } from "../../src/assessment/namedActions";
+import { ratioLines } from "../../src/copy/ratioLines";
 import { axisSentence } from "../../src/copy/axisSentence";
 import { HYPERTROPHY_CONFIG, hypertrophyProfile } from "../../src/goal-profiles/hypertrophy";
 import { scopeReferenceDataToGoal } from "../../src/reference/scopeReferenceData";
@@ -85,6 +87,9 @@ export function run(p: Program, opts: { defaultRpe?: number | null; quiet?: bool
   if (a.biggestOpportunity) L.push(`  BIGGEST: ${sentence(a.biggestOpportunity)}`);
   for (const x of a.attentionAreas) L.push(`  ATTN: ${label(x)} — ${sentence(x)}`);
   L.push(`  ACTIONS (${a.actions.length}): ${a.actions.map((x) => x.description).join(" | ") || "none"}`);
+  const named = nameActions(a, structure, REF, HYPERTROPHY_CONFIG);
+  L.push(`  NAMED ACTIONS: ${named.map((x) => x.description).join(" | ") || "none"}`);
+  L.push(`  RATIOS: ${ratioLines(a.ratios).join(" ") || "none"}`);
   L.push(`  SILENT (computed, never shown): ${a.allAssessedAxes.filter((x) => x.severity !== "NONE" && !a.attentionAreas.includes(x) && x !== a.biggestOpportunity).map((x) => `${label(x)}=${x.status.band}`).join(", ") || "none"}`);
   // Auditor-computed facts (NOT engine output): what a coach glances at first.
   const pat = (names: string[]) => p.days.reduce((s, d) => s + d.rows.filter((r) => names.includes(EX.get(r[0])!.movementPattern)).reduce((t, r) => t + r[1], 0), 0);
