@@ -18,7 +18,8 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "db:generate": "pnpm --filter @training/db db:generate",
     "db:migrate": "pnpm --filter @training/db db:migrate",
-    "db:push": "pnpm --filter @training/db db:push"
+    "db:push": "pnpm --filter @training/db db:push",
+    "coach-parity": "pnpm --filter @training/domain coach-parity"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",
