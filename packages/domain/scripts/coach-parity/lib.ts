@@ -1,17 +1,17 @@
 // Audit harness: drives the REAL domain engine with the seed's involvement data loaded in memory.
 // Read-only: no DB, no repo writes.
 import { readFileSync } from "node:fs";
-const ROOT = "/Users/arpan/Documents/code/training-platform";
-import { computeAnalysis } from "/Users/arpan/Documents/code/training-platform/packages/domain/src/analysis/computeAnalysis";
-import { computeAssessment } from "/Users/arpan/Documents/code/training-platform/packages/domain/src/assessment/computeAssessment";
-import { provisionalFitBand } from "/Users/arpan/Documents/code/training-platform/packages/domain/src/assessment/provisionalFit";
-import { evaluateProgressionChecks } from "/Users/arpan/Documents/code/training-platform/packages/domain/src/analysis/progressionSoundness";
-import { axisSentence } from "/Users/arpan/Documents/code/training-platform/packages/domain/src/copy/axisSentence";
-import { HYPERTROPHY_CONFIG, hypertrophyProfile } from "/Users/arpan/Documents/code/training-platform/packages/domain/src/goal-profiles/hypertrophy";
-import { scopeReferenceDataToGoal } from "/Users/arpan/Documents/code/training-platform/packages/domain/src/reference/scopeReferenceData";
-import type { ProgramStructure, LoadScheme } from "/Users/arpan/Documents/code/training-platform/packages/domain/src/types";
-import type { ExerciseReferenceData } from "/Users/arpan/Documents/code/training-platform/packages/domain/src/analysis/types";
-import type { AssessedAxis } from "/Users/arpan/Documents/code/training-platform/packages/domain/src/assessment/types";
+const ROOT = new URL("../../../../", import.meta.url).pathname.replace(/\/$/, "");
+import { computeAnalysis } from "../../src/analysis/computeAnalysis";
+import { computeAssessment } from "../../src/assessment/computeAssessment";
+import { provisionalFitBand } from "../../src/assessment/provisionalFit";
+import { evaluateProgressionChecks } from "../../src/analysis/progressionSoundness";
+import { axisSentence } from "../../src/copy/axisSentence";
+import { HYPERTROPHY_CONFIG, hypertrophyProfile } from "../../src/goal-profiles/hypertrophy";
+import { scopeReferenceDataToGoal } from "../../src/reference/scopeReferenceData";
+import type { ProgramStructure, LoadScheme } from "../../src/types";
+import type { ExerciseReferenceData } from "../../src/analysis/types";
+import type { AssessedAxis } from "../../src/assessment/types";
 
 // ---- seed extraction (text slice of packages/db/prisma/seed.ts, evaluated as a JS literal) ----
 const seedText = readFileSync(`${ROOT}/packages/db/prisma/seed.ts`, "utf8");
