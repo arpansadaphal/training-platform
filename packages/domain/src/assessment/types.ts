@@ -35,6 +35,8 @@ import type {
   FitScoreBand,
   FitScoreProjection,
   Leverage,
+  MovementPattern,
+  RegionKey,
   Severity,
   SeverityMap,
   SeverityWeightTable,
@@ -65,6 +67,37 @@ export interface AssessedAxis extends Omit<AnalysisAxisResult, "status"> {
   readonly severity: Severity;
   readonly weight: Weight;
   readonly leverage: Leverage;
+}
+
+/** One muscle a consolidated finding stands for, with the weekly hard sets it gets. */
+export interface FindingMember {
+  readonly muscle: string;
+  readonly sets: number;
+}
+
+export type FindingKind = "AXIS" | "REGION" | "PATTERN";
+
+/**
+ * ARCH-063 / B2. One problem, said once. Several Low muscles in one body region are one REGION finding; a missing
+ * movement-pattern group (no pulling, no hinge, ...) is one PATTERN finding that absorbs the muscles it explains;
+ * everything else is one AXIS finding. The axes a finding stands for stay in `allAssessedAxes`, so the roll-up
+ * and Fit still see every one (invariant 8). `lead` is the axis that ranks and represents the finding; it is also
+ * what `biggestOpportunity` / `attentionAreas` carry.
+ */
+export interface AssessmentFinding {
+  readonly kind: FindingKind;
+  /** `VOLUME:calves`, `region:lower`, `pattern:pull`, `pattern:gaps`. Stable across runs. */
+  readonly key: string;
+  readonly lead: AssessedAxis;
+  /** REGION and PATTERN: the muscles absorbed, best-ranked first. Empty otherwise. */
+  readonly members: readonly FindingMember[];
+  readonly region?: RegionKey;
+  /** REGION: every in-scope muscle of the region is at 0 sets ("No lower-body training"). */
+  readonly absent?: boolean;
+  /** PATTERN: keys of the whole-pattern groups this finding is about (`wholePatternGaps[].key`). */
+  readonly patterns?: readonly string[];
+  /** PATTERN: the required movement patterns it names as missing. */
+  readonly missingPatterns?: readonly MovementPattern[];
 }
 
 /**
@@ -132,6 +165,12 @@ export interface Assessment {
    * assessments persisted before this field existed.
    */
   readonly ratios?: CrossMuscleRatios;
+  /**
+   * ARCH-063 / B2. The things to look at, ranked, one per underlying problem. `findings[0]` is the headline and
+   * the rest are the attention areas; `biggestOpportunity` and `attentionAreas` are their lead axes, so every
+   * consumer written before this field keeps working. Absent on assessments persisted before it existed.
+   */
+  readonly findings?: readonly AssessmentFinding[];
 }
 
 /**

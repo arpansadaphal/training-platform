@@ -99,6 +99,17 @@ export type AxisStatus =
   | { readonly kind: "BAND"; readonly band: string }
   | { readonly kind: "UNVALIDATED"; readonly reason: string };
 
+/**
+ * ARCH-063 / B2. Structure-level detail an axis already computed, carried to the Assessment so a finding can say
+ * WHICH pattern is missing, not only that the coverage ratio is low. Set only when non-empty, so an axis with
+ * nothing to report keeps exactly the shape it had before. Never an input to a band, severity or leverage, with
+ * one exception: a whole missing pattern group raises the ESB severity (rollup.ts, `wholePatternGaps`).
+ */
+export interface AxisFacts {
+  /** EXERCISE_SELECTION_BALANCE: required movement patterns no exercise in the program has, in config order. */
+  readonly missingPatterns?: readonly MovementPattern[];
+}
+
 export interface AnalysisAxisResult {
   readonly axisType: AxisType;
   /** muscleGroupId for VOLUME/FREQUENCY; null for the program-wide axes. */
@@ -106,6 +117,7 @@ export interface AnalysisAxisResult {
   /** e.g. 6 (sets/week) for VOLUME; a coverage ratio for ESB; etc. */
   readonly metricValue: number | string;
   readonly status: AxisStatus;
+  readonly facts?: AxisFacts;
 }
 
 export interface Analysis {
@@ -277,6 +289,46 @@ export interface FrequencyDistributionConfig {
   readonly minExposureSets: number;
 }
 
+/** ARCH-063 / B2. Body regions findings are grouped by. `core` is reserved; no hypertrophy-relevant muscle is in it. */
+export type RegionKey = "upper" | "lower" | "arms" | "core";
+
+/** ARCH-063 / B2. One body region, in the words a sentence uses and the fix it suggests. Tier 3. */
+export interface RegionDefinition {
+  readonly key: RegionKey;
+  /** Mid-sentence name: "lower body". */
+  readonly name: string;
+  /** Before a noun: "lower-body" (volume), "arm" (work). */
+  readonly adjective: string;
+  /** Muscle-group names (not ids) in the region. */
+  readonly muscles: readonly string[];
+  /** The action when every muscle in the region is at 0 sets. */
+  readonly addAction: string;
+}
+
+/**
+ * ARCH-063 / B2. A movement pattern (or a pair, for pulling) whose complete absence is surfaced as a finding of its
+ * own, even though the Exercise selection axis alone would tolerate it. Tier 3. Group is absent when EVERY pattern
+ * in `patterns` is missing from the program.
+ */
+export interface WholePatternGap {
+  readonly key: string;
+  /** Sentence subject: "pulling", "hip hinge". */
+  readonly name: string;
+  readonly patterns: readonly MovementPattern[];
+  /** Muscle-group names whose VOLUME Lows this gap explains and absorbs. May be empty. */
+  readonly muscles: readonly string[];
+  /** The Exercise selection severity is raised to at least this while the group is absent. */
+  readonly severity: Severity;
+  /** The action for this gap. */
+  readonly addAction: string;
+}
+
+/** ARCH-063 / B2. How a missing movement pattern reads in a sentence and what to add for it. Tier 3. */
+export interface PatternPhrase {
+  readonly name: string;
+  readonly example: string;
+}
+
 /** E8. See progressionSoundness.ts. */
 export interface ProgressionRulesConfig {
   readonly minShareEffortDefined: number;
@@ -360,6 +412,12 @@ export interface GoalProfileConfig {
    * after every listed one. Tier 3 (a coaching convention). Absent means no priority: axis order decides.
    */
   readonly musclePriority?: readonly string[];
+  /** ARCH-063 / B2. Body regions, for consolidating several Low muscles into one finding. Absent: no consolidation. */
+  readonly regions?: readonly RegionDefinition[];
+  /** ARCH-063 / B2. Whole-pattern groups surfaced when absent. Absent: no bump, no pattern findings. */
+  readonly wholePatternGaps?: readonly WholePatternGap[];
+  /** ARCH-063 / B2. Wording for each missing movement pattern. */
+  readonly patternPhrases?: Readonly<Partial<Record<MovementPattern, PatternPhrase>>>;
 
   axisWeights: Record<string, AxisWeight>;
   statusBands: Record<AxisType, AxisBandDefinition[]>;

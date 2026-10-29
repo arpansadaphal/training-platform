@@ -29,8 +29,12 @@ import type {
   FitScoreProjection,
   GoalProfileConfig,
   GoalProfileEvidence,
+  MovementPattern,
+  PatternPhrase,
+  RegionDefinition,
   SeverityMap,
   SeverityWeightTable,
+  WholePatternGap,
 } from "../analysis/types";
 import type { GoalProfileDefinition } from "./types";
 
@@ -234,6 +238,87 @@ const RELEVANT_AXES: readonly AxisType[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Grouping for findings (ARCH-063 / B2). All Tier 3: coaching conventions about how to say a problem once, not
+// measurements. Names, not ids (see RELEVANT_MUSCLE_GROUPS).
+// ---------------------------------------------------------------------------
+
+// Body regions. Several Low muscles in one region are one finding ("Lower-body volume is low..."), and a region
+// whose every muscle is at 0 sets reads "No lower-body training". Core has no goal-relevant muscle here.
+const HYPERTROPHY_REGIONS: readonly RegionDefinition[] = [
+  {
+    key: "upper",
+    name: "upper body",
+    adjective: "upper-body",
+    muscles: ["chest", "lats", "upper back", "side delts", "rear delts"],
+    addAction:
+      "Add an upper-body day: a press, a row, a pulldown and a lateral raise, about 3 sets each.",
+  },
+  {
+    key: "lower",
+    name: "lower body",
+    adjective: "lower-body",
+    muscles: ["quads", "hamstrings", "glutes", "calves"],
+    addAction:
+      "Add a leg day: a squat or leg press, a Romanian deadlift, a leg curl and a calf raise, about 3 sets each.",
+  },
+  {
+    key: "arms",
+    name: "arms",
+    adjective: "arm",
+    muscles: ["biceps", "triceps"],
+    addAction: "Add arm work: a curl and a triceps extension, about 3 sets each.",
+  },
+];
+
+// Whole-pattern groups. A group is absent when EVERY pattern in it is missing. While absent, the Exercise
+// selection severity is raised to MODERATE (a MINOR gap on a LOW-weight axis is NONE leverage, so the gap was
+// computed and never shown) and the gap is a finding of its own, explaining the VOLUME Lows of `muscles`. One
+// missing pattern outside these groups (a program with rows but no pulldown) stays silent, as before.
+const HYPERTROPHY_WHOLE_PATTERN_GAPS: readonly WholePatternGap[] = [
+  {
+    key: "pull",
+    name: "pulling",
+    patterns: ["HORIZONTAL_PULL", "VERTICAL_PULL"],
+    muscles: ["lats", "upper back"],
+    severity: "MODERATE",
+    addAction: "Add 3 sets of rows and 3 of pulldowns.",
+  },
+  {
+    key: "hinge",
+    name: "hinge",
+    patterns: ["HINGE"],
+    muscles: ["hamstrings", "glutes"],
+    severity: "MODERATE",
+    addAction: "Add 3 sets of a Romanian deadlift or hip thrust.",
+  },
+  {
+    key: "squat",
+    name: "squat",
+    patterns: ["SQUAT"],
+    muscles: ["quads"],
+    severity: "MODERATE",
+    addAction: "Add 3 sets of a squat or leg press.",
+  },
+  {
+    key: "vertical-push",
+    name: "vertical push",
+    patterns: ["VERTICAL_PUSH"],
+    muscles: [],
+    severity: "MODERATE",
+    addAction: "Add 3 sets of an overhead or shoulder press.",
+  },
+];
+
+const HYPERTROPHY_PATTERN_PHRASES: Readonly<Partial<Record<MovementPattern, PatternPhrase>>> = {
+  HORIZONTAL_PUSH: { name: "horizontal pushing", example: "a bench press or push-up" },
+  VERTICAL_PUSH: { name: "vertical pushing", example: "an overhead or shoulder press" },
+  HORIZONTAL_PULL: { name: "horizontal pulling", example: "a row" },
+  VERTICAL_PULL: { name: "vertical pulling", example: "a pulldown or chin-up" },
+  HINGE: { name: "hip hinging", example: "a Romanian deadlift or hip thrust" },
+  SQUAT: { name: "squatting", example: "a squat or leg press" },
+};
+
+// ---------------------------------------------------------------------------
 // Evidence (ARCH-054). A display restatement of the tier comments above: every tier and citation here
 // is copied from a comment in this file (or, for Epley, progressionSoundness.ts). Nothing is regraded.
 // When a comment above changes, change the matching claim here. No engine code reads this block.
@@ -315,6 +400,12 @@ const HYPERTROPHY_EVIDENCE: GoalProfileEvidence = {
         {
           claim: "One missing pattern is tolerated; two or more reads Gaps present.",
           tier: { from: 3, to: 4 },
+          sources: [],
+        },
+        {
+          claim:
+            "The exception: a whole movement group missing (no pulling, no hinge, no squat, no vertical push) is surfaced as a finding even when the axis reads Balanced.",
+          tier: { from: 3, to: 3 },
           sources: [],
         },
       ],
@@ -463,6 +554,10 @@ export const HYPERTROPHY_CONFIG: GoalProfileConfig = {
     "triceps",
     "calves",
   ],
+  // ARCH-063 / B2. Tier 3; see HYPERTROPHY_REGIONS / HYPERTROPHY_WHOLE_PATTERN_GAPS above.
+  regions: HYPERTROPHY_REGIONS,
+  wholePatternGaps: HYPERTROPHY_WHOLE_PATTERN_GAPS,
+  patternPhrases: HYPERTROPHY_PATTERN_PHRASES,
   fitScoreProjection: HYPERTROPHY_FIT_SCORE_PROJECTION,
   validated: false,
   sourceNote:

@@ -11,7 +11,7 @@
 //   - Expected `none` (the coach found nothing to fix) passes only when the headline is EMPTY. It is the only
 //     way a program with no findings can pass; any program whose coach line names a problem fails until the
 //     engine produces that problem.
-import type { AssessedAxis, Assessment } from "../../src/assessment/types";
+import type { AssessedAxis, Assessment, AssessmentFinding } from "../../src/assessment/types";
 
 export type Direction = "low" | "missing" | "high" | "none";
 
@@ -95,8 +95,51 @@ function axisSubjects(axis: AssessedAxis, via: Via): HeadlineSubject[] {
 
 const axisLabel = (a: AssessedAxis): string => (a.scopeKey ? `${a.axisType}:${a.scopeKey}` : a.axisType);
 
-/** Expand the engine's headline into subjects. Reads only what the Assessment carries. */
-export function headlineOf(assessment: Pick<Assessment, "biggestOpportunity">): Headline {
+/** Required movement pattern -> the pattern subject the vocabulary uses for it (those a coach names). */
+const PATTERN_SUBJECT: Readonly<Record<string, string>> = {
+  HINGE: "pattern:hinge",
+  SQUAT: "pattern:squat",
+  VERTICAL_PUSH: "pattern:vertical-push",
+  VERTICAL_PULL: "pattern:vertical-pull",
+};
+
+/** Expand one finding. A broader finding contains its narrower subjects (a region its muscles), never the reverse. */
+function findingSubjects(finding: AssessmentFinding): HeadlineSubject[] {
+  const out: HeadlineSubject[] = [];
+  const muscles = (): void => {
+    for (const m of finding.members) {
+      out.push({
+        subject: `muscle:${m.muscle}`,
+        direction: m.sets === 0 ? "missing" : "low",
+        via: m.muscle === finding.lead.scopeKey ? "lead" : "member",
+      });
+    }
+  };
+  if (finding.kind === "REGION") {
+    out.push({ subject: `region:${finding.region ?? "?"}`, direction: finding.absent ? "missing" : "low", via: "lead" });
+    muscles();
+  } else if (finding.kind === "PATTERN") {
+    for (const key of finding.patterns ?? []) out.push({ subject: `pattern:${key}`, direction: "missing", via: "lead" });
+    for (const p of finding.missingPatterns ?? []) {
+      const subject = PATTERN_SUBJECT[p];
+      if (subject !== undefined && !out.some((o) => o.subject === subject)) {
+        out.push({ subject, direction: "missing", via: "lead" });
+      }
+    }
+    muscles();
+  } else {
+    out.push(...axisSubjects(finding.lead, "lead"));
+  }
+  return out;
+}
+
+/**
+ * Expand the engine's headline into subjects. Reads only what the Assessment carries: the first ranked finding
+ * when the Assessment has findings (engine 0.5.0), otherwise its biggest opportunity.
+ */
+export function headlineOf(assessment: Pick<Assessment, "biggestOpportunity"> & { findings?: Assessment["findings"] }): Headline {
+  const finding = assessment.findings?.[0];
+  if (finding !== undefined) return { source: "finding", label: finding.key, subjects: findingSubjects(finding) };
   const lead = assessment.biggestOpportunity;
   if (lead === null) return { source: "none", label: "", subjects: [] };
   return { source: "biggestOpportunity", label: axisLabel(lead), subjects: axisSubjects(lead, "lead") };

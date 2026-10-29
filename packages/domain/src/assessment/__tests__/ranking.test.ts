@@ -67,10 +67,11 @@ describe("B1: deficit beats name order", () => {
 });
 
 describe("B1: the configured muscle priority breaks a deficit tie", () => {
-  it("quads, then lats, then calves when all three sit at 0 sets", () => {
-    const a = assess(vol("calves", 0), vol("lats", 0), vol("quads", 0));
+  // The three sit in different regions (lower, upper, arms) so B2 leaves each as its own finding.
+  it("quads, then lats, then biceps when all three sit at 0 sets", () => {
+    const a = assess(vol("biceps", 0), vol("lats", 0), vol("quads", 0));
     expect(keys([a.biggestOpportunity!])).toEqual(["VOLUME:quads"]);
-    expect(keys(a.attentionAreas)).toEqual(["VOLUME:lats", "VOLUME:calves"]);
+    expect(keys(a.attentionAreas)).toEqual(["VOLUME:lats", "VOLUME:biceps"]);
   });
 
   it("a muscle the priority list does not name ranks after every named muscle", () => {
@@ -83,16 +84,18 @@ describe("B1: the configured muscle priority breaks a deficit tie", () => {
     const { musclePriority: _omitted, ...rest } = HYPERTROPHY_CONFIG;
     const analysis: Analysis = {
       programVersionId: "ranking",
-      axisResults: [vol("calves", 0), vol("quads", 0)],
+      axisResults: [vol("calves", 0), vol("biceps", 0)],
       computedAt: T,
     };
-    const a = computeAssessment(analysis, rest, { goalId: "g" }).assessment;
-    expect(keys([a.biggestOpportunity!])).toEqual(["VOLUME:calves"]);
+    const without = computeAssessment(analysis, rest, { goalId: "g" }).assessment;
+    expect(keys([without.biggestOpportunity!])).toEqual(["VOLUME:calves"]);
+    // With the list, biceps (8th) outranks calves (11th).
+    expect(keys([assess(vol("calves", 0), vol("biceps", 0)).biggestOpportunity!])).toEqual(["VOLUME:biceps"]);
   });
 
   it("deficit still outranks priority: the higher-priority muscle with the smaller deficit loses", () => {
-    const a = assess(vol("quads", 5), vol("calves", 0));
-    expect(keys([a.biggestOpportunity!])).toEqual(["VOLUME:calves"]);
+    const a = assess(vol("quads", 5), vol("biceps", 0));
+    expect(keys([a.biggestOpportunity!])).toEqual(["VOLUME:biceps"]);
   });
 });
 

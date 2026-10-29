@@ -121,11 +121,21 @@ export type {
   AssessedAxis,
   ActionSuggestion,
   Assessment,
+  AssessmentFinding,
   AssessmentResult,
   ComputeAssessmentOptions,
+  FindingKind,
+  FindingMember,
   FitScore,
   FitScoreResult,
 } from "./assessment/types";
+export type {
+  AxisFacts,
+  PatternPhrase,
+  RegionDefinition,
+  RegionKey,
+  WholePatternGap,
+} from "./analysis/types";
 
 // --- Assessment engine ---
 
@@ -135,10 +145,12 @@ export type { FitBandProjection } from "./assessment/computeFitScore";
 export { isClassified, provisionalFitBand } from "./assessment/provisionalFit";
 export { rollUpLeverage } from "./assessment/rollup";
 export type { RollUpOutcome, RollUpOk, RollUpBlocked } from "./assessment/rollup";
-export { actionTemplateFor } from "./assessment/actionTemplates";
+export { actionForFinding, actionTemplateFor } from "./assessment/actionTemplates";
 export type { ActionTemplateResult } from "./assessment/actionTemplates";
+export { absentPatternGaps, regionOf } from "./assessment/patternGaps";
+export { findingSentence, joinList } from "./copy/findingSentence";
 export { nameActions } from "./assessment/namedActions";
-export type { NamedAction, NamedActionSuggestion } from "./assessment/namedActions";
+export type { NamedAction, NamedActionSuggestion, NamedDaySuggestion } from "./assessment/namedActions";
 
 // --- Launch gate ---
 

@@ -126,8 +126,12 @@ describe("coach parity ratchet", () => {
 
   // Moves only with an engine change. Part 0 baseline (the 2026-10-28 engine): D, E, P1, PPLx6, S2, S3.
   // After B1 (rank by deficit): + P3, S6, S6b.
-  const PINNED_PASSING = ["D", "E", "P1", "P3", "PPLx6", "S2", "S3", "S6", "S6b"];
-  const PINNED_CONTAINED: string[] = [];
+  // After B2 (consolidate, de-duplicate, surface whole-pattern gaps): + F1, F2, S4, S5a, S5b.
+  //   S4 passes as "contained": hamstrings sits inside a lower-body finding led by calves. It is not a direct hit.
+  const PINNED_PASSING = [
+    "D", "E", "F1", "F2", "P1", "P3", "PPLx6", "S2", "S3", "S4", "S5a", "S5b", "S6", "S6b",
+  ];
+  const PINNED_CONTAINED = ["S4"];
 
   it("the passing set is exactly the pinned set", () => {
     expect(passing()).toEqual(PINNED_PASSING);

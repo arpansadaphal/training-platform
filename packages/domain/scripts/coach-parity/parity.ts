@@ -6,6 +6,7 @@
 // Read-only: no database, no writes. Imported by parity.test.ts, which pins the passing set.
 import { pathToFileURL } from "node:url";
 import { axisSentence } from "../../src/copy/axisSentence";
+import { findingSentence } from "../../src/copy/findingSentence";
 import { HYPERTROPHY_CONFIG } from "../../src/goal-profiles/hypertrophy";
 import type { AssessedAxis } from "../../src/assessment/types";
 import { EXPECTED_HEADLINES, type ExpectedHeadline } from "./expected";
@@ -37,7 +38,12 @@ export function scoreAll(): ParityScore {
   const rows: ParityRow[] = EXPECTED_HEADLINES.map((expected) => {
     const { a } = run(expected.program, { defaultRpe: expected.defaultRpe, quiet: true });
     const headline = headlineOf(a);
-    const sentence = a.biggestOpportunity ? sentenceFor(a.biggestOpportunity) : "";
+    const finding = a.findings?.[0];
+    const sentence = finding
+      ? (findingSentence(finding, HYPERTROPHY_CONFIG) ?? sentenceFor(finding.lead))
+      : a.biggestOpportunity
+        ? sentenceFor(a.biggestOpportunity)
+        : "";
     return { expected, headline, sentence, result: matchHeadline(expected.match, headline) };
   });
   return { rows, passed: rows.filter((r) => r.result.pass).length, total: rows.length };
