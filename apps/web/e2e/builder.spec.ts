@@ -157,9 +157,18 @@ test("Builder: build a draft, see the unvalidated Assessment state, commit a ver
   // Named actions and cross-muscle balance (engine-output session A). One exercise leaves most muscles low,
   // so the actions list has "Add N sets of <exercise> on <day> → X sets/week." lines, and the balance
   // section states the weekly hard-set totals. The old axis label must be gone.
+  //
+  // AUDIT TRAIL (ARCH-063 / B2, engine 0.5.0): this used to match `Add N sets of X on D → N sets/week`. B2 puts the
+  // Lows of one body region into ONE action, so a sentence now says which muscle each number belongs to
+  // (`→ hamstrings 4 sets/week`), and a region with no training proposes a new day (`Add a lower-body day: 3 sets
+  // of ... → quads 3 and glutes 4.5 sets/week`). The intent is unchanged: a named addition with the engine's
+  // after-number.
   await expect(
-    assessmentPanel.locator("[data-root-cause]").filter({ hasText: /Add \d sets? of .+ → [\d.]+ sets\/week/ }).first(),
+    assessmentPanel.locator("[data-root-cause]").filter({ hasText: /Add .+ → .*[\d.]+ sets\/week/ }).first(),
   ).toBeVisible();
+  // One finding per problem: a program with one exercise no longer lists a card per muscle.
+  await expect(assessmentPanel.getByRole("heading", { name: "Biggest Opportunity" })).toBeVisible();
+  await expect(assessmentPanel.getByText(/No (upper-body|lower-body|arm) training:|exercises:/).first()).toBeVisible();
   await expect(assessmentPanel.getByRole("heading", { name: "Cross-muscle balance" })).toBeVisible();
   await expect(assessmentPanel.getByText(/Tier 3: a coaching comparison/)).toBeVisible();
   await expect(assessmentPanel.getByText("Progression & effort")).toHaveCount(0);
