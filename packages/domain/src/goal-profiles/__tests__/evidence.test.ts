@@ -59,6 +59,22 @@ describe("HYPERTROPHY evidence block", () => {
     expect(text).not.toMatch(/\bvalidated\b/i);
   });
 
+  // ARCH-063 / B3: a new tier needs its own entry here; a regrade needs a decision entry, not a test edit.
+  it("pins the near-failure claim: Tier 4, cited to Refalo 2023 and Robinson 2024", () => {
+    const claim = evidence!.axes.PROGRESSION_SOUNDNESS.claims.find((c) => /0 reps in reserve/.test(c.claim));
+    expect(claim).toBeDefined();
+    expect(claim?.tier).toEqual({ from: 4, to: 4 });
+    expect(claim?.sources).toEqual(["Robinson 2024", "Refalo 2023"]);
+    // The check's cutpoint lives in the config, beside the claim that explains it.
+    expect(HYPERTROPHY_CONFIG.progressionRules?.maxShareAtFailure).toBe(0.5);
+  });
+
+  it("pins the whole-pattern claim on Exercise selection: Tier 3, still a coaching heuristic", () => {
+    const claim = evidence!.axes.EXERCISE_SELECTION_BALANCE.claims.find((c) => /whole movement group/.test(c.claim));
+    expect(claim?.tier).toEqual({ from: 3, to: 3 });
+    expect(claim?.sources).toEqual([]);
+  });
+
   it("does not change the validated flag", () => {
     expect(HYPERTROPHY_CONFIG.validated).toBe(false);
   });

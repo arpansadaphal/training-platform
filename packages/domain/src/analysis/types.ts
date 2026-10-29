@@ -108,6 +108,15 @@ export type AxisStatus =
 export interface AxisFacts {
   /** EXERCISE_SELECTION_BALANCE: required movement patterns no exercise in the program has, in config order. */
   readonly missingPatterns?: readonly MovementPattern[];
+  /** PROGRESSION_SOUNDNESS: the checks that failed (ARCH-063 / B3), so a finding can say WHICH. */
+  readonly failedChecks?: readonly FailedCheckFact[];
+}
+
+/** One failed progression check: its id, the share it measured (0-1) when it measures one, and its detail line. */
+export interface FailedCheckFact {
+  readonly id: string;
+  readonly share?: number;
+  readonly detail: string;
 }
 
 export interface AnalysisAxisResult {
@@ -334,6 +343,11 @@ export interface ProgressionRulesConfig {
   readonly minShareEffortDefined: number;
   readonly farFromFailureMinRir: number;
   readonly maxShareFarFromFailure: number;
+  /**
+   * ARCH-063 / B3. NEAR_FAILURE fails when MORE than this share of SETS is prescribed at 0 reps in reserve
+   * (RPE 10). Sets with no stated effort are not counted. Tier 4: an engine boundary, not a measurement.
+   */
+  readonly maxShareAtFailure: number;
   readonly acceptedRepRange: readonly [number, number];
   readonly minShareInAcceptedRepRange: number;
   /** Reps of slack allowed beyond the Epley estimate before a %1RM prescription is called infeasible. */

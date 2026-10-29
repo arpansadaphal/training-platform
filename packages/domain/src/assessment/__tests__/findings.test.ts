@@ -319,3 +319,76 @@ describe("B2: nothing else about the roll-up moves", () => {
     assertCleanCopy(lines);
   });
 });
+
+describe("B3: the near-failure finding (Program J's shape)", () => {
+  const nearFailure = (share: number): AnalysisAxisResult => ({
+    axisType: "PROGRESSION_SOUNDNESS",
+    scopeKey: null,
+    metricValue: 1,
+    status: { kind: "BAND", band: "Issue found" },
+    facts: { failedChecks: [{ id: "NEAR_FAILURE", share, detail: `${share * 100}% of sets at RIR 0 (max 50%)` }] },
+  });
+  const recoveryHigh: AnalysisAxisResult = {
+    axisType: "RECOVERY_COST",
+    scopeKey: null,
+    metricValue: 120,
+    status: { kind: "BAND", band: "High" },
+  };
+  // J: nothing wrong with volume, one failed effort check, high recovery cost, and no overhead press or pulldown.
+  const j = with_(program({}), nearFailure(1), recoveryHigh, esb(["VERTICAL_PUSH", "VERTICAL_PULL"]));
+  const a = assess(j);
+
+  it("leads with near-failure: Effort & rep ranges outranks Recovery cost and the selection gap on weight", () => {
+    // Recovery cost High is MINOR severity, below the materiality bar, so it is not an attention area; the
+    // selection gap is MODERATE (the whole-pattern bump) and is.
+    expect(keysOf(a)).toEqual(["PROGRESSION_SOUNDNESS", "pattern:gaps"]);
+    expect(a.allAssessedAxes.find((x) => x.axisType === "RECOVERY_COST")!.leverage).toBe("LOW");
+  });
+
+  it("says it in the words the brief gives, with the share the engine measured", () => {
+    expect(findingSentence(a.findings![0]!, HYPERTROPHY_CONFIG)).toBe(
+      "100% of your sets are to failure. Growth doesn't need failure — leave 1–2 reps in reserve on most sets.",
+    );
+    expect(findingSentence(assess(with_(program({}), nearFailure(0.516))).findings![0]!, HYPERTROPHY_CONFIG)).toMatch(
+      /^52% of your sets are to failure\./,
+    );
+  });
+
+  it("the copy passes the forbidden-copy lint and never says safe, injury or prevent", () => {
+    const all = [
+      findingSentence(a.findings![0]!, HYPERTROPHY_CONFIG)!,
+      ...["EFFORT_DEFINED", "FAR_FROM_FAILURE", "REP_RANGE", "PERCENT_1RM_FEASIBILITY"].map(
+        (id) =>
+          findingSentence(
+            assess(
+              with_(program({}), {
+                ...nearFailure(0.3),
+                facts: { failedChecks: [{ id, share: 0.3, detail: id }] },
+              }),
+            ).findings![0]!,
+            HYPERTROPHY_CONFIG,
+          )!,
+      ),
+    ];
+    expect(all.every((s) => s.length > 0)).toBe(true);
+    assertCleanCopy(all);
+    for (const line of all) expect(line).not.toMatch(/\b(safe|safely|injur\w*|prevent\w*)\b/i);
+  });
+
+  it("an Effort & rep ranges finding without per-check facts has no sentence of its own (older snapshots)", () => {
+    const old: AnalysisAxisResult = { ...nearFailure(1), facts: undefined };
+    const f = assess(with_(program({}), old)).findings![0]!;
+    expect(f.key).toBe("PROGRESSION_SOUNDNESS");
+    expect(findingSentence(f, HYPERTROPHY_CONFIG)).toBeNull();
+  });
+
+  it("KNOWN LIMITATION: Fit stays STRONG. Effort & rep ranges is MINOR severity, below the breadth bar", () => {
+    // Pinned so the limitation is visible and a future change to it is deliberate (graded severity, E4, or a
+    // decision to raise PROGRESSION from MINOR to MODERATE; both are separate ARCHs). Until then J's headline
+    // reads 'near-failure' and its action is correct, but the band label understates the problem.
+    const axis = a.allAssessedAxes.find((x) => x.axisType === "PROGRESSION_SOUNDNESS")!;
+    expect(axis.severity).toBe("MINOR");
+    expect(axis.leverage).toBe("LOW");
+    expect(projectFitBand(a).band).toBe("STRONG");
+  });
+});

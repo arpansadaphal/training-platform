@@ -20,9 +20,9 @@ function num(value: number): string {
 }
 
 export function FindingCard({ finding, variant }: Props) {
-  if (finding.kind === "AXIS") return <AxisCard axis={finding.lead} variant={variant} />;
-
   const sentence = findingSentence(finding, HYPERTROPHY_CONFIG);
+  if (finding.kind === "AXIS") return <AxisCard axis={finding.lead} variant={variant} sentence={sentence} />;
+
   return (
     <div
       className={`${styles.axisCard} ${styles[`variant_${variant}`]}`}

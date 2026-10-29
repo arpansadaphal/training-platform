@@ -8,8 +8,9 @@
 // Invariants 9 and 10 apply, as in axisSentence: the sentence states where numbers sit, never what they will do
 // for the lifter, and says nothing about injury, cause or posture.
 
+import { DEFAULT_PROGRESSION_RULES } from "../analysis/progressionSoundness";
 import type { AxisBandDefinition, GoalProfileConfig } from "../analysis/types";
-import type { AssessmentFinding } from "../assessment/types";
+import type { AssessedAxis, AssessmentFinding } from "../assessment/types";
 
 const num = (n: number): string => String(Math.round(n * 10) / 10);
 
@@ -37,9 +38,55 @@ function setsClause(finding: AssessmentFinding): string {
     : `${joinList(finding.members.map((m) => `${m.muscle} ${num(m.sets)}`))} hard sets a week`;
 }
 
+const percent = (share: number): string => `${Math.round(share * 100)}%`;
+
 /**
- * The leading sentence for a REGION or PATTERN finding, or null for an AXIS finding (those keep their
- * `axisSentence`) and for a finding the profile cannot word.
+ * ARCH-063 / B3. What a failed progression check says, in the words the lifter reads. Each sentence states a
+ * share the engine measured and what to do about it; none claims an outcome (invariant 9) or a cause
+ * (invariant 10). Null for a check this module has no wording for.
+ */
+function progressionCheckSentence(
+  check: { id: string; share?: number },
+  config: GoalProfileConfig,
+): string | null {
+  const rules = config.progressionRules ?? DEFAULT_PROGRESSION_RULES;
+  const share = check.share;
+  switch (check.id) {
+    case "NEAR_FAILURE":
+      return share === undefined
+        ? null
+        : `${percent(share)} of your sets are to failure. Growth doesn't need failure — leave 1–2 reps in reserve on most sets.`;
+    case "EFFORT_DEFINED":
+      return share === undefined
+        ? null
+        : `Effort is stated on ${percent(share)} of your exercises. Set a target effort (RPE or reps in reserve) on the rest.`;
+    case "FAR_FROM_FAILURE":
+      return share === undefined
+        ? null
+        : `${percent(share)} of your sets are planned ${rules.farFromFailureMinRir} or more reps from failure, so they do not count as hard sets in this analysis.`;
+    case "REP_RANGE":
+      return share === undefined
+        ? null
+        : `Only ${percent(share)} of your sets are inside ${rules.acceptedRepRange[0]}–${rules.acceptedRepRange[1]} reps, the range this analysis is built on.`;
+    case "PERCENT_1RM_FEASIBILITY":
+      return "At least one prescription asks for more reps than its percentage of your max allows.";
+    default:
+      return null;
+  }
+}
+
+/** The leading sentence for an Effort & rep ranges finding: one sentence per failed check, in check order. */
+function progressionSentence(axis: AssessedAxis, config: GoalProfileConfig): string | null {
+  const sentences = (axis.facts?.failedChecks ?? [])
+    .map((c) => progressionCheckSentence(c, config))
+    .filter((s): s is string => s !== null);
+  return sentences.length === 0 ? null : sentences.join(" ");
+}
+
+/**
+ * The leading sentence for a REGION or PATTERN finding, or for an Effort & rep ranges finding that knows which
+ * checks failed. Null for every other AXIS finding (those keep their `axisSentence`) and for a finding the
+ * profile cannot word.
  */
 export function findingSentence(finding: AssessmentFinding, config: GoalProfileConfig): string | null {
   if (finding.kind === "REGION") {
@@ -70,5 +117,6 @@ export function findingSentence(finding: AssessmentFinding, config: GoalProfileC
     return `No ${names.join(" or ")} exercise in the program.`;
   }
 
+  if (finding.lead.axisType === "PROGRESSION_SOUNDNESS") return progressionSentence(finding.lead, config);
   return null;
 }

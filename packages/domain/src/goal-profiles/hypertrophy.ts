@@ -438,6 +438,12 @@ const HYPERTROPHY_EVIDENCE: GoalProfileEvidence = {
         },
         {
           claim:
+            "More than half of a program's sets prescribed at 0 reps in reserve (RPE 10) is flagged: growth rises as sets approach failure, but failure itself is unnecessary. The share is an engine boundary, not a measurement.",
+          tier: { from: 4, to: 4 },
+          sources: [ROBINSON_2024, REFALO_2023],
+        },
+        {
+          claim:
             "Effort and overload matter, but the current rules are a weak proxy for a sound progression; no single overload scheme is required.",
           tier: { from: 4, to: 4 },
           sources: [ROBINSON_2024, "Plotkin 2022"],
@@ -534,6 +540,13 @@ export const HYPERTROPHY_CONFIG: GoalProfileConfig = {
     minShareEffortDefined: 0.8,
     farFromFailureMinRir: 5,
     maxShareFarFromFailure: 0.25,
+    // ARCH-063 / B3. Tier 4: an engine boundary. Growth rises as sets approach failure but failure itself is
+    // unnecessary (Refalo 2023; Robinson 2024), and no study gives a share. "More than half of the sets at RIR 0"
+    // is where a program stops being one that uses failure now and then and becomes one built on it. Sets with
+    // no stated effort are not counted. The calibration programs bracket it without pinning it: J (every set to
+    // failure) is 100%, C and K are about 52%, and every other program in A-L and the coach-parity set is 0%.
+    // Any value from 0 up to about 0.51 gives the same flips on A-L; 0.5 is the round number inside that range.
+    maxShareAtFailure: 0.5,
     acceptedRepRange: [5, 30],
     minShareInAcceptedRepRange: 0.8,
     percent1RmRepTolerance: 1,

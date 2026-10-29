@@ -68,6 +68,15 @@ export function isKnownSubject(subject: string): boolean {
 }
 
 // ---- computed headline ----
+/** Progression check id -> the subject and direction a coach names it with. */
+const CHECK_SUBJECT: Readonly<Record<string, { subject: string; direction: Direction }>> = {
+  EFFORT_DEFINED: { subject: "check:effort-defined", direction: "low" },
+  FAR_FROM_FAILURE: { subject: "check:far-from-failure", direction: "high" },
+  REP_RANGE: { subject: "check:rep-range", direction: "low" },
+  PERCENT_1RM_FEASIBILITY: { subject: "check:percent-1rm", direction: "high" },
+  NEAR_FAILURE: { subject: "check:near-failure", direction: "high" },
+};
+
 function axisSubjects(axis: AssessedAxis, via: Via): HeadlineSubject[] {
   const band = axis.status.band;
   const value = typeof axis.metricValue === "number" ? axis.metricValue : null;
@@ -85,9 +94,13 @@ function axisSubjects(axis: AssessedAxis, via: Via): HeadlineSubject[] {
     case "EXERCISE_SELECTION_BALANCE":
       // No per-pattern facts reach the Assessment yet: the headline cannot say WHICH pattern is missing.
       return band === "Gaps present" ? [{ subject: "pattern:unspecified", direction: "missing", via }] : [];
-    case "PROGRESSION_SOUNDNESS":
-      // No per-check facts reach the Assessment yet: the headline cannot say WHICH check failed.
-      return band === "Issue found" ? [{ subject: "check:unspecified", direction: "low", via }] : [];
+    case "PROGRESSION_SOUNDNESS": {
+      if (band !== "Issue found") return [];
+      // Which checks failed is in the axis facts (engine 0.5.0). Without them the headline names no check.
+      const failed = axis.facts?.failedChecks ?? [];
+      const known = failed.flatMap((c) => (CHECK_SUBJECT[c.id] ? [{ ...CHECK_SUBJECT[c.id]!, via }] : []));
+      return known.length > 0 ? known : [{ subject: "check:unspecified", direction: "low", via }];
+    }
     case "RECOVERY_COST":
       return band === "High" || band === "Excessive" ? [{ subject: "recovery", direction: "high", via }] : [];
   }

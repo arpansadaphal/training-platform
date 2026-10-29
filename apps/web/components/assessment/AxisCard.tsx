@@ -24,10 +24,15 @@ export type AxisCardVariant = "strength" | "attention" | "opportunity";
 interface Props {
   axis: AssessedAxis;
   variant: AxisCardVariant;
+  /**
+   * A finding's own leading sentence (ARCH-063 / B3: which effort checks failed), used in place of the
+   * band-level one when the engine produced it.
+   */
+  sentence?: string | null;
 }
 
-export function AxisCard({ axis, variant }: Props) {
-  const sentence = axisSentence(axis, HYPERTROPHY_CONFIG.statusBands[axis.axisType] ?? []);
+export function AxisCard({ axis, variant, sentence: given }: Props) {
+  const sentence = given ?? axisSentence(axis, HYPERTROPHY_CONFIG.statusBands[axis.axisType] ?? []);
   const meaning = sentence === null ? meaningText(axis) : "";
   return (
     <div className={`${styles.axisCard} ${styles[`variant_${variant}`]}`}>
