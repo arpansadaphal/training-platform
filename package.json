@@ -19,7 +19,8 @@
     "db:generate": "pnpm --filter @training/db db:generate",
     "db:migrate": "pnpm --filter @training/db db:migrate",
     "db:push": "pnpm --filter @training/db db:push",
-    "coach-parity": "pnpm --filter @training/domain coach-parity"
+    "coach-parity": "pnpm --filter @training/domain coach-parity",
+    "coach-parity:score": "pnpm --filter @training/domain coach-parity:score"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",
