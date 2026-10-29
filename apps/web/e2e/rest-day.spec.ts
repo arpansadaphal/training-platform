@@ -3,7 +3,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 /**
  * ARCH-061: a rest day in the Builder, in the rotation, in the day picker, and
- * moved past without counting as a missed session.
+ * moved past without counting as a missed session. okay
  */
 
 async function signUp(page: Page): Promise<void> {
@@ -48,7 +48,13 @@ test("rest day: build, rotate, pick, move past (375px for the session part)", as
   const sentence = page.getByText(/ volume is (low|in range|on the high side|past the well-studied range):/).first();
   await expect(sentence).toBeVisible();
   const axisCard = sentence.locator("xpath=ancestor::div[contains(@class,'axisCard')][1]");
-  await expect(axisCard.getByText(/hard sets? \/ week/).first()).toBeVisible();
+// Session B (findings consolidation) hides per-axis metrics behind a
+// disclosure. This test's intent is "the assessment rendered with real
+// data" — proven by the sentence assertion above — not "the exact number
+// is painted above the fold." toContainText checks textContent, so it
+// works whether or not the disclosure is expanded.
+await expect(axisCard).toContainText(/hard sets? \/ week/);
+  
   if (process.env.A3A_SHOTS) await axisCard.screenshot({ path: `${process.env.A3A_SHOTS}/axis-card.png` });
   await page.getByRole("button", { name: "Commit", exact: true }).click();
   await expect(page.getByText(/Committed as version 1\./)).toBeVisible();
