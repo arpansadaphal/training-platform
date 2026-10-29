@@ -124,13 +124,100 @@ describe("computeProgressionSoundnessAxis (E8)", () => {
   });
 
   it("honours config.progressionRules", () => {
-    const strict = { ...TEST_CONFIG_BOUNDED, progressionRules: { minShareEffortDefined: 1, farFromFailureMinRir: 3, maxShareFarFromFailure: 0, acceptedRepRange: [8, 12] as const, minShareInAcceptedRepRange: 1, percent1RmRepTolerance: 0 } };
+    const strict = { ...TEST_CONFIG_BOUNDED, progressionRules: { minShareEffortDefined: 1, farFromFailureMinRir: 3, maxShareFarFromFailure: 0, maxShareAtFailure: 0.5, acceptedRepRange: [8, 12] as const, minShareInAcceptedRepRange: 1, percent1RmRepTolerance: 0 } };
     expect(failedIds(five(() => ({ loadScheme: rpe(7) })))).toEqual([]);
     expect(evaluateProgressionChecks(five(() => ({ loadScheme: rpe(7) })), strict).filter((c) => c.failed).map((c) => c.id)).toEqual(["FAR_FROM_FAILURE"]);
   });
 
   it("returns UNVALIDATED when bounds are null", () => {
     expect(run(five(() => ({ loadScheme: { type: "BODYWEIGHT" } as LoadScheme })), TEST_CONFIG_ALL_NULL).status.kind).toBe("UNVALIDATED");
+  });
+});
+
+// ARCH-063 / B3: the fifth check. The four above only ever caught effort that was too LOW, so a program with
+// every set to failure read "Sound" (and STRONG). NEAR_FAILURE fails when MORE than maxShareAtFailure (0.5) of
+// SETS are prescribed at RIR 0 (RPE 10). Sets with no stated effort are not counted.
+describe("NEAR_FAILURE (ARCH-063 / B3)", () => {
+  const atFailure = (sets: number, over: Partial<ExercisePrescriptionStructure> = {}) =>
+    rx(`f${sets}-${Math.random()}`, { targetSets: sets, loadScheme: rpe(10), targetRpe: 10, ...over });
+  const easy = (sets: number) => rx(`e${sets}-${Math.random()}`, { targetSets: sets }); // RPE 8
+  const check = (s: ProgramStructure) => evaluateProgressionChecks(s, TEST_CONFIG_BOUNDED).find((c) => c.id === "NEAR_FAILURE")!;
+
+  it("is the fifth check, after the original four", () => {
+    expect(evaluateProgressionChecks(five(), TEST_CONFIG_BOUNDED).map((c) => c.id)).toEqual([
+      "EFFORT_DEFINED", "FAR_FROM_FAILURE", "REP_RANGE", "PERCENT_1RM_FEASIBILITY", "NEAR_FAILURE",
+    ]);
+    expect(evaluateProgressionChecks(emptyProgram, TEST_CONFIG_BOUNDED)).toHaveLength(5);
+  });
+
+  it("fires when every set is to failure (Program J)", () => {
+    const j = prog(atFailure(3), atFailure(3), atFailure(3), atFailure(3));
+    expect(check(j).failed).toBe(true);
+    expect(check(j).share).toBe(1);
+    expect(failedIds(j)).toEqual(["NEAR_FAILURE"]);
+    expect(run(j).status).toEqual({ kind: "BAND", band: "Issue found" });
+  });
+
+  it("does not fire at about 30% of sets to failure", () => {
+    const s = prog(atFailure(3), easy(3), easy(4)); // 3 of 10 sets
+    expect(check(s).share).toBeCloseTo(0.3);
+    expect(check(s).failed).toBe(false);
+    expect(run(s).status).toEqual({ kind: "BAND", band: "Sound" });
+  });
+
+  it("does not fire at exactly the limit (50%): the rule is 'more than'", () => {
+    const s = prog(atFailure(5), easy(5)); // 5 of 10 sets
+    expect(check(s).share).toBe(0.5);
+    expect(check(s).failed).toBe(false);
+  });
+
+  it("fires just above the limit", () => {
+    const s = prog(atFailure(6), easy(5)); // 6 of 11 sets
+    expect(check(s).failed).toBe(true);
+  });
+
+  it("counts SETS, not prescriptions: one big set group outweighs several small ones", () => {
+    const s = prog(atFailure(10), easy(1), easy(1), easy(1)); // 1 of 4 prescriptions, 10 of 13 sets
+    expect(check(s).share).toBeCloseTo(10 / 13);
+    expect(check(s).failed).toBe(true);
+  });
+
+  it("reads RPE 10 from the load scheme when targetRpe is not set", () => {
+    const viaScheme = prog(rx("a", { targetSets: 4, targetRpe: undefined, loadScheme: rpe(10) }));
+    expect(check(viaScheme).share).toBe(1);
+  });
+
+  it("does not count sets with no stated effort as at failure", () => {
+    const unstated = prog(
+      rx("a", { targetSets: 5, targetRpe: undefined, loadScheme: { type: "FIXED_WEIGHT", weight: 20, unit: "kg" } }),
+      atFailure(1),
+    );
+    expect(check(unstated).share).toBeCloseTo(1 / 6);
+    expect(check(unstated).failed).toBe(false);
+  });
+
+  it("honours config.progressionRules.maxShareAtFailure", () => {
+    const s = prog(atFailure(3), easy(3), easy(4)); // 30%
+    const strict = {
+      ...TEST_CONFIG_BOUNDED,
+      progressionRules: {
+        minShareEffortDefined: 0.8, farFromFailureMinRir: 5, maxShareFarFromFailure: 0.25, maxShareAtFailure: 0.2,
+        acceptedRepRange: [5, 30] as const, minShareInAcceptedRepRange: 0.8, percent1RmRepTolerance: 1,
+      },
+    };
+    expect(evaluateProgressionChecks(s, strict).find((c) => c.id === "NEAR_FAILURE")?.failed).toBe(true);
+    expect(check(s).failed).toBe(false);
+  });
+
+  it("carries which checks failed, with their shares, on the axis result", () => {
+    const j = run(prog(atFailure(3), atFailure(3)));
+    expect(j.facts?.failedChecks).toEqual([
+      { id: "NEAR_FAILURE", share: 1, detail: "100% of sets at RIR 0 (max 50%)" },
+    ]);
+  });
+
+  it("carries no facts when every check passes", () => {
+    expect(run(five()).facts).toBeUndefined();
   });
 });
 

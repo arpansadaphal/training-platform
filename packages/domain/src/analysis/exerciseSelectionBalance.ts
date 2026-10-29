@@ -8,7 +8,8 @@
 // per-muscle coverage is already judged by VOLUME. "OTHER" is never a required pattern.
 //
 // metricValue = (required patterns present) / (required patterns). An empty required list is vacuously
-// covered (1). Band names come from the config; the domain never hard-codes them.
+// covered (1). Band names come from the config; the domain never hard-codes them. `facts.missingPatterns` lists
+// the required patterns no exercise has (ARCH-063 / B2), so a finding can name them.
 // Regional rules (triceps overhead, hamstring knee flexion) are DEFERRED.
 
 import type { ProgramStructure } from "../types";
@@ -52,8 +53,10 @@ export function computeExerciseSelectionBalanceAxis(
   }
 
   let covered = 0;
+  const missingPatterns: MovementPattern[] = [];
   for (const pattern of required) {
     if (present.has(pattern)) covered += 1;
+    else missingPatterns.push(pattern);
   }
   const rawRatio = required.size === 0 ? 1 : covered / required.size;
   const coverageRatio = Math.round(rawRatio * 1e6) / 1e6;
@@ -63,5 +66,8 @@ export function computeExerciseSelectionBalanceAxis(
     scopeKey: null,
     metricValue: coverageRatio,
     status: resolveBand(coverageRatio, config.statusBands.EXERCISE_SELECTION_BALANCE),
+    // ARCH-063 / B2: WHICH patterns are missing (in required order). Omitted when none, so a covered program
+    // keeps exactly the shape it had.
+    ...(missingPatterns.length > 0 ? { facts: { missingPatterns } } : {}),
   };
 }

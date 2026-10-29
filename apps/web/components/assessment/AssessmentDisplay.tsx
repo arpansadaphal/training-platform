@@ -44,23 +44,33 @@ import { useState } from "react";
 import {
   isClassified,
   provisionalFitBand,
+  ratioLines,
+  RATIO_TIER_NOTE,
   type AssessedAxis,
   type Assessment,
   type AssessmentResult,
   type FitScoreBand,
   type FitScoreResult,
+  type NamedAction,
 } from "@training/domain";
 import { AxisCard } from "./AxisCard";
 import { EvidencePanel } from "./EvidencePanel";
+import { FindingCard } from "./FindingCard";
 import { ProvisionalBanner } from "./ProvisionalBanner";
 import { UnvalidatedState } from "./UnvalidatedState";
-import { axisLabel, fitBandLabel } from "./labels";
+import { axisLabel, findingLabel, fitBandLabel } from "./labels";
 import { useProvisionalBanner } from "@/src/lib/provisionalBanner";
 import styles from "./assessment.module.css";
 
 interface Props {
   result: AssessmentResult;
   fitScore: FitScoreResult;
+  /**
+   * Named sentences for the actions ("Add 3 sets of Leg Curl on Day 2 → 7.5 sets/week."), matched to the
+   * assessment's actions by rootCauseKey. Absent (a persisted snapshot, which shows what the lifter saw
+   * at commit) means every action reads as its template sentence.
+   */
+  namedActions?: readonly NamedAction[];
 }
 
 function axisKey(axis: AssessedAxis): string {
@@ -79,7 +89,7 @@ function fitLineFor(result: AssessmentResult, fitScore: FitScoreResult): FitLine
   return provisional ? { kind: "PROVISIONAL", band: provisional.band } : null;
 }
 
-export function AssessmentDisplay({ result, fitScore }: Props) {
+export function AssessmentDisplay({ result, fitScore, namedActions }: Props) {
   // ARCH-046: the banner is a property of the configuration, not of any
   // one assessment. `useProvisionalBanner` reads HYPERTROPHY_CONFIG's
   // `validated` flag and returns true while it is false — which, at MVP,
@@ -116,6 +126,7 @@ export function AssessmentDisplay({ result, fitScore }: Props) {
       <AssessmentBody
         a={a}
         fit={fitLineFor(result, fitScore)}
+        namedActions={namedActions}
         onSeeEvidence={openEvidence}
         evidenceOpen={evidenceOpen}
       />
@@ -130,14 +141,23 @@ function plural(n: number, one: string, many: string): string {
 function AssessmentBody({
   a,
   fit,
+  namedActions,
   onSeeEvidence,
   evidenceOpen,
 }: {
   a: Assessment;
   fit: FitLine;
+  namedActions: readonly NamedAction[] | undefined;
   onSeeEvidence: () => void;
   evidenceOpen: boolean;
 }) {
+  const namedText = new Map((namedActions ?? []).map((n) => [n.rootCauseKey, n.description]));
+  const balance = ratioLines(a.ratios);
+  // ARCH-063 / B2: findings (engine 0.5.0) say each problem once. A snapshot saved before that has none, and
+  // renders as it always did, axis by axis.
+  const headline = a.biggestOpportunity ? (a.findings?.[0] ?? null) : null;
+  const attention = a.findings ? (a.biggestOpportunity ? a.findings.slice(1) : a.findings) : null;
+  const things = a.findings ? a.findings.length : a.attentionAreas.length + (a.biggestOpportunity ? 1 : 0);
   return (
     <>
       <section className={styles.overall}>
@@ -165,11 +185,11 @@ function AssessmentBody({
         ) : null}
         <p className={styles.overallSummary}>
           {plural(a.strengths.length, "strength", "strengths")} ·{" "}
-          {plural(a.attentionAreas.length + (a.biggestOpportunity ? 1 : 0), "thing", "things")} to
-          look at
+          {plural(things, "thing", "things")} to look at
           {a.biggestOpportunity ? (
             <>
-              . Biggest opportunity: <strong>{axisLabel(a.biggestOpportunity)}</strong>.
+              . Biggest opportunity:{" "}
+              <strong>{headline ? findingLabel(headline) : axisLabel(a.biggestOpportunity)}</strong>.
             </>
           ) : (
             "."
@@ -188,13 +208,17 @@ function AssessmentBody({
         </section>
       ) : null}
 
-      {a.attentionAreas.length > 0 ? (
+      {(attention ? attention.length : a.attentionAreas.length) > 0 ? (
         <section className={styles.section}>
           <h2 className={styles.sectionHeading}>Attention areas</h2>
           <div className={styles.axisList}>
-            {a.attentionAreas.map((axis) => (
-              <AxisCard key={axisKey(axis)} axis={axis} variant="attention" />
-            ))}
+            {attention
+              ? attention.map((finding) => (
+                  <FindingCard key={finding.key} finding={finding} variant="attention" />
+                ))
+              : a.attentionAreas.map((axis) => (
+                  <AxisCard key={axisKey(axis)} axis={axis} variant="attention" />
+                ))}
           </div>
         </section>
       ) : null}
@@ -202,7 +226,11 @@ function AssessmentBody({
       {a.biggestOpportunity ? (
         <section className={styles.section}>
           <h2 className={styles.sectionHeading}>Biggest Opportunity</h2>
-          <AxisCard axis={a.biggestOpportunity} variant="opportunity" />
+          {headline ? (
+            <FindingCard finding={headline} variant="opportunity" />
+          ) : (
+            <AxisCard axis={a.biggestOpportunity} variant="opportunity" />
+          )}
         </section>
       ) : null}
 
@@ -216,10 +244,23 @@ function AssessmentBody({
                 className={styles.actionItem}
                 data-root-cause={action.rootCauseKey}
               >
-                <p className={styles.actionDescription}>{action.description}</p>
+                <p className={styles.actionDescription}>
+                  {namedText.get(action.rootCauseKey) ?? action.description}
+                </p>
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+      {balance.length > 0 ? (
+        <section className={styles.section} data-cross-muscle-balance>
+          <h2 className={styles.sectionHeading}>Cross-muscle balance</h2>
+          <ul className={styles.balanceList}>
+            {balance.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <p className={styles.balanceNote}>{RATIO_TIER_NOTE}</p>
         </section>
       ) : null}
     </>

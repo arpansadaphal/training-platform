@@ -99,6 +99,26 @@ export type AxisStatus =
   | { readonly kind: "BAND"; readonly band: string }
   | { readonly kind: "UNVALIDATED"; readonly reason: string };
 
+/**
+ * ARCH-063 / B2. Structure-level detail an axis already computed, carried to the Assessment so a finding can say
+ * WHICH pattern is missing, not only that the coverage ratio is low. Set only when non-empty, so an axis with
+ * nothing to report keeps exactly the shape it had before. Never an input to a band, severity or leverage, with
+ * one exception: a whole missing pattern group raises the ESB severity (rollup.ts, `wholePatternGaps`).
+ */
+export interface AxisFacts {
+  /** EXERCISE_SELECTION_BALANCE: required movement patterns no exercise in the program has, in config order. */
+  readonly missingPatterns?: readonly MovementPattern[];
+  /** PROGRESSION_SOUNDNESS: the checks that failed (ARCH-063 / B3), so a finding can say WHICH. */
+  readonly failedChecks?: readonly FailedCheckFact[];
+}
+
+/** One failed progression check: its id, the share it measured (0-1) when it measures one, and its detail line. */
+export interface FailedCheckFact {
+  readonly id: string;
+  readonly share?: number;
+  readonly detail: string;
+}
+
 export interface AnalysisAxisResult {
   readonly axisType: AxisType;
   /** muscleGroupId for VOLUME/FREQUENCY; null for the program-wide axes. */
@@ -106,12 +126,38 @@ export interface AnalysisAxisResult {
   /** e.g. 6 (sets/week) for VOLUME; a coverage ratio for ESB; etc. */
   readonly metricValue: number | string;
   readonly status: AxisStatus;
+  readonly facts?: AxisFacts;
 }
 
 export interface Analysis {
   readonly programVersionId: string | null;
   readonly axisResults: readonly AnalysisAxisResult[];
   readonly computedAt: string;
+  /**
+   * Informational cross-muscle ratios (analysis/ratios.ts). Tier 3, never an
+   * input to any band, severity, leverage or Fit. Optional because analyses
+   * persisted before this field existed do not carry it.
+   */
+  readonly ratios?: CrossMuscleRatios;
+}
+
+// ---------------------------------------------------------------------------
+// Cross-muscle ratios (informational; outside the roll-up and the Fit band)
+// ---------------------------------------------------------------------------
+
+/**
+ * Each pair holds two weekly hard-set totals and `ratio = first / second`
+ * (null when `second` is 0: the totals still state the fact). A pair is null
+ * when both totals are 0.
+ */
+export interface CrossMuscleRatios {
+  readonly pushPull: { pushSets: number; pullSets: number; ratio: number | null } | null;
+  readonly armsLegs: { armSets: number; legSets: number; ratio: number | null } | null;
+  readonly quadsHamstrings: {
+    quadSets: number;
+    hamstringSets: number;
+    ratio: number | null;
+  } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -252,11 +298,56 @@ export interface FrequencyDistributionConfig {
   readonly minExposureSets: number;
 }
 
+/** ARCH-063 / B2. Body regions findings are grouped by. `core` is reserved; no hypertrophy-relevant muscle is in it. */
+export type RegionKey = "upper" | "lower" | "arms" | "core";
+
+/** ARCH-063 / B2. One body region, in the words a sentence uses and the fix it suggests. Tier 3. */
+export interface RegionDefinition {
+  readonly key: RegionKey;
+  /** Mid-sentence name: "lower body". */
+  readonly name: string;
+  /** Before a noun: "lower-body" (volume), "arm" (work). */
+  readonly adjective: string;
+  /** Muscle-group names (not ids) in the region. */
+  readonly muscles: readonly string[];
+  /** The action when every muscle in the region is at 0 sets. */
+  readonly addAction: string;
+}
+
+/**
+ * ARCH-063 / B2. A movement pattern (or a pair, for pulling) whose complete absence is surfaced as a finding of its
+ * own, even though the Exercise selection axis alone would tolerate it. Tier 3. Group is absent when EVERY pattern
+ * in `patterns` is missing from the program.
+ */
+export interface WholePatternGap {
+  readonly key: string;
+  /** Sentence subject: "pulling", "hip hinge". */
+  readonly name: string;
+  readonly patterns: readonly MovementPattern[];
+  /** Muscle-group names whose VOLUME Lows this gap explains and absorbs. May be empty. */
+  readonly muscles: readonly string[];
+  /** The Exercise selection severity is raised to at least this while the group is absent. */
+  readonly severity: Severity;
+  /** The action for this gap. */
+  readonly addAction: string;
+}
+
+/** ARCH-063 / B2. How a missing movement pattern reads in a sentence and what to add for it. Tier 3. */
+export interface PatternPhrase {
+  readonly name: string;
+  readonly example: string;
+}
+
 /** E8. See progressionSoundness.ts. */
 export interface ProgressionRulesConfig {
   readonly minShareEffortDefined: number;
   readonly farFromFailureMinRir: number;
   readonly maxShareFarFromFailure: number;
+  /**
+   * ARCH-063 / B3. NEAR_FAILURE fails when MORE than this share of SETS is prescribed at 0 reps in reserve
+   * (RPE 10). Sets with no stated effort are not counted. Tier 4: an engine boundary, not a measurement.
+   */
+  readonly maxShareAtFailure: number;
   readonly acceptedRepRange: readonly [number, number];
   readonly minShareInAcceptedRepRange: number;
   /** Reps of slack allowed beyond the Epley estimate before a %1RM prescription is called infeasible. */
@@ -329,6 +420,18 @@ export interface GoalProfileConfig {
   readonly frequencyDistribution?: FrequencyDistributionConfig;
   /** E8. Defaults as in progressionSoundness.ts. */
   readonly progressionRules?: ProgressionRulesConfig;
+  /**
+   * ARCH-063 / B1. Muscle-group names, most important first. The last tie-break when two findings of the same
+   * axis type have the same leverage and the same deficit: the earlier name leads. A name not listed ranks
+   * after every listed one. Tier 3 (a coaching convention). Absent means no priority: axis order decides.
+   */
+  readonly musclePriority?: readonly string[];
+  /** ARCH-063 / B2. Body regions, for consolidating several Low muscles into one finding. Absent: no consolidation. */
+  readonly regions?: readonly RegionDefinition[];
+  /** ARCH-063 / B2. Whole-pattern groups surfaced when absent. Absent: no bump, no pattern findings. */
+  readonly wholePatternGaps?: readonly WholePatternGap[];
+  /** ARCH-063 / B2. Wording for each missing movement pattern. */
+  readonly patternPhrases?: Readonly<Partial<Record<MovementPattern, PatternPhrase>>>;
 
   axisWeights: Record<string, AxisWeight>;
   statusBands: Record<AxisType, AxisBandDefinition[]>;
@@ -370,8 +473,22 @@ export interface GoalProfileConfig {
 // computeAnalysis options
 // ---------------------------------------------------------------------------
 
+/**
+ * What the engine may know about the lifter beyond the program. Passed in, never
+ * stored. Foundation only: no axis, band or action reads it yet (later items
+ * will), so supplying or omitting it leaves every output identical.
+ */
+export interface AnalysisContext {
+  readonly daysPerWeek?: number;
+  readonly trainingAgeMonths?: number;
+  readonly equipment?: "commercial_gym" | "home_dumbbells" | "bodyweight_only";
+  readonly minutesPerSession?: number;
+}
+
 export interface ComputeAnalysisOptions {
   programVersionId?: string | null;
+  /** Optional lifter context. Not read by any calculator today; see AnalysisContext. */
+  context?: AnalysisContext;
   /**
    * Injectable clock, used only so a determinism test can compare two runs
    * byte-for-byte. Production callers omit it and get `new Date()`.

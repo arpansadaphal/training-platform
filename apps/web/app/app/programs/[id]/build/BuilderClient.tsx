@@ -510,6 +510,7 @@ function BuilderClientInner({
           <AssessmentDisplay
             result={previewQuery.data.assessment}
             fitScore={previewQuery.data.fitScore}
+            namedActions={previewQuery.data.namedActions}
           />
         ) : null}
       </section>

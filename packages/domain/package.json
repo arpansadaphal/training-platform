@@ -12,7 +12,9 @@
    "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "run-analysis": "tsx scripts/run-analysis.ts"
+    "run-analysis": "tsx scripts/run-analysis.ts",
+    "coach-parity": "tsx scripts/coach-parity/set1.ts && tsx scripts/coach-parity/set2.ts && tsx scripts/coach-parity/set3.ts && tsx scripts/coach-parity/probes.ts",
+    "coach-parity:score": "tsx scripts/coach-parity/parity.ts"
   },
   "devDependencies": {
     "@types/node": "^20.16.11",

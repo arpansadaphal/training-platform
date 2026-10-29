@@ -26,6 +26,7 @@ import type {
   Severity,
   Weight,
 } from "../analysis/types";
+import { absentPatternGaps } from "./patternGaps";
 import type { AssessedAxis } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -83,6 +84,9 @@ function resolveWeight(
   };
 }
 
+// Comparison-only ordinal over the closed Severity union (same discipline as computeAssessment.ts).
+const SEVERITY_RANK: Readonly<Record<Severity, number>> = { NONE: 0, MINOR: 1, MODERATE: 2, MAJOR: 3 };
+
 // ---------------------------------------------------------------------------
 // Roll-up outcome
 // ---------------------------------------------------------------------------
@@ -137,12 +141,23 @@ export function rollUpLeverage(
     // Step 2 — per-axis, per-band severity map. A missing entry is a config
     // hole, not a default.
     const severityRow = config.severityMap[axis.axisType];
-    const severity: Severity | undefined = severityRow?.[band];
+    let severity: Severity | undefined = severityRow?.[band];
     if (!severity) {
       blockers.push(
         `${scopeLabel} has band "${band}" but no severity mapping for that (axis, band) pair`,
       );
       continue;
+    }
+
+    // ARCH-063 / B2c. Exercise selection tolerates a missing pattern (a single one reads Balanced) and, when
+    // it reads Gaps present, is MINOR x LOW = NONE leverage: the gap is computed and never shown. A WHOLE
+    // missing pattern group (no pulling, no hinge, no squat, no vertical push) is surfaced regardless of the
+    // band: the severity is raised to the group's configured floor. The band, the metric and the weight are
+    // untouched, and the raise happens here, inside the roll-up, so Fit reads it too (invariant 8).
+    if (axis.axisType === "EXERCISE_SELECTION_BALANCE") {
+      for (const group of absentPatternGaps(axis.facts?.missingPatterns, config)) {
+        if (SEVERITY_RANK[group.severity] > SEVERITY_RANK[severity]) severity = group.severity;
+      }
     }
 
     // Step 3 — weight resolution via the precedence chain.
@@ -165,6 +180,7 @@ export function rollUpLeverage(
       severity,
       weight,
       leverage,
+      ...(axis.facts ? { facts: axis.facts } : {}),
     });
   }
 

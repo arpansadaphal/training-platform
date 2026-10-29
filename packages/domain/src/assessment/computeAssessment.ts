@@ -15,8 +15,8 @@
 //   3. Otherwise, classify:
 //        Strengths        = axes whose severity is NONE AND whose axis type
 //                           is listed in `config.strengthEligibleAxes`.
-//        BiggestOpportunity = argmax(leverage) among axes NOT in good status,
-//                           EXCLUDING axes whose leverage is NONE (see E1).
+//        BiggestOpportunity = the first-ranked axis NOT in good status, EXCLUDING axes whose
+//                           leverage is NONE (see E1). Ranking: see `compareRanked` (B1).
 //        AttentionAreas   = other axes whose severity clears the profile's
 //                           materiality threshold, excluding the Biggest
 //                           Opportunity.
@@ -47,13 +47,16 @@ import type {
   GoalProfileConfig,
   Leverage,
   Severity,
+  Weight,
 } from "../analysis/types";
-import { actionTemplateFor } from "./actionTemplates";
+import { actionForFinding } from "./actionTemplates";
+import { composeFindings } from "./findings";
 import { rollUpLeverage } from "./rollup";
 import type {
   ActionSuggestion,
   AssessedAxis,
   Assessment,
+  AssessmentFinding,
   AssessmentResult,
   ComputeAssessmentOptions,
 } from "./types";
@@ -83,6 +86,80 @@ const LEVERAGE_RANK: Readonly<Record<Leverage, number>> = {
   HIGH: 3,
 };
 
+const WEIGHT_RANK: Readonly<Record<Weight, number>> = {
+  LOW: 1,
+  MEDIUM: 2,
+  HIGH: 3,
+};
+
+// ---------------------------------------------------------------------------
+// Ranking (ARCH-063 / B1)
+// ---------------------------------------------------------------------------
+//
+// Before B1 the headline was the first axis, in axis order, with the highest leverage. Production loads muscle
+// groups sorted by name, so among tied Lows the headline was alphabetical ("biceps" for a program with no pulling
+// at all). Now every not-good axis is ranked by one lexicographic key, so the order is total and deterministic:
+//
+//   1. leverage, highest first                         (unchanged)
+//   2. axis weight, highest first                      (separates axis TYPES that tie on leverage; the weights
+//                                                       are already ordered by evidence strength)
+//   3. axis type, in the order the Analysis lists them (VOLUME, FREQUENCY, SELECTION, PROGRESSION, RECOVERY)
+//   4. deficit, largest first                          (only ever compared within one axis type, see below)
+//   5. the profile's `musclePriority`, earlier first   (Tier 3: breaks a deficit tie between muscles)
+//   6. original axis order
+//
+// Deficit is how far the metric sits from the nearest band the profile calls good (severity NONE), read from the
+// profile's own band bounds. It is a tie-break key, not a threshold: it never creates, moves or re-grades a band,
+// a severity or a leverage, and it is never summed or averaged.
+
+interface RankedAxis {
+  readonly axis: AssessedAxis;
+  readonly index: number;
+  readonly typeOrder: number;
+  readonly deficit: number;
+  readonly priority: number;
+}
+
+/**
+ * Distance from `axis.metricValue` to the nearest band whose severity is NONE; 0 when the metric is not a
+ * number, when no such band exists, or when it already sits inside one. A VOLUME Low is `lowerBound - value`
+ * of the Adequate band; an Excessive one is `value - upperBound` of the High band. Rounded so that two equal
+ * deficits computed from different floats still compare equal.
+ */
+function deficitOf(axis: AssessedAxis, config: GoalProfileConfig): number {
+  if (typeof axis.metricValue !== "number") return 0;
+  const value = axis.metricValue;
+  const severityRow = config.severityMap[axis.axisType] ?? {};
+  let nearest = Number.POSITIVE_INFINITY;
+  for (const band of config.statusBands[axis.axisType] ?? []) {
+    if (severityRow[band.status] !== "NONE") continue;
+    const { lowerBound: lo, upperBound: hi } = band;
+    if (lo === null && hi === null) continue; // placeholder band (N/A): no real extent
+    const distance = lo !== null && value < lo ? lo - value : hi !== null && value >= hi ? value - hi : 0;
+    if (distance < nearest) nearest = distance;
+  }
+  return Number.isFinite(nearest) ? Math.round(nearest * 1e6) / 1e6 : 0;
+}
+
+/** Position in `config.musclePriority`; a name not listed ranks after every listed one; no list ranks all equal. */
+function priorityOf(axis: AssessedAxis, config: GoalProfileConfig): number {
+  const list = config.musclePriority;
+  if (list === undefined) return 0;
+  const at = axis.scopeKey === null ? -1 : list.indexOf(axis.scopeKey);
+  return at < 0 ? list.length : at;
+}
+
+function compareRanked(a: RankedAxis, b: RankedAxis): number {
+  return (
+    LEVERAGE_RANK[b.axis.leverage] - LEVERAGE_RANK[a.axis.leverage] ||
+    WEIGHT_RANK[b.axis.weight] - WEIGHT_RANK[a.axis.weight] ||
+    a.typeOrder - b.typeOrder ||
+    b.deficit - a.deficit ||
+    a.priority - b.priority ||
+    a.index - b.index
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Classification
 // ---------------------------------------------------------------------------
@@ -92,6 +169,10 @@ interface ClassifiedAxes {
   readonly attentionAreas: readonly AssessedAxis[];
   readonly biggestOpportunity: AssessedAxis | null;
   readonly actions: readonly ActionSuggestion[];
+  /** B2: the surfaced findings, headline first. `biggestOpportunity` / `attentionAreas` are their lead axes. */
+  readonly findings: readonly AssessmentFinding[];
+  /** The headline finding's name for the summary sentence; null when there is no headline. */
+  readonly headlineLabel: string | null;
 }
 
 /**
@@ -114,98 +195,95 @@ function classifyAxes(
   // not eligible are dropped from both lists: not a Strength, not a
   // problem. They remain visible in `allAssessedAxes` for the Fit Score.
   const eligible = new Set<AxisType>(config.strengthEligibleAxes);
+  const typeOrder = new Map<AxisType, number>();
+  assessedAxes.forEach((axis, index) => {
+    if (!typeOrder.has(axis.axisType)) typeOrder.set(axis.axisType, index);
+  });
   const strengths: AssessedAxis[] = [];
-  const notGood: AssessedAxis[] = [];
-  for (const axis of assessedAxes) {
+  const ranked: RankedAxis[] = [];
+  assessedAxes.forEach((axis, index) => {
     if (axis.severity === "NONE") {
       if (eligible.has(axis.axisType)) strengths.push(axis);
       // else: silently dropped — not a Strength, not a problem.
     } else {
-      notGood.push(axis);
+      ranked.push({
+        axis,
+        index,
+        typeOrder: typeOrder.get(axis.axisType) ?? index,
+        deficit: deficitOf(axis, config),
+        priority: priorityOf(axis, config),
+      });
     }
-  }
-
-  // Biggest Opportunity (E1 fix): argmax(leverage) among axes NOT in good
-  // status, EXCLUDING axes whose leverage is NONE. Previously the running
-  // rank started at -1, so an axis whose leverage was NONE could win — a
-  // MINOR severity on a LOW weight axis maps to NONE in the leverage table,
-  // and that axis was being surfaced as the headline opportunity even
-  // though it carries no leverage. Now such axes cannot win; if no not-good
-  // axis reaches LOW leverage or higher, biggestOpportunity stays null.
-  // First-wins on ties, in original axis order — deterministic.
-  let biggestOpportunity: AssessedAxis | null = null;
-  let biggestRank = LEVERAGE_RANK["NONE"]; // 0 — excludes NONE-leverage axes
-  for (const axis of notGood) {
-    const r = LEVERAGE_RANK[axis.leverage];
-    if (r > biggestRank) {
-      biggestRank = r;
-      biggestOpportunity = axis;
-    }
-  }
-
-    // Attention areas: remaining not-good axes whose severity clears the
-  // profile's materiality threshold. The Biggest Opportunity is excluded —
-  // it is already surfaced under its own field.
-  //
-  // Phase 10.2 dedup: two axes that map to the same action root cause
-  // (e.g. VOLUME:chest and FREQUENCY:chest both → volume:add-chest) are
-  // ONE problem, not two. A muscle at zero weekly sets is also at zero
-  // weekly sessions, and surfacing it twice inflates the attention list
-  // without adding information. This applies the same root-cause dedup
-  // that the actions list below already uses.
-  //
-  // The seen set is seeded with the biggest opportunity's root cause so a
-  // duplicate FREQUENCY finding for the biggest-opportunity muscle does not
-  // appear alongside the VOLUME finding that is the headline.
-  const materialityRank = SEVERITY_RANK[config.materialitySeverityThreshold];
-  const attentionCandidates = notGood.filter((axis) => {
-    if (axis === biggestOpportunity) return false;
-    return SEVERITY_RANK[axis.severity] >= materialityRank;
   });
+  // B1: not-good axes, best candidate first. Strengths keep the Analysis order.
+  const notGood: AssessedAxis[] = ranked.sort(compareRanked).map((r) => r.axis);
+
+  // B2: one finding per underlying problem (see findings.ts). A region with several Lows is one finding; a
+  // missing pattern group is one; a FREQUENCY "no exposure" for a muscle that already has a VOLUME Low is
+  // dropped. The axes stay in allAssessedAxes; only what is SURFACED is grouped. `findings` is ordered by the
+  // rank of each finding's lead axis.
+  const found = composeFindings(assessedAxes, notGood, config);
+
+  // Biggest Opportunity: the first-ranked finding, EXCLUDING one whose lead has NONE leverage (E1 fix). A MINOR
+  // severity on a LOW weight axis maps to NONE in the leverage table; such an axis carries no leverage and
+  // cannot be the headline. `found` is ordered by leverage first, so if its first lead has NONE leverage none
+  // qualifies and the headline stays null. B1: ties on leverage are broken by weight, then deficit, then muscle
+  // priority, not by axis order alone (alphabetical, for muscles in production).
+  const first = found[0];
+  const biggestFinding: AssessmentFinding | null =
+    first !== undefined && LEVERAGE_RANK[first.lead.leverage] > LEVERAGE_RANK["NONE"] ? first : null;
+
+  // Attention areas: the remaining findings whose lead severity clears the profile's materiality threshold. The
+  // Biggest Opportunity is excluded; it is already surfaced under its own field.
+  //
+  // Phase 10.2 dedup: two findings that map to the same action root cause are ONE problem, not two. The seen set
+  // is seeded with the headline's root cause so a duplicate of the headline never appears beside it. (E6 gave
+  // FREQUENCY its own root cause, so a muscle's VOLUME Low and FREQUENCY "no exposure" no longer fold here;
+  // composeFindings drops the zero-exposure one instead.)
+  const materialityRank = SEVERITY_RANK[config.materialitySeverityThreshold];
+  const rootCauseOf = (finding: AssessmentFinding): string =>
+    actionForFinding(finding, config)?.rootCauseKey ?? finding.key;
 
   const seenRootCauses = new Set<string>();
-  if (biggestOpportunity) {
-    const t = actionTemplateFor(biggestOpportunity, config.goalProfileKey);
-    if (t) seenRootCauses.add(t.rootCauseKey);
-  }
+  if (biggestFinding) seenRootCauses.add(rootCauseOf(biggestFinding));
 
-  const attentionAreas: AssessedAxis[] = [];
-  for (const axis of attentionCandidates) {
-    const template = actionTemplateFor(axis, config.goalProfileKey);
-    const key =
-      template?.rootCauseKey ?? `${axis.axisType}:${axis.scopeKey ?? ""}`;
+  const attentionFindings: AssessmentFinding[] = [];
+  for (const finding of found) {
+    if (finding === biggestFinding) continue;
+    if (SEVERITY_RANK[finding.lead.severity] < materialityRank) continue;
+    const key = rootCauseOf(finding);
     if (seenRootCauses.has(key)) continue;
     seenRootCauses.add(key);
-    attentionAreas.push(axis);
+    attentionFindings.push(finding);
   }
 
-  // Actions: one per surfaced axis (biggest opportunity first, then
-  // attention areas), deduplicated by rootCauseKey. Ordering the biggest
-  // opportunity first means that when two axes share a rootCauseKey (e.g.
-  // "chest volume Low" and "chest frequency Low" both emitting
-  // `volume:add-chest`), the surviving action's `relatedAxis` is the one
-  // the narrative headlines as the priority. The dedup collapses
-  // volume-side and frequency-side fixes into a single action — see
-  // actionTemplates.ts.
-  const candidates: AssessedAxis[] = [
-    ...(biggestOpportunity ? [biggestOpportunity] : []),
-    ...attentionAreas,
-  ];
+  const surfaced: AssessmentFinding[] = [...(biggestFinding ? [biggestFinding] : []), ...attentionFindings];
+
+  // Actions: one per surfaced finding (headline first, then attention areas), deduplicated by rootCauseKey.
+  // Ordering the headline first means that when two findings share a rootCauseKey the surviving action's
+  // `relatedAxis` is the one the narrative headlines as the priority.
   const seen = new Set<string>();
   const actions: ActionSuggestion[] = [];
-  for (const axis of candidates) {
-    const template = actionTemplateFor(axis, config.goalProfileKey);
+  for (const finding of surfaced) {
+    const template = actionForFinding(finding, config);
     if (!template) continue;
     if (seen.has(template.rootCauseKey)) continue;
     seen.add(template.rootCauseKey);
     actions.push({
-      relatedAxis: axis,
+      relatedAxis: finding.lead,
       description: template.description,
       rootCauseKey: template.rootCauseKey,
     });
   }
 
-  return { strengths, attentionAreas, biggestOpportunity, actions };
+  return {
+    strengths,
+    attentionAreas: attentionFindings.map((f) => f.lead),
+    biggestOpportunity: biggestFinding ? biggestFinding.lead : null,
+    actions,
+    findings: surfaced,
+    headlineLabel: biggestFinding ? biggestFinding.key : null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -215,9 +293,9 @@ function classifyAxes(
 function buildOverallSummary(
   strengths: readonly AssessedAxis[],
   attentionAreas: readonly AssessedAxis[],
-  biggestOpportunity: AssessedAxis | null,
+  headlineLabel: string | null,
 ): string {
-  if (strengths.length === 0 && attentionAreas.length === 0 && !biggestOpportunity) {
+  if (strengths.length === 0 && attentionAreas.length === 0 && headlineLabel === null) {
     return "No material strengths, attention areas, or opportunities identified.";
   }
   const parts: string[] = [];
@@ -229,11 +307,8 @@ function buildOverallSummary(
       `${attentionAreas.length} attention area${attentionAreas.length === 1 ? "" : "s"}`,
     );
   }
-  if (biggestOpportunity) {
-    const label = biggestOpportunity.scopeKey
-      ? `${biggestOpportunity.axisType}:${biggestOpportunity.scopeKey}`
-      : biggestOpportunity.axisType;
-    parts.push(`biggest opportunity on ${label}`);
+  if (headlineLabel !== null) {
+    parts.push(`biggest opportunity on ${headlineLabel}`);
   }
   return `Identified ${parts.join(", ")}.`;
 }
@@ -263,6 +338,8 @@ export function computeAssessment(
         attentionAreas: [],
         biggestOpportunity: null,
         actions: [],
+        findings: [],
+        headlineLabel: null,
       };
 
   const inner: Assessment = {
@@ -271,16 +348,19 @@ export function computeAssessment(
     overallSummary: buildOverallSummary(
       classified.strengths,
       classified.attentionAreas,
-      classified.biggestOpportunity,
+      classified.headlineLabel,
     ),
     strengths: classified.strengths,
     attentionAreas: classified.attentionAreas,
     biggestOpportunity: classified.biggestOpportunity,
     actions: classified.actions,
+    findings: classified.findings,
     thresholdsValidated: overallValidated,
     computedAt: analysis.computedAt,
     allAssessedAxes: rollUp.assessedAxes,
     fitScoreProjection: config.fitScoreProjection,
+    // Informational; copied through untouched. Nothing above reads it.
+    ...(analysis.ratios ? { ratios: analysis.ratios } : {}),
   };
 
   if (overallValidated) {

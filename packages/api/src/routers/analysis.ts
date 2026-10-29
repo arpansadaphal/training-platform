@@ -18,7 +18,9 @@ import {
   computeAssessment,
   computeFitScore,
   goalProfileRegistry,
+  nameActions,
   type AssessmentResult,
+  type NamedAction,
   type Analysis,
   type FitScoreResult,
   type ProgramStructure,
@@ -35,6 +37,8 @@ export interface PreviewAnalyzeResult {
   analysis: Analysis;
   assessment: AssessmentResult;
   fitScore: FitScoreResult;
+  /** Same order as the assessment's actions; named sentences where the engine could name one. */
+  namedActions: NamedAction[];
 }
 
 export const analysisRouter = router({
@@ -76,15 +80,17 @@ export const analysisRouter = router({
 });
       const structure = draft.structure as ProgramStructure;
 
-      const analysis = computeAnalysis(withoutRestDays(structure), referenceData, config);
+      const analysed = withoutRestDays(structure);
+      const analysis = computeAnalysis(analysed, referenceData, config);
       const assessment = computeAssessment(analysis, config, { goalId });
       const fitScore = computeFitScore(assessment);
+      const namedActions = nameActions(assessment.assessment, analysed, referenceData, config);
 
       // Returned as-is; the UI narrows on the discriminated unions
       // (AssessmentResult.kind, FitScoreResult.kind) and on AxisStatus.kind
       // within Analysis's axisResults before rendering a band. The router
       // does not unwrap — unwrapping here would defeat the type-level
       // guarantee and force a second, equally-fallible narrowing downstream.
-      return { analysis, assessment, fitScore };
+      return { analysis, assessment, fitScore, namedActions };
     }),
 });

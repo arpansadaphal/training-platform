@@ -43,7 +43,9 @@ import {
   computeAssessment,
   computeFitScore,
   goalProfileRegistry,
+  nameActions,
   withoutRestDays,
+  type NamedAction,
   type ProgramStructure,
   type WorkoutDayStructure,
   type ExercisePrescriptionStructure,
@@ -135,6 +137,8 @@ export interface RecomputedAssessment {
   analysis: Analysis;
   assessment: AssessmentResult;
   fitScore: FitScoreResult;
+  /** Same order as the assessment's actions; named sentences where the engine could name one. */
+  namedActions: NamedAction[];
 }
 
 // ---- Constants -----------------------------------------------------------
@@ -286,13 +290,15 @@ export async function recomputeAssessment(
   const structure = version.structureSnapshot as ProgramStructure;
 
   // Positional signatures match programVersionService's usage.
-  const analysis = computeAnalysis(withoutRestDays(structure), referenceData, config);
+  const analysed = withoutRestDays(structure);
+  const analysis = computeAnalysis(analysed, referenceData, config);
   const assessment = computeAssessment(analysis, config, {
     goalId: snapshot.goalId,
   });
   const fitScore = computeFitScore(assessment);
+  const namedActions = nameActions(assessment.assessment, analysed, referenceData, config);
 
-  return { analysis, assessment, fitScore };
+  return { analysis, assessment, fitScore, namedActions };
 }
 
 // ---- Adherence computation ----------------------------------------------

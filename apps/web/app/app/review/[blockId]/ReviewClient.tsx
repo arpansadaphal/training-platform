@@ -326,6 +326,7 @@ function ReviewClientInner({ data, lifts }: Props) {
                 <AssessmentDisplay
                   result={recomputeQuery.data.assessment}
                   fitScore={recomputeQuery.data.fitScore}
+                  namedActions={recomputeQuery.data.namedActions}
                 />
               </>
             ) : null}

@@ -20,7 +20,9 @@
 // be revised too. The rootCauseKey format is stable; it is the bridge to
 // Phase 4.
 
-import type { AssessedAxis } from "./types";
+import type { GoalProfileConfig } from "../analysis/types";
+import { joinList } from "../copy/findingSentence";
+import type { AssessedAxis, AssessmentFinding } from "./types";
 
 export interface ActionTemplateResult {
   readonly description: string;
@@ -102,7 +104,7 @@ export function actionTemplateFor(
       case "PROGRESSION_SOUNDNESS": {
         if (band === "Issue found") {
           return {
-            description: `Align progression schemes across prescriptions.`,
+            description: `Review effort targets and rep ranges across prescriptions.`,
             rootCauseKey: `progressionSoundness:align-schemes`,
           };
         }
@@ -134,4 +136,53 @@ export function actionTemplateFor(
   }
 
   return null;
+}
+
+/**
+ * ARCH-063 / B2. The action for one finding. A single-axis finding uses the axis template above; a REGION or
+ * PATTERN finding has one action for the whole problem, so "no leg training" is one "Add a leg day" and not nine
+ * separate lines. Wording comes from the profile's Tier 3 grouping config, never from here.
+ *
+ * Root causes:
+ *   volume:add-region-<region>            a REGION finding (absent or low)
+ *   exerciseSelectionBalance:add-<group>  a PATTERN finding that explains VOLUME Lows
+ *   exerciseSelectionBalance:fill-gaps    a PATTERN finding led by the Exercise-selection axis (the key the axis
+ *                                         template already used)
+ */
+export function actionForFinding(
+  finding: AssessmentFinding,
+  config: GoalProfileConfig,
+): ActionTemplateResult | null {
+  if (finding.kind === "AXIS") return actionTemplateFor(finding.lead, config.goalProfileKey);
+  if (config.goalProfileKey !== "HYPERTROPHY") return null;
+
+  if (finding.kind === "REGION") {
+    const region = config.regions?.find((r) => r.key === finding.region);
+    if (!region) return null;
+    return {
+      description: finding.absent
+        ? region.addAction
+        : `Add weekly volume for ${joinList(finding.members.map((m) => m.muscle))}.`,
+      rootCauseKey: `volume:add-region-${region.key}`,
+    };
+  }
+
+  // PATTERN
+  if (finding.members.length > 0) {
+    const group = config.wholePatternGaps?.find((g) => g.key === finding.patterns?.[0]);
+    if (!group) return null;
+    return { description: group.addAction, rootCauseKey: `exerciseSelectionBalance:add-${group.key}` };
+  }
+  const examples = (finding.missingPatterns ?? [])
+    .map((p) => config.patternPhrases?.[p]?.example)
+    .filter((e): e is string => e !== undefined);
+  const description =
+    examples.length > 0
+      ? `Add ${joinList(examples)}, about 3 sets each.`
+      : joinList(
+          (finding.patterns ?? [])
+            .map((key) => config.wholePatternGaps?.find((g) => g.key === key)?.addAction)
+            .filter((a): a is string => a !== undefined),
+        );
+  return { description, rootCauseKey: "exerciseSelectionBalance:fill-gaps" };
 }

@@ -52,10 +52,35 @@ describe("computeAssessment: VOLUME-Low and FREQUENCY-Low are distinct root caus
     expect(result.assessment.actions.map((a) => a.rootCauseKey).sort()).toEqual(["frequency:split-chest", "volume:add-chest"]);
   });
 
-  it("describes a muscle with no exposure differently from an under-distributed one", () => {
-    const none = computeAssessment(analysis(vol, freq(0)), config, { goalId: "g" }).assessment.actions.find((a) => a.rootCauseKey === "frequency:split-chest")!;
+  // AUDIT TRAIL (ARCH-063 / B2b, engine 0.5.0). This test used to feed a VOLUME Low plus a FREQUENCY "no
+  // exposure" for the same muscle and expect both surfaced, with different wording. That was the E6 side effect
+  // B2b removes: a muscle at 0 sessions with 2+ sets and below the volume range is ONE problem, and showing it
+  // twice is how a program with no legs produced nine cards. The "no exposure" FREQUENCY axis is now dropped
+  // from what is surfaced when the same muscle already has a VOLUME Low; it stays in allAssessedAxes. The
+  // distinct cases below (under-distributed, and no exposure with volume in range) are still surfaced.
+  it("drops a zero-exposure FREQUENCY axis when the same muscle already has a VOLUME Low", () => {
+    const merged = computeAssessment(analysis(vol, freq(0)), config, { goalId: "g" }).assessment;
+    expect(merged.attentionAreas).toEqual([]);
+    expect(merged.actions.map((a) => a.rootCauseKey)).toEqual(["volume:add-chest"]);
+    // Invariant 8: the roll-up still sees both axes.
+    expect(merged.allAssessedAxes.map((a) => a.axisType)).toEqual(["VOLUME", "FREQUENCY"]);
+  });
+
+  it("keeps a zero-exposure FREQUENCY axis when the muscle's volume is fine (it says something distinct)", () => {
+    const volOk = { ...vol, metricValue: 12, status: { kind: "BAND" as const, band: "Adequate" } };
+    // The fixture config only maps the Low bands; Adequate needs a severity for the roll-up to resolve.
+    const withAdequate: GoalProfileConfig = {
+      ...config,
+      severityMap: { ...config.severityMap, VOLUME: { Low: "MAJOR", Adequate: "NONE" } },
+    };
+    const a = computeAssessment(analysis(volOk, freq(0)), withAdequate, { goalId: "g" }).assessment;
+    expect(a.biggestOpportunity?.axisType).toBe("FREQUENCY");
+    expect(a.actions.map((x) => x.rootCauseKey)).toEqual(["frequency:split-chest"]);
+    expect(a.actions[0]!.description).toMatch(/at least one session/);
+  });
+
+  it("describes an under-distributed muscle as a split, not as no exposure", () => {
     const split = result.assessment.actions.find((a) => a.rootCauseKey === "frequency:split-chest")!;
-    expect(none.description).toMatch(/at least one session/);
     expect(split.description).toMatch(/Split chest across more training days/);
   });
 });

@@ -29,8 +29,12 @@ import type {
   FitScoreProjection,
   GoalProfileConfig,
   GoalProfileEvidence,
+  MovementPattern,
+  PatternPhrase,
+  RegionDefinition,
   SeverityMap,
   SeverityWeightTable,
+  WholePatternGap,
 } from "../analysis/types";
 import type { GoalProfileDefinition } from "./types";
 
@@ -234,6 +238,87 @@ const RELEVANT_AXES: readonly AxisType[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Grouping for findings (ARCH-063 / B2). All Tier 3: coaching conventions about how to say a problem once, not
+// measurements. Names, not ids (see RELEVANT_MUSCLE_GROUPS).
+// ---------------------------------------------------------------------------
+
+// Body regions. Several Low muscles in one region are one finding ("Lower-body volume is low..."), and a region
+// whose every muscle is at 0 sets reads "No lower-body training". Core has no goal-relevant muscle here.
+const HYPERTROPHY_REGIONS: readonly RegionDefinition[] = [
+  {
+    key: "upper",
+    name: "upper body",
+    adjective: "upper-body",
+    muscles: ["chest", "lats", "upper back", "side delts", "rear delts"],
+    addAction:
+      "Add an upper-body day: a press, a row, a pulldown and a lateral raise, about 3 sets each.",
+  },
+  {
+    key: "lower",
+    name: "lower body",
+    adjective: "lower-body",
+    muscles: ["quads", "hamstrings", "glutes", "calves"],
+    addAction:
+      "Add a leg day: a squat or leg press, a Romanian deadlift, a leg curl and a calf raise, about 3 sets each.",
+  },
+  {
+    key: "arms",
+    name: "arms",
+    adjective: "arm",
+    muscles: ["biceps", "triceps"],
+    addAction: "Add arm work: a curl and a triceps extension, about 3 sets each.",
+  },
+];
+
+// Whole-pattern groups. A group is absent when EVERY pattern in it is missing. While absent, the Exercise
+// selection severity is raised to MODERATE (a MINOR gap on a LOW-weight axis is NONE leverage, so the gap was
+// computed and never shown) and the gap is a finding of its own, explaining the VOLUME Lows of `muscles`. One
+// missing pattern outside these groups (a program with rows but no pulldown) stays silent, as before.
+const HYPERTROPHY_WHOLE_PATTERN_GAPS: readonly WholePatternGap[] = [
+  {
+    key: "pull",
+    name: "pulling",
+    patterns: ["HORIZONTAL_PULL", "VERTICAL_PULL"],
+    muscles: ["lats", "upper back"],
+    severity: "MODERATE",
+    addAction: "Add 3 sets of rows and 3 of pulldowns.",
+  },
+  {
+    key: "hinge",
+    name: "hinge",
+    patterns: ["HINGE"],
+    muscles: ["hamstrings", "glutes"],
+    severity: "MODERATE",
+    addAction: "Add 3 sets of a Romanian deadlift or hip thrust.",
+  },
+  {
+    key: "squat",
+    name: "squat",
+    patterns: ["SQUAT"],
+    muscles: ["quads"],
+    severity: "MODERATE",
+    addAction: "Add 3 sets of a squat or leg press.",
+  },
+  {
+    key: "vertical-push",
+    name: "vertical push",
+    patterns: ["VERTICAL_PUSH"],
+    muscles: [],
+    severity: "MODERATE",
+    addAction: "Add 3 sets of an overhead or shoulder press.",
+  },
+];
+
+const HYPERTROPHY_PATTERN_PHRASES: Readonly<Partial<Record<MovementPattern, PatternPhrase>>> = {
+  HORIZONTAL_PUSH: { name: "horizontal pushing", example: "a bench press or push-up" },
+  VERTICAL_PUSH: { name: "vertical pushing", example: "an overhead or shoulder press" },
+  HORIZONTAL_PULL: { name: "horizontal pulling", example: "a row" },
+  VERTICAL_PULL: { name: "vertical pulling", example: "a pulldown or chin-up" },
+  HINGE: { name: "hip hinging", example: "a Romanian deadlift or hip thrust" },
+  SQUAT: { name: "squatting", example: "a squat or leg press" },
+};
+
+// ---------------------------------------------------------------------------
 // Evidence (ARCH-054). A display restatement of the tier comments above: every tier and citation here
 // is copied from a comment in this file (or, for Epley, progressionSoundness.ts). Nothing is regraded.
 // When a comment above changes, change the matching claim here. No engine code reads this block.
@@ -317,6 +402,12 @@ const HYPERTROPHY_EVIDENCE: GoalProfileEvidence = {
           tier: { from: 3, to: 4 },
           sources: [],
         },
+        {
+          claim:
+            "The exception: a whole movement group missing (no pulling, no hinge, no squat, no vertical push) is surfaced as a finding even when the axis reads Balanced.",
+          tier: { from: 3, to: 3 },
+          sources: [],
+        },
       ],
     },
     PROGRESSION_SOUNDNESS: {
@@ -344,6 +435,12 @@ const HYPERTROPHY_EVIDENCE: GoalProfileEvidence = {
             "A %1RM prescription is checked for feasibility with the Epley equation, allowing 1 rep of slack.",
           tier: { from: 4, to: 4 },
           sources: ["Epley equation (interim; Nuzzo et al. 2023 is the intended source)"],
+        },
+        {
+          claim:
+            "More than half of a program's sets prescribed at 0 reps in reserve (RPE 10) is flagged: growth rises as sets approach failure, but failure itself is unnecessary. The share is an engine boundary, not a measurement.",
+          tier: { from: 4, to: 4 },
+          sources: [ROBINSON_2024, REFALO_2023],
         },
         {
           claim:
@@ -388,7 +485,7 @@ const HYPERTROPHY_EVIDENCE: GoalProfileEvidence = {
       },
       {
         claim:
-          "Axis weights follow evidence strength: Volume high; Progression and Recovery medium; Frequency and Exercise selection low.",
+          "Axis weights follow evidence strength: Volume high; Effort & rep ranges and Recovery medium; Frequency and Exercise selection low.",
         tier: { from: 4, to: 4 },
         sources: [ACSM_2026, PELLAND_2026, "Schoenfeld 2019"],
       },
@@ -443,10 +540,37 @@ export const HYPERTROPHY_CONFIG: GoalProfileConfig = {
     minShareEffortDefined: 0.8,
     farFromFailureMinRir: 5,
     maxShareFarFromFailure: 0.25,
+    // ARCH-063 / B3. Tier 4: an engine boundary. Growth rises as sets approach failure but failure itself is
+    // unnecessary (Refalo 2023; Robinson 2024), and no study gives a share. "More than half of the sets at RIR 0"
+    // is where a program stops being one that uses failure now and then and becomes one built on it. Sets with
+    // no stated effort are not counted. The calibration programs bracket it without pinning it: J (every set to
+    // failure) is 100%, C and K are about 52%, and every other program in A-L and the coach-parity set is 0%.
+    // Any value from 0 up to about 0.51 gives the same flips on A-L; 0.5 is the round number inside that range.
+    maxShareAtFailure: 0.5,
     acceptedRepRange: [5, 30],
     minShareInAcceptedRepRange: 0.8,
     percent1RmRepTolerance: 1,
   },
+  // ARCH-063 / B1. Tier 3, a coaching convention (not a measurement): when two findings are equally severe and
+  // equally far below their band, the one nearer the top of this list is the headline. Big, high-yield,
+  // slow-to-fix muscles first; calves last. Names, not ids (see RELEVANT_MUSCLE_GROUPS).
+  musclePriority: [
+    "quads",
+    "chest",
+    "lats",
+    "upper back",
+    "hamstrings",
+    "side delts",
+    "rear delts",
+    "glutes",
+    "biceps",
+    "triceps",
+    "calves",
+  ],
+  // ARCH-063 / B2. Tier 3; see HYPERTROPHY_REGIONS / HYPERTROPHY_WHOLE_PATTERN_GAPS above.
+  regions: HYPERTROPHY_REGIONS,
+  wholePatternGaps: HYPERTROPHY_WHOLE_PATTERN_GAPS,
+  patternPhrases: HYPERTROPHY_PATTERN_PHRASES,
   fitScoreProjection: HYPERTROPHY_FIT_SCORE_PROJECTION,
   validated: false,
   sourceNote:

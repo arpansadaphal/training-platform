@@ -10,6 +10,7 @@
 import {
   HYPERTROPHY_CONFIG,
   type AssessedAxis,
+  type AssessmentFinding,
   type AxisType,
   type FitScoreBand,
 } from "@training/domain";
@@ -18,7 +19,7 @@ export const AXIS_NAMES: Readonly<Record<AxisType, string>> = {
   VOLUME: "Weekly volume",
   FREQUENCY: "Frequency",
   EXERCISE_SELECTION_BALANCE: "Exercise selection",
-  PROGRESSION_SOUNDNESS: "Progression & effort",
+  PROGRESSION_SOUNDNESS: "Effort & rep ranges",
   RECOVERY_COST: "Recovery cost",
 };
 
@@ -31,6 +32,34 @@ function scopeName(scopeKey: string): string {
 export function axisLabel(axis: Pick<AssessedAxis, "axisType" | "scopeKey">): string {
   const name = AXIS_NAMES[axis.axisType] ?? axis.axisType;
   return axis.scopeKey ? `${name} · ${scopeName(axis.scopeKey)}` : name;
+}
+
+/**
+ * The title of a consolidated finding (ARCH-063 / B2): "Lower body · weekly volume", "Pulling · exercise selection",
+ * "Exercise selection". A single-axis finding reads exactly as its axis always has.
+ */
+export function findingLabel(finding: Pick<AssessmentFinding, "kind" | "region" | "patterns" | "members" | "lead">): string {
+  if (finding.kind === "REGION") {
+    const region = HYPERTROPHY_CONFIG.regions?.find((r) => r.key === finding.region);
+    return region ? `${scopeName(region.name)} · ${AXIS_NAMES.VOLUME.toLowerCase()}` : AXIS_NAMES.VOLUME;
+  }
+  if (finding.kind === "PATTERN") {
+    const group =
+      finding.members.length > 0
+        ? HYPERTROPHY_CONFIG.wholePatternGaps?.find((g) => g.key === finding.patterns?.[0])
+        : undefined;
+    return group
+      ? `${scopeName(group.name)} · ${AXIS_NAMES.EXERCISE_SELECTION_BALANCE.toLowerCase()}`
+      : AXIS_NAMES.EXERCISE_SELECTION_BALANCE;
+  }
+  return axisLabel(finding.lead);
+}
+
+/** The small badge on a consolidated finding's card: what state the whole group is in. */
+export function findingBandLabel(finding: Pick<AssessmentFinding, "kind" | "absent" | "lead">): string {
+  if (finding.kind === "AXIS") return finding.lead.status.band;
+  if (finding.kind === "REGION") return finding.absent ? "No training" : "Low";
+  return "Missing";
 }
 
 export function fitBandLabel(band: FitScoreBand): string {
