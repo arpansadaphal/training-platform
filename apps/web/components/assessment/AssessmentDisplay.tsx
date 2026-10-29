@@ -55,9 +55,10 @@ import {
 } from "@training/domain";
 import { AxisCard } from "./AxisCard";
 import { EvidencePanel } from "./EvidencePanel";
+import { FindingCard } from "./FindingCard";
 import { ProvisionalBanner } from "./ProvisionalBanner";
 import { UnvalidatedState } from "./UnvalidatedState";
-import { axisLabel, fitBandLabel } from "./labels";
+import { axisLabel, findingLabel, fitBandLabel } from "./labels";
 import { useProvisionalBanner } from "@/src/lib/provisionalBanner";
 import styles from "./assessment.module.css";
 
@@ -152,6 +153,11 @@ function AssessmentBody({
 }) {
   const namedText = new Map((namedActions ?? []).map((n) => [n.rootCauseKey, n.description]));
   const balance = ratioLines(a.ratios);
+  // ARCH-063 / B2: findings (engine 0.5.0) say each problem once. A snapshot saved before that has none, and
+  // renders as it always did, axis by axis.
+  const headline = a.biggestOpportunity ? (a.findings?.[0] ?? null) : null;
+  const attention = a.findings ? (a.biggestOpportunity ? a.findings.slice(1) : a.findings) : null;
+  const things = a.findings ? a.findings.length : a.attentionAreas.length + (a.biggestOpportunity ? 1 : 0);
   return (
     <>
       <section className={styles.overall}>
@@ -179,11 +185,11 @@ function AssessmentBody({
         ) : null}
         <p className={styles.overallSummary}>
           {plural(a.strengths.length, "strength", "strengths")} ·{" "}
-          {plural(a.attentionAreas.length + (a.biggestOpportunity ? 1 : 0), "thing", "things")} to
-          look at
+          {plural(things, "thing", "things")} to look at
           {a.biggestOpportunity ? (
             <>
-              . Biggest opportunity: <strong>{axisLabel(a.biggestOpportunity)}</strong>.
+              . Biggest opportunity:{" "}
+              <strong>{headline ? findingLabel(headline) : axisLabel(a.biggestOpportunity)}</strong>.
             </>
           ) : (
             "."
@@ -202,13 +208,17 @@ function AssessmentBody({
         </section>
       ) : null}
 
-      {a.attentionAreas.length > 0 ? (
+      {(attention ? attention.length : a.attentionAreas.length) > 0 ? (
         <section className={styles.section}>
           <h2 className={styles.sectionHeading}>Attention areas</h2>
           <div className={styles.axisList}>
-            {a.attentionAreas.map((axis) => (
-              <AxisCard key={axisKey(axis)} axis={axis} variant="attention" />
-            ))}
+            {attention
+              ? attention.map((finding) => (
+                  <FindingCard key={finding.key} finding={finding} variant="attention" />
+                ))
+              : a.attentionAreas.map((axis) => (
+                  <AxisCard key={axisKey(axis)} axis={axis} variant="attention" />
+                ))}
           </div>
         </section>
       ) : null}
@@ -216,7 +226,11 @@ function AssessmentBody({
       {a.biggestOpportunity ? (
         <section className={styles.section}>
           <h2 className={styles.sectionHeading}>Biggest Opportunity</h2>
-          <AxisCard axis={a.biggestOpportunity} variant="opportunity" />
+          {headline ? (
+            <FindingCard finding={headline} variant="opportunity" />
+          ) : (
+            <AxisCard axis={a.biggestOpportunity} variant="opportunity" />
+          )}
         </section>
       ) : null}
 
