@@ -482,6 +482,10 @@ interface Snapshot {
   program: Map<string, AxisSnap>; // ESB / PS / RC by axis type
   biggest: string;
   fit: string;
+  // ARCH-063 (engine 0.5.0): how much the narrative says. Counts parse from the older baseline too.
+  attention: string; // number of attention areas, or "?" when the baseline has none
+  actions: string; // number of actions, or "?"
+  findings: string; // the surfaced findings, "key | key"; "?" when the baseline predates findings
 }
 const snapshots = new Map<string, Snapshot>();
 const PROGRAM_AXES = ["EXERCISE_SELECTION_BALANCE", "PROGRESSION_SOUNDNESS", "RECOVERY_COST"] as const;
@@ -598,6 +602,23 @@ function report(label: string, description: string, ev: Evaluated): void {
   L.push(`strengths (${a.strengths.length}): ${a.strengths.map(axisLabel).sort().join(", ") || "none"}`);
   L.push(`attention areas (${a.attentionAreas.length}): ${a.attentionAreas.map(axisLabel).join(", ") || "none"}`);
   L.push(`biggest opportunity: ${a.biggestOpportunity === null ? "null" : axisLabel(a.biggestOpportunity)}`);
+  // ARCH-063 / B2: the surfaced findings, headline first. A consolidated finding lists the muscles it absorbed.
+  const findingText = (f: NonNullable<typeof a.findings>[number]): string =>
+    f.kind === "AXIS"
+      ? axisLabel(f.lead)
+      : `${f.key}${f.members.length > 0 ? `[${f.members.map((m) => `${named(m.muscle)} ${fmt(m.sets)}`).join(", ")}]` : ""}`;
+  L.push(
+    `findings (${(a.findings ?? []).length}): ${(a.findings ?? []).map(findingText).join(" | ") || "none"}`,
+  );
+  // ARCH-063 / B2, B3: what the program-wide axes carry beyond their band.
+  for (const x of axes("EXERCISE_SELECTION_BALANCE")) {
+    if (x.facts?.missingPatterns) L.push(`EXERCISE_SELECTION facts: missing patterns [${x.facts.missingPatterns.join(", ")}]`);
+  }
+  for (const x of axes("PROGRESSION_SOUNDNESS")) {
+    if (x.facts?.failedChecks) {
+      L.push(`PROGRESSION facts: failed checks [${x.facts.failedChecks.map((c) => c.id).join(", ")}]`);
+    }
+  }
   L.push(
     `actions (${a.actions.length}): ${a.actions.map((x) => `${named(x.rootCauseKey)} :: ${named(x.description)}`).join(" | ") || "none"}`,
   );
@@ -622,6 +643,9 @@ function report(label: string, description: string, ev: Evaluated): void {
     program: new Map(),
     biggest: a.biggestOpportunity === null ? "null" : axisLabel(a.biggestOpportunity),
     fit: ev.provisionalFit,
+    attention: String(a.attentionAreas.length),
+    actions: String(a.actions.length),
+    findings: (a.findings ?? []).map(findingText).join(" | ") || "none",
   };
   for (const x of axes("VOLUME"))
     snap.volume.set(nameOf(x), { metric: fmt(x.metricValue), band: x.status.band, severity: x.severity, leverage: x.leverage });
@@ -763,6 +787,39 @@ describe("calibration harness: real engine + real seed + HYPERTROPHY candidate c
   });
 
   // Defined LAST so every snapshot (A-L, G-pct x2, J(probe)) exists when it runs.
+  //
+  // AUDIT TRAIL: engine 0.5.0 (ARCH-063, Session B). No assertion in this file changed: they are structural
+  // (seed convention, scope, profile gate, roll-up completeness). What changed is the LOGGING, which now also
+  // records attention-area count, action count and the surfaced findings, and the per-axis facts that explain
+  // them. The calibration-before.txt regenerated with this commit differs from the 0.4.0 one as follows, and
+  // NO Fit band moved on any program (the CHANGES list below has no FIT line):
+  //
+  //   B1 (rank the headline by deficit, then muscle priority) - BIGGEST OPPORTUNITY
+  //     A  VOLUME:biceps -> VOLUME:calves      first by name -> largest deficit (calves at 0 sets)
+  //     C  VOLUME:biceps -> VOLUME:lats        biceps and lats are both 36 (Excessive); lats outranks biceps
+  //     D  FREQUENCY:chest -> FREQUENCY:quads  five tied at 0.5; quads is first in musclePriority
+  //     F2 VOLUME:calves -> VOLUME:quads       four muscles at 0; quads is first in musclePriority
+  //
+  //   B2 (consolidate, de-duplicate, surface whole-pattern gaps) - ATTENTION AREAS / ACTIONS / FINDINGS
+  //     A  attention areas 17 -> 2, actions 18 -> 3     three region findings (lower, upper, arms)
+  //     F2 attention areas 8 -> 2, actions 9 -> 3       lower body (no training), chest frequency, no overhead press
+  //     F1 actions 0 -> 1, biggest null -> EXERCISE_SELECTION_BALANCE   no overhead press / pulldown, once hidden
+  //     EXERCISE_SELECTION_BALANCE severity/leverage MINOR/NONE -> MODERATE/LOW on F1, F2 and J (+ J(probe)): a
+  //       whole pattern group is missing (vertical push; squat and hinge on F2). Band and metric unchanged.
+  //
+  //   B3 (near-failure check) - PROGRESSION_SOUNDNESS
+  //     C, J, K (+ J(probe))  BAND Sound -> Issue found (metric 0 -> 1), severity/leverage NONE/NONE -> MINOR/LOW
+  //       Shares at RIR 0: J 100%, K 52.9%, C 51.6% (limit: more than 50%). Every other program is 0%.
+  //     J  BIGGEST OPPORTUNITY RECOVERY_COST -> PROGRESSION_SOUNDNESS; attention areas 0 -> 1; actions 1 -> 2
+  //
+  //   KNOWN LIMITATION: J's provisional Fit stays STRONG. PROGRESSION "Issue found" is MINOR severity, below the
+  //   breadth bar (MODERATE), and the base band is the worst single leverage (LOW -> STRONG). The audit's
+  //   concern about J is only partly addressed: its headline and action now name the near-failure problem, but
+  //   the band label understates it. Unblocked by graded severity (E4) or a decision to raise PROGRESSION from
+  //   MINOR to MODERATE; both are separate ARCHs. A stays NEEDS_WORK (11 VOLUME Lows at HIGH leverage are still
+  //   in allAssessedAxes; only what is surfaced is grouped).
+  //
+  // Programs not listed (B, E, G, H, L and the G-pct probes) have no change except the new FINDINGS line.
   describe("comparison against calibration-before.txt (logs only, never asserts engine output)", () => {
     const HERE = dirname(fileURLToPath(import.meta.url));
     const candidates = [
@@ -779,7 +836,7 @@ describe("calibration harness: real engine + real seed + HYPERTROPHY candidate c
         const line = raw.trim();
         const head = /^=== Program ([^:]+): /.exec(line);
         if (head !== null) {
-          cur = { volume: new Map(), frequency: new Map(), program: new Map(), biggest: "?", fit: "?" };
+          cur = { volume: new Map(), frequency: new Map(), program: new Map(), biggest: "?", fit: "?", attention: "?", actions: "?", findings: "?" };
           out.set((head[1] ?? "").trim(), cur);
           continue;
         }
@@ -802,6 +859,12 @@ describe("calibration harness: real engine + real seed + HYPERTROPHY candidate c
           cur.program.set(ax[1] ?? "", { metric: ax[2] ?? "", band: ax[3] ?? "", severity: ax[4] ?? "", leverage: ax[6] ?? "" });
           continue;
         }
+        const att = /^attention areas \((\d+)\):/.exec(line);
+        if (att !== null) { cur.attention = att[1] ?? "?"; continue; }
+        const act = /^actions \((\d+)\):/.exec(line);
+        if (act !== null) { cur.actions = act[1] ?? "?"; continue; }
+        const fnd = /^findings \((\d+)\): (.+)$/.exec(line);
+        if (fnd !== null) { cur.findings = fnd[2] ?? "?"; continue; }
         const big = /^biggest opportunity: (.+)$/.exec(line);
         if (big !== null) { cur.biggest = big[1] ?? "?"; continue; }
         const fit = /^FIT \(.*?\): (.+)$/.exec(line);
@@ -836,6 +899,11 @@ describe("calibration harness: real engine + real seed + HYPERTROPHY candidate c
           L.push(`${label} ${t} severity/leverage ${bv.severity}/${bv.leverage} -> ${av.severity}/${av.leverage}`);
       }
       if (b.biggest !== a.biggest) L.push(`${label} BIGGEST OPPORTUNITY ${b.biggest} -> ${a.biggest}`);
+      // ARCH-063: how much the narrative says (consolidation) and, from engine 0.5.0, what the findings are.
+      if (b.attention !== a.attention) L.push(`${label} ATTENTION AREAS ${b.attention} -> ${a.attention}`);
+      if (b.actions !== a.actions) L.push(`${label} ACTIONS ${b.actions} -> ${a.actions}`);
+      if (b.findings !== "?" && b.findings !== a.findings) L.push(`${label} FINDINGS ${b.findings} -> ${a.findings}`);
+      if (b.findings === "?") L.push(`${label} FINDINGS (new in 0.5.0): ${a.findings}`);
       if (b.fit !== a.fit) L.push(`${label} FIT (provisional) ${b.fit} -> ${a.fit}`);
       return L;
     }
