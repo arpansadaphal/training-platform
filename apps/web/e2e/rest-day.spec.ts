@@ -48,7 +48,7 @@ test("rest day: build, rotate, pick, move past (375px for the session part)", as
   const sentence = page.getByText(/ volume is (low|in range|on the high side|past the well-studied range):/).first();
   await expect(sentence).toBeVisible();
   const axisCard = sentence.locator("xpath=ancestor::div[contains(@class,'axisCard')][1]");
-  await expect(axisCard.getByText(/hard sets? \/ week/)).toBeVisible();
+  await expect(axisCard.getByText(/hard sets? \/ week/).first()).toBeVisible();
   if (process.env.A3A_SHOTS) await axisCard.screenshot({ path: `${process.env.A3A_SHOTS}/axis-card.png` });
   await page.getByRole("button", { name: "Commit", exact: true }).click();
   await expect(page.getByText(/Committed as version 1\./)).toBeVisible();
