@@ -124,8 +124,9 @@ describe("coach parity ratchet", () => {
   const contained = (): string[] =>
     score.rows.filter((r) => r.result.kind === "contained").map((r) => r.expected.id).sort();
 
-  // Moves only with an engine change. Baseline (Part 0, before B1): the 2026-10-28 engine.
-  const PINNED_PASSING = ["D", "E", "P1", "PPLx6", "S2", "S3"];
+  // Moves only with an engine change. Part 0 baseline (the 2026-10-28 engine): D, E, P1, PPLx6, S2, S3.
+  // After B1 (rank by deficit): + P3, S6, S6b.
+  const PINNED_PASSING = ["D", "E", "P1", "P3", "PPLx6", "S2", "S3", "S6", "S6b"];
   const PINNED_CONTAINED: string[] = [];
 
   it("the passing set is exactly the pinned set", () => {

@@ -447,6 +447,22 @@ export const HYPERTROPHY_CONFIG: GoalProfileConfig = {
     minShareInAcceptedRepRange: 0.8,
     percent1RmRepTolerance: 1,
   },
+  // ARCH-063 / B1. Tier 3, a coaching convention (not a measurement): when two findings are equally severe and
+  // equally far below their band, the one nearer the top of this list is the headline. Big, high-yield,
+  // slow-to-fix muscles first; calves last. Names, not ids (see RELEVANT_MUSCLE_GROUPS).
+  musclePriority: [
+    "quads",
+    "chest",
+    "lats",
+    "upper back",
+    "hamstrings",
+    "side delts",
+    "rear delts",
+    "glutes",
+    "biceps",
+    "triceps",
+    "calves",
+  ],
   fitScoreProjection: HYPERTROPHY_FIT_SCORE_PROJECTION,
   validated: false,
   sourceNote:

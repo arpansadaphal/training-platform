@@ -354,6 +354,12 @@ export interface GoalProfileConfig {
   readonly frequencyDistribution?: FrequencyDistributionConfig;
   /** E8. Defaults as in progressionSoundness.ts. */
   readonly progressionRules?: ProgressionRulesConfig;
+  /**
+   * ARCH-063 / B1. Muscle-group names, most important first. The last tie-break when two findings of the same
+   * axis type have the same leverage and the same deficit: the earlier name leads. A name not listed ranks
+   * after every listed one. Tier 3 (a coaching convention). Absent means no priority: axis order decides.
+   */
+  readonly musclePriority?: readonly string[];
 
   axisWeights: Record<string, AxisWeight>;
   statusBands: Record<AxisType, AxisBandDefinition[]>;

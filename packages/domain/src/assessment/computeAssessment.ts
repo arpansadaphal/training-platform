@@ -15,8 +15,8 @@
 //   3. Otherwise, classify:
 //        Strengths        = axes whose severity is NONE AND whose axis type
 //                           is listed in `config.strengthEligibleAxes`.
-//        BiggestOpportunity = argmax(leverage) among axes NOT in good status,
-//                           EXCLUDING axes whose leverage is NONE (see E1).
+//        BiggestOpportunity = the first-ranked axis NOT in good status, EXCLUDING axes whose
+//                           leverage is NONE (see E1). Ranking: see `compareRanked` (B1).
 //        AttentionAreas   = other axes whose severity clears the profile's
 //                           materiality threshold, excluding the Biggest
 //                           Opportunity.
@@ -47,6 +47,7 @@ import type {
   GoalProfileConfig,
   Leverage,
   Severity,
+  Weight,
 } from "../analysis/types";
 import { actionTemplateFor } from "./actionTemplates";
 import { rollUpLeverage } from "./rollup";
@@ -83,6 +84,80 @@ const LEVERAGE_RANK: Readonly<Record<Leverage, number>> = {
   HIGH: 3,
 };
 
+const WEIGHT_RANK: Readonly<Record<Weight, number>> = {
+  LOW: 1,
+  MEDIUM: 2,
+  HIGH: 3,
+};
+
+// ---------------------------------------------------------------------------
+// Ranking (ARCH-063 / B1)
+// ---------------------------------------------------------------------------
+//
+// Before B1 the headline was the first axis, in axis order, with the highest leverage. Production loads muscle
+// groups sorted by name, so among tied Lows the headline was alphabetical ("biceps" for a program with no pulling
+// at all). Now every not-good axis is ranked by one lexicographic key, so the order is total and deterministic:
+//
+//   1. leverage, highest first                         (unchanged)
+//   2. axis weight, highest first                      (separates axis TYPES that tie on leverage; the weights
+//                                                       are already ordered by evidence strength)
+//   3. axis type, in the order the Analysis lists them (VOLUME, FREQUENCY, SELECTION, PROGRESSION, RECOVERY)
+//   4. deficit, largest first                          (only ever compared within one axis type, see below)
+//   5. the profile's `musclePriority`, earlier first   (Tier 3: breaks a deficit tie between muscles)
+//   6. original axis order
+//
+// Deficit is how far the metric sits from the nearest band the profile calls good (severity NONE), read from the
+// profile's own band bounds. It is a tie-break key, not a threshold: it never creates, moves or re-grades a band,
+// a severity or a leverage, and it is never summed or averaged.
+
+interface RankedAxis {
+  readonly axis: AssessedAxis;
+  readonly index: number;
+  readonly typeOrder: number;
+  readonly deficit: number;
+  readonly priority: number;
+}
+
+/**
+ * Distance from `axis.metricValue` to the nearest band whose severity is NONE; 0 when the metric is not a
+ * number, when no such band exists, or when it already sits inside one. A VOLUME Low is `lowerBound - value`
+ * of the Adequate band; an Excessive one is `value - upperBound` of the High band. Rounded so that two equal
+ * deficits computed from different floats still compare equal.
+ */
+function deficitOf(axis: AssessedAxis, config: GoalProfileConfig): number {
+  if (typeof axis.metricValue !== "number") return 0;
+  const value = axis.metricValue;
+  const severityRow = config.severityMap[axis.axisType] ?? {};
+  let nearest = Number.POSITIVE_INFINITY;
+  for (const band of config.statusBands[axis.axisType] ?? []) {
+    if (severityRow[band.status] !== "NONE") continue;
+    const { lowerBound: lo, upperBound: hi } = band;
+    if (lo === null && hi === null) continue; // placeholder band (N/A): no real extent
+    const distance = lo !== null && value < lo ? lo - value : hi !== null && value >= hi ? value - hi : 0;
+    if (distance < nearest) nearest = distance;
+  }
+  return Number.isFinite(nearest) ? Math.round(nearest * 1e6) / 1e6 : 0;
+}
+
+/** Position in `config.musclePriority`; a name not listed ranks after every listed one; no list ranks all equal. */
+function priorityOf(axis: AssessedAxis, config: GoalProfileConfig): number {
+  const list = config.musclePriority;
+  if (list === undefined) return 0;
+  const at = axis.scopeKey === null ? -1 : list.indexOf(axis.scopeKey);
+  return at < 0 ? list.length : at;
+}
+
+function compareRanked(a: RankedAxis, b: RankedAxis): number {
+  return (
+    LEVERAGE_RANK[b.axis.leverage] - LEVERAGE_RANK[a.axis.leverage] ||
+    WEIGHT_RANK[b.axis.weight] - WEIGHT_RANK[a.axis.weight] ||
+    a.typeOrder - b.typeOrder ||
+    b.deficit - a.deficit ||
+    a.priority - b.priority ||
+    a.index - b.index
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Classification
 // ---------------------------------------------------------------------------
@@ -114,34 +189,40 @@ function classifyAxes(
   // not eligible are dropped from both lists: not a Strength, not a
   // problem. They remain visible in `allAssessedAxes` for the Fit Score.
   const eligible = new Set<AxisType>(config.strengthEligibleAxes);
+  const typeOrder = new Map<AxisType, number>();
+  assessedAxes.forEach((axis, index) => {
+    if (!typeOrder.has(axis.axisType)) typeOrder.set(axis.axisType, index);
+  });
   const strengths: AssessedAxis[] = [];
-  const notGood: AssessedAxis[] = [];
-  for (const axis of assessedAxes) {
+  const ranked: RankedAxis[] = [];
+  assessedAxes.forEach((axis, index) => {
     if (axis.severity === "NONE") {
       if (eligible.has(axis.axisType)) strengths.push(axis);
       // else: silently dropped — not a Strength, not a problem.
     } else {
-      notGood.push(axis);
+      ranked.push({
+        axis,
+        index,
+        typeOrder: typeOrder.get(axis.axisType) ?? index,
+        deficit: deficitOf(axis, config),
+        priority: priorityOf(axis, config),
+      });
     }
-  }
+  });
+  // B1: not-good axes, best candidate first. Strengths keep the Analysis order.
+  const notGood: AssessedAxis[] = ranked.sort(compareRanked).map((r) => r.axis);
 
-  // Biggest Opportunity (E1 fix): argmax(leverage) among axes NOT in good
-  // status, EXCLUDING axes whose leverage is NONE. Previously the running
-  // rank started at -1, so an axis whose leverage was NONE could win — a
-  // MINOR severity on a LOW weight axis maps to NONE in the leverage table,
-  // and that axis was being surfaced as the headline opportunity even
-  // though it carries no leverage. Now such axes cannot win; if no not-good
-  // axis reaches LOW leverage or higher, biggestOpportunity stays null.
-  // First-wins on ties, in original axis order — deterministic.
-  let biggestOpportunity: AssessedAxis | null = null;
-  let biggestRank = LEVERAGE_RANK["NONE"]; // 0 — excludes NONE-leverage axes
-  for (const axis of notGood) {
-    const r = LEVERAGE_RANK[axis.leverage];
-    if (r > biggestRank) {
-      biggestRank = r;
-      biggestOpportunity = axis;
-    }
-  }
+  // Biggest Opportunity: the first-ranked not-good axis (see `compareRanked`),
+  // EXCLUDING axes whose leverage is NONE (E1 fix). A MINOR severity on a LOW
+  // weight axis maps to NONE in the leverage table; such an axis carries no
+  // leverage and cannot be the headline. `notGood` is ordered by leverage
+  // first, so if its first element has NONE leverage, none of them qualifies
+  // and biggestOpportunity stays null. B1: ties on leverage are no longer
+  // broken by axis order alone (alphabetical, for muscles in production);
+  // they are broken by weight, then deficit, then muscle priority.
+  const first = notGood[0];
+  const biggestOpportunity: AssessedAxis | null =
+    first !== undefined && LEVERAGE_RANK[first.leverage] > LEVERAGE_RANK["NONE"] ? first : null;
 
     // Attention areas: remaining not-good axes whose severity clears the
   // profile's materiality threshold. The Biggest Opportunity is excluded —

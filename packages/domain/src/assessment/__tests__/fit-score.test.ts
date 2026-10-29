@@ -449,10 +449,26 @@ describe("E11 — integration: every finding that moves the band is one the narr
     // band the projection WOULD give, exactly as the calibration harness does. PROVISIONAL: never user-visible.
     const provisional = computeFitScore({ kind: "VALIDATED", assessment: result.assessment });
     if (provisional.kind !== "VALIDATED") throw new Error("expected VALIDATED");
-    const surfaced =
-      (result.assessment.biggestOpportunity === null ? 0 : 1) + result.assessment.attentionAreas.length;
+    const surfacedAxes = [
+      ...(result.assessment.biggestOpportunity === null ? [] : [result.assessment.biggestOpportunity]),
+      ...result.assessment.attentionAreas,
+    ];
+    const surfaced = surfacedAxes.length;
     const lowOrWorse = result.assessment.allAssessedAxes.filter((a) => a.leverage !== "NONE").length;
-    return { result, gated: computeFitScore(result), band: provisional.fitScore.band, surfaced, lowOrWorse };
+    // The findings the breadth floor counts: leverage >= LOW and severity at the materiality bar (MODERATE).
+    const counted = result.assessment.allAssessedAxes.filter(
+      (a) => a.leverage !== "NONE" && (a.severity === "MODERATE" || a.severity === "MAJOR"),
+    );
+    const countedAllSurfaced = counted.every((c) => surfacedAxes.includes(c));
+    return {
+      result,
+      gated: computeFitScore(result),
+      band: provisional.fitScore.band,
+      surfaced,
+      lowOrWorse,
+      counted: counted.length,
+      countedAllSurfaced,
+    };
   }
 
   it("the real Fit result stays UNVALIDATED while the profile is unvalidated", () => {
@@ -466,17 +482,32 @@ describe("E11 — integration: every finding that moves the band is one the narr
     expect(surfaced).toBe(5);
   });
 
-  it("three material findings plus two MINOR-severity axes -> DECENT, and exactly the three are surfaced", () => {
-    const { band, surfaced, lowOrWorse } = run(freq(0), freq(1), freq(2), progressionIssue, recoveryHigh);
+  // AUDIT TRAIL (ARCH-063 / B1, engine 0.5.0). These two tests used to assert `surfaced` equal to the number of
+  // counted findings (3, then 2). B1 breaks leverage ties by axis weight before axis order, so at the same LOW
+  // leverage the MINOR-severity PROGRESSION axis (weight MEDIUM) now outranks FREQUENCY (weight LOW) and becomes
+  // the biggest opportunity; the counted findings move to the attention areas. The narrative therefore shows
+  // the counted findings AND one MINOR headline (4, then 3). What this block exists to guard is unchanged and
+  // is now asserted directly: every finding the breadth floor counts is surfaced, and the MINOR axes still
+  // do not count toward breadth.
+  it("three material findings plus two MINOR-severity axes -> DECENT, and all three are surfaced", () => {
+    const { band, surfaced, lowOrWorse, counted, countedAllSurfaced } = run(
+      freq(0), freq(1), freq(2), progressionIssue, recoveryHigh,
+    );
     expect(band).toBe("DECENT");
-    expect(surfaced).toBe(3);
+    expect(counted).toBe(3);
+    expect(countedAllSurfaced).toBe(true);
+    expect(surfaced).toBe(4); // the three, plus the MINOR PROGRESSION axis as the headline (B1)
     expect(lowOrWorse).toBe(5); // the two MINOR-severity axes carry leverage but do not count toward breadth
   });
 
   it("two material findings plus two MINOR-severity axes -> STRONG, even though four axes carry leverage", () => {
-    const { band, surfaced, lowOrWorse } = run(freq(0), freq(1), progressionIssue, recoveryHigh);
+    const { band, surfaced, lowOrWorse, counted, countedAllSurfaced } = run(
+      freq(0), freq(1), progressionIssue, recoveryHigh,
+    );
     expect(band).toBe("STRONG");
-    expect(surfaced).toBe(2);
+    expect(counted).toBe(2);
+    expect(countedAllSurfaced).toBe(true);
+    expect(surfaced).toBe(3); // the two, plus the MINOR PROGRESSION axis as the headline (B1)
     expect(lowOrWorse).toBe(4);
   });
 });
