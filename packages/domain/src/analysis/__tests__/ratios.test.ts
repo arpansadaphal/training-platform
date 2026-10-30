@@ -89,7 +89,14 @@ describe("computeCrossMuscleRatios", () => {
 describe("AnalysisContext", () => {
   const p = program(rx("Barbell Bench Press", 4), rx("Barbell Row", 3), rx("Back Squat", 3), rx("Lateral Raise", 2));
   const options = { now: () => new Date("2026-01-01T00:00:00Z") };
-  const full: AnalysisContext = { daysPerWeek: 4, trainingAgeMonths: 18, equipment: "home_dumbbells", minutesPerSession: 45 };
+  // daysPerWeek is read since Session C1 (runsPerWeek.ts, tested in runsPerWeek.test.ts), so a value that differs from
+  // the listed days is no longer inert. Here it equals them; the other three fields are still read by nothing.
+  const full: AnalysisContext = {
+    daysPerWeek: p.workoutDays.length,
+    trainingAgeMonths: 18,
+    equipment: "home_dumbbells",
+    minutesPerSession: 45,
+  };
 
   it("leaves the whole Analysis and Assessment byte-identical whether context is undefined, empty or full", () => {
     const base = computeAnalysis(p, REF, HYPERTROPHY_CONFIG, options);

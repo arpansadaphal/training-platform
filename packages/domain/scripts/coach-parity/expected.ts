@@ -15,6 +15,7 @@
 // its entry is a `none` and its note says so) and the five goal-dependent entries (see `goalDependent`). Every other
 // entry is still audit-authored.
 // `rationale` says why each match reads the way it does, so a reviewer can disagree with one line at a time.
+import type { AnalysisContext } from "../../src/analysis/types";
 import type { Program } from "./lib";
 import { PROGRAMS_BY_ID } from "./programs";
 import type { ExpectedMatch } from "./matcher";
@@ -33,6 +34,8 @@ export interface ExpectedHeadline {
    * changes scoring. It marks contour cases that wait for a goal selector (Session C2).
    */
   readonly goalDependent: boolean;
+  /** What the lifter tells the checker beyond the program (days per week, minutes per session). Absent: none. */
+  readonly context?: AnalysisContext;
 }
 
 const AUDIT = "Audit-authored; awaiting real coach review";
@@ -68,6 +71,9 @@ const goalDependent = (e: ExpectedHeadline): ExpectedHeadline => ({
   goalDependent: true,
   rationale: `${e.rationale} ${GOAL_DEPENDENT_RATIONALE}`,
 });
+
+/** The same lifter told the checker something beyond the program, as /check will ask. */
+const withContext = (e: ExpectedHeadline, context: AnalysisContext): ExpectedHeadline => ({ ...e, context });
 
 const derived = (basis: string): string => `Derived (the audit has no line for this run): ${basis}. ${AUDIT}`;
 
@@ -225,12 +231,15 @@ export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
     [m("pattern:hinge", "missing"), m("muscle:hamstrings", "missing"), m("push-pull", "high")],
     "The audit: 'the one thing that matters is buried'. The pattern and the muscle are stated together.",
   ),
-  entry(
-    "PPLx3",
-    "Solid: nothing to fix (a PPL run twice a week).",
-    [m("none", "none")],
-    "The title says the user runs it twice a week, so a coach reads the 6-day week. The engine reads 3 listed days as the week: a missing input (daysPerWeek), the case the probe exists to show.",
-    derived("same program as PPLx6; the audit gives only the engine's 3-day verdict (NEEDS WORK, 5 things)"),
+  withContext(
+    entry(
+      "PPLx3",
+      "Solid: nothing to fix (a PPL run twice a week).",
+      [m("none", "none")],
+      "The title says the user runs it twice a week, so a coach reads the 6-day week. Read with daysPerWeek 6 (ARCH-063, Session C1), the engine reads the 3 listed days as a cycle run twice, as the lifter does. Without it the engine reads 3 days as the week: the case the probe exists to show.",
+      derived("same program as PPLx6; the audit gives only the engine's 3-day verdict (NEEDS WORK, 5 things)"),
+    ),
+    { daysPerWeek: 6 },
   ),
   entry(
     "PPLx6",

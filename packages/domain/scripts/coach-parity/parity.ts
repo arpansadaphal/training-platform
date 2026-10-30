@@ -36,7 +36,11 @@ export function scoreAll(): ParityScore {
   // Production loads muscle groups sorted by name; the headline tie-break depends on that order.
   REF.muscleGroups.sort((a, b) => a.name.localeCompare(b.name));
   const rows: ParityRow[] = EXPECTED_HEADLINES.map((expected) => {
-    const { a } = run(expected.program, { defaultRpe: expected.defaultRpe, quiet: true });
+    const { a } = run(expected.program, {
+      defaultRpe: expected.defaultRpe,
+      quiet: true,
+      ...(expected.context === undefined ? {} : { context: expected.context }),
+    });
     const headline = headlineOf(a);
     const finding = a.findings?.[0];
     const sentence = finding

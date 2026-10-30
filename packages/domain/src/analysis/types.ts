@@ -475,8 +475,10 @@ export interface GoalProfileConfig {
 
 /**
  * What the engine may know about the lifter beyond the program. Passed in, never
- * stored. Foundation only: no axis, band or action reads it yet (later items
- * will), so supplying or omitting it leaves every output identical.
+ * stored. Read so far (ARCH-063, Session C1):
+ *   - `daysPerWeek`: VOLUME and FREQUENCY, when it differs from the days listed (runsPerWeek.ts).
+ * Omit it, or pass a value equal to the listed days, and every output is identical.
+ * `trainingAgeMonths`, `equipment` and `minutesPerSession` are read by nothing yet.
  */
 export interface AnalysisContext {
   readonly daysPerWeek?: number;
@@ -487,7 +489,7 @@ export interface AnalysisContext {
 
 export interface ComputeAnalysisOptions {
   programVersionId?: string | null;
-  /** Optional lifter context. Not read by any calculator today; see AnalysisContext. */
+  /** Optional lifter context. Only `daysPerWeek` is read today (VOLUME, FREQUENCY); see AnalysisContext. */
   context?: AnalysisContext;
   /**
    * Injectable clock, used only so a determinism test can compare two runs

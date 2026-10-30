@@ -131,6 +131,11 @@ describe("expected headlines", () => {
       expect(e.rationale, e.id).toMatch(/3 of 5 real coaches agreed.*2 of 5 said 'fine, optional accessory work'/);
     }
   });
+
+  it("only PPLx3 supplies context, and it supplies the real week", () => {
+    const withContext = EXPECTED_HEADLINES.filter((e) => e.context !== undefined).map((e) => [e.id, e.context]);
+    expect(withContext).toEqual([["PPLx3", { daysPerWeek: 6 }]]);
+  });
 });
 
 describe("coach parity ratchet", () => {
@@ -146,8 +151,10 @@ describe("coach parity ratchet", () => {
   // After B3 (near-failure check carried to the headline): + G, J.
   // Session C1, Part 1 (real coach review: 5/5 say B is fine, so expected.ts now says `none`): + B. No matcher or
   //   engine change; the engine already said nothing about B.
+  // Session C1, Part 2 (daysPerWeek is read: PPLx3 supplies 6 and the engine reads its 3 listed days as a cycle run
+  //   twice, which is PPLx6's week): + PPLx3. No threshold moved.
   const PINNED_PASSING = [
-    "B", "D", "E", "F1", "F2", "G", "J", "P1", "P3", "PPLx6", "S2", "S3", "S4", "S5a", "S5b", "S6", "S6b",
+    "B", "D", "E", "F1", "F2", "G", "J", "P1", "P3", "PPLx3", "PPLx6", "S2", "S3", "S4", "S5a", "S5b", "S6", "S6b",
   ];
   const PINNED_CONTAINED = ["S4"];
 
