@@ -14,6 +14,10 @@
 // (Schoenfeld 2019; Pelland 2026), while per-session returns diminish (Remmert 2025 preprint). Raw
 // "sessions per week" therefore stopped being the right question.
 //
+// A structure run more or less than once a week (runsPerWeek.ts) scales both sides: the weekly dose by runsPerWeek,
+// and the exposures by runsPerWeek rounded DOWN, because a half-run is not a second exposure (the muscle was
+// trained once and a half, not twice). The default of 1 changes nothing.
+//
 // Edge cases: a muscle with no weekly dose has zero exposures and requiredExposures 1, so the metric is 0
 // (Low); VOLUME flags the same muscle, and the Low action text distinguishes the two cases.
 // Replaces the old rule (distinct days with any involvementFactor > 0).
@@ -44,6 +48,7 @@ export function computeFrequencyAxis(
   structure: ProgramStructure,
   referenceData: ExerciseReferenceData,
   config: GoalProfileConfig,
+  runs: number = 1,
 ): AnalysisAxisResult[] {
   const bands = config.statusBands.FREQUENCY;
   const dist = config.frequencyDistribution ?? DEFAULT_FREQUENCY_DISTRIBUTION;
@@ -66,8 +71,8 @@ export function computeFrequencyAxis(
   const results: AnalysisAxisResult[] = [];
 
   for (const muscleGroup of referenceData.muscleGroups) {
-    let weeklySets = 0;
-    let exposures = 0;
+    let listedSets = 0;
+    let listedExposures = 0;
 
     for (const day of structure.workoutDays) {
       let daySets = 0;
@@ -76,9 +81,11 @@ export function computeFrequencyAxis(
         if (factor === undefined || factor <= 0) continue;
         daySets += creditedSets(prescription, credit) * factor;
       }
-      weeklySets += daySets;
-      if (daySets > 0 && daySets >= dist.minExposureSets - EPS) exposures += 1;
+      listedSets += daySets;
+      if (daySets > 0 && daySets >= dist.minExposureSets - EPS) listedExposures += 1;
     }
+    const weeklySets = listedSets * runs;
+    const exposures = Math.floor(listedExposures * runs + EPS);
 
     const metricValue = exposures / requiredExposures(weeklySets, dist.perSessionSetCap);
     results.push({

@@ -1,7 +1,7 @@
 # ARCH-063 — Engine output improvements (rank by deficit, consolidation, near-failure check)
 
 **Date:** 2026-10-28
-**Status:** Accepted (Session B shipped 2026-10-29). Session A (2026-10-28) shipped the five changes that leave calibration alone; Session B shipped the three that change it, with engine version 0.5.0, a regenerated calibration baseline and a coach-parity test. Branches `coach-parity-session-a` and `coach-parity-session-b`.
+**Status:** Accepted (Session B shipped 2026-10-29; Session C1 shipped 2026-10-30). Session A (2026-10-28) shipped the five changes that leave calibration alone; Session B shipped the three that change it, with engine version 0.5.0, a regenerated calibration baseline and a coach-parity test; Session C1 corrected the parity table against a real coach review and made `daysPerWeek` matter (engine 0.5.1). Branches `coach-parity-session-a` and `coach-parity-session-b` (C1 is on the latter).
 **Supersedes:** none
 **Related:** ARCH-051 (config and scope), ARCH-052 (axis rebuild), ARCH-053 (breadth-aware Fit), ARCH-054 (evidence-graded thresholds)
 
@@ -93,6 +93,48 @@ Re-running the calibration test against the regenerated baseline reports "no cha
 - The baseline is regenerated in its own commit; the version constant is the one engine-file change in that commit (metadata, as the Session B brief placed it). The earlier line "regenerate in the same commit as the change" is overridden: the baseline is never in an engine commit.
 - `calibration.test.ts`: no assertion changed. The logging now records attention-area count, action count, the findings and the axis facts, with an audit-trail note tying each change to B1, B2 or B3. `dedup.test.ts`, `namedActions.test.ts`, `fit-score.test.ts` (the integration test) and `e2e/builder.spec.ts` carry audit notes where their premise changed by design.
 
+## Shipped in Session C1 (2026-10-30, engine 0.5.1)
+
+Two parts shipped: the coach-validated correction to `expected.ts`, and `daysPerWeek`. A third, `minutesPerSession`, is **deferred and not shipped** (below). No schema change, nothing under `packages/ai`, no `/check`, no threshold, weight or config change. **Coach parity 16/25 to 18/25.**
+
+### Real coach review changes `expected.ts`
+
+A five-coach review of the 25 programs came back with two unambiguous findings. Everything else in `expected.ts` is still audit-authored.
+
+- **B is fine.** All five coaches called it fine; the audit had invented two minor findings (a 9-set arm day, side delts at 7.5) that no coach considers a problem. B's expected match is now `[none]` and its note says "Real coach review (5/5) is unanimous that this program is fine. The audit was stricter than real coaches. B passes honestly." **B is an "empty" pass: the engine says nothing, and that is correct because 5 of 5 coaches said the program is fine.** The same class as E and PPLx6 (PPLx3 joins it below). It is not a matcher change and nothing was loosened: the engine already said nothing about B. 16 to 17.
+- **`goalDependent`.** New boolean on `ExpectedHeadline` (default false), set on **S2, S3, S6, S6b and P1**. For these, 3 of 5 coaches agreed with the engine's finding and 2 of 5 said "fine, optional accessory work"; the disagreement tracks whether the lifter's goal cares about aesthetic priorities (calves, delts), not the program. Annotation only: scoring is unchanged and all five still pass. They are contour cases waiting for a goal selector (Session C2).
+
+### `daysPerWeek` is read (a structural read, not a threshold change)
+
+`analysis/runsPerWeek.ts`: when `AnalysisContext.daysPerWeek` is a positive finite number that differs from the number of listed training days (rest days are not counted), the structure is a repeating cycle and `runsPerWeek = daysPerWeek / listedDays`.
+
+- **VOLUME** multiplies the per-muscle weekly sets by `runsPerWeek`.
+- **FREQUENCY** multiplies the weekly dose by `runsPerWeek` and takes `floor(listedExposures x runsPerWeek)` exposures. A half-run is not a second exposure: three sessions run 1.5 times are four exposures, not 4.5.
+- Absent, non-positive or non-finite `daysPerWeek`, or one equal to the listed days, reads as 1 and changes nothing. No band, severity, weight or leverage moved, so no calibration program (none supplies context) changes.
+- **PPLx3** (a 3-day PPL the lifter runs twice a week) supplies `{ daysPerWeek: 6 }` on its `expected.ts` entry and now reads exactly as PPLx6: VOLUME and FREQUENCY are equal, as tested. 17 to 18. The scorer passes an entry's `context` to the engine; the four print scripts do not, so their output is unchanged.
+- **Only VOLUME and FREQUENCY read it.** RECOVERY_COST and the cross-muscle ratios still read the listed days, so a 3-day cycle run twice reports half the recovery cost and half the push and pull set totals that the 6-day listing does. No parity program is affected (PPLx3's recovery cost is lower, not higher, than PPLx6's). Scaling them is a Session D candidate.
+- Session A's test that a "full" context changes nothing now sets `daysPerWeek` to the listed day count; `trainingAgeMonths`, `equipment` and `minutesPerSession` are still read by nothing.
+
+### `minutesPerSession` is deferred, not shipped
+
+Session C1 did not implement it and ships no code, test or copy for it. The brief's rule (estimate session length at 2.5 min a set; above the budget, cap the "add X sets" actions to two) was probed on P2 and does not move it:
+
+- P2's sessions are 11 sets, 27.5 minutes at 2.5 min a set, under a 45-minute budget, so the trigger does not fire. (The week is 55 minutes; comparing that to a per-session budget would be a bug.)
+- P2 has 3 actions after Session B, not the 15 the audit counted.
+- The matcher scores the headline, which stays `region:lower/low` however many actions are shown. P2 expects `time-budget/none`, and nothing in the engine emits a `time-budget` subject. Moving P2 needs a rule, not an action cap.
+- `NamedAction[]` has no header field for "About N sets fit in your M-minute budget".
+
+It lands with Session D's program-level volume rule, with the design questions above settled first.
+
+### Parity after C1 (18 of 25)
+
+- **Pass (18):** B, D, E, F1, F2, G, J, P1, P3, PPLx3, PPLx6, S2, S3, S4, S5a, S5b, S6, S6b. By kind: 13 lead (D, F1, F2, G, J, P1, P3, S2, S3, S5a, S5b, S6, S6b), **4 empty (B, E, PPLx3, PPLx6)** and 1 contained (S4, hamstrings inside a lower-body finding led by calves; not a direct hit). Of the four empty passes only B is backed by real coaches; E, PPLx3 and PPLx6 expect `none` on an audit-derived line.
+- **Fail (7):** A, C, S1, S7, S8, P2, P2-1x. See the handoff for each.
+
+### Deviation from the brief
+
+The brief gave the parity before Part 1 as 6 (and the first target as 7). The measured baseline was 16, Session B's result; 6 was Session B's pre-change score. The brief's later checkpoints (18 after PPLx3) fit 16. Actual: 16, 17 after B, 18 after PPLx3.
+
 ## Proposed for Session B (each changes calibration; shipped, see "Shipped in Session B")
 
 **B1. Rank the headline by deficit.** `biggestOpportunity` is the first axis with the highest leverage, in axis order, and production loads muscle groups sorted by name, so among tied Lows the headline is alphabetical ("biceps" for Starting Strength, which has no pulling at all; "calves" for a program with no leg day). Change: among equal leverage, rank by distance below the band's lower bound, then by a configured muscle priority (Tier 3).
@@ -114,7 +156,7 @@ Re-running the calibration test against the regenerated baseline reports "no cha
 
 ## Not in this ARCH
 
-`AnalysisContext` has no effect yet. Making `daysPerWeek` matter (the same PPL reads STRONG as 6 days and NEEDS WORK as 3, because the listed days are the week), novice bands (a `[SCIENTIFIC INPUT REQUIRED]` item), and attaching sources to the Adequate-band claim are later decisions.
+`AnalysisContext` is read only for `daysPerWeek` (Session C1: the same PPL used to read STRONG as 6 days and NEEDS WORK as 3, because the listed days were the week; with `daysPerWeek` it no longer does). `minutesPerSession`, training age and equipment are read by nothing. Novice bands (a `[SCIENTIFIC INPUT REQUIRED]` item) and attaching sources to the Adequate-band claim are later decisions.
 
 ## Freeze check
 

@@ -40,9 +40,9 @@ describe("matcher rules", () => {
   });
 
   it("a substantive expectation FAILS on an empty headline (zero findings is not a free pass)", () => {
-    const b = EXPECTED_HEADLINES.find((e) => e.id === "B");
-    expect(b?.match.some((m) => m.subject === "none")).toBe(false);
-    expect(matchHeadline(b?.match ?? [], EMPTY).pass).toBe(false);
+    const a = EXPECTED_HEADLINES.find((e) => e.id === "A");
+    expect(a?.match.some((m) => m.subject === "none")).toBe(false);
+    expect(matchHeadline(a?.match ?? [], EMPTY).pass).toBe(false);
   });
 
   it("expected `low` accepts a computed `missing`; `missing` and `high` need an exact direction", () => {
@@ -99,7 +99,8 @@ describe("expected headlines", () => {
   it("every entry has a headline, a note, a rationale and a non-empty match", () => {
     for (const e of EXPECTED_HEADLINES) {
       expect(e.expectedHeadline.length, e.id).toBeGreaterThan(0);
-      expect(e.note, e.id).toMatch(/awaiting real coach review/);
+      // Audit-authored entries say so; an entry a real coach review has settled says that instead.
+      expect(e.note, e.id).toMatch(/awaiting real coach review|^Real coach review/);
       expect(e.rationale.length, e.id).toBeGreaterThan(0);
       expect(e.match.length, e.id).toBeGreaterThan(0);
     }
@@ -112,9 +113,28 @@ describe("expected headlines", () => {
     }
   });
 
-  it("only E, S7, PPLx3 and PPLx6 expect `none`", () => {
+  it("only B, E, S7, PPLx3 and PPLx6 expect `none`", () => {
     const none = EXPECTED_HEADLINES.filter((e) => e.match.some((m) => m.subject === "none")).map((e) => e.id);
-    expect(none.sort()).toEqual(["E", "PPLx3", "PPLx6", "S7"]);
+    expect(none.sort()).toEqual(["B", "E", "PPLx3", "PPLx6", "S7"]);
+  });
+
+  it("B is settled by real coach review: five of five said it is fine, so it expects `none`", () => {
+    const b = EXPECTED_HEADLINES.find((e) => e.id === "B");
+    expect(b?.match).toEqual([{ subject: "none", direction: "none" }]);
+    expect(b?.note).toMatch(/^Real coach review \(5\/5\)/);
+  });
+
+  it("goalDependent marks exactly the contour cases real coaches split on (S2, S3, S6, S6b, P1)", () => {
+    const flagged = EXPECTED_HEADLINES.filter((e) => e.goalDependent).map((e) => e.id);
+    expect(flagged.sort()).toEqual(["P1", "S2", "S3", "S6", "S6b"]);
+    for (const e of EXPECTED_HEADLINES.filter((x) => x.goalDependent)) {
+      expect(e.rationale, e.id).toMatch(/3 of 5 real coaches agreed.*2 of 5 said 'fine, optional accessory work'/);
+    }
+  });
+
+  it("only PPLx3 supplies context, and it supplies the real week", () => {
+    const withContext = EXPECTED_HEADLINES.filter((e) => e.context !== undefined).map((e) => [e.id, e.context]);
+    expect(withContext).toEqual([["PPLx3", { daysPerWeek: 6 }]]);
   });
 });
 
@@ -129,8 +149,12 @@ describe("coach parity ratchet", () => {
   // After B2 (consolidate, de-duplicate, surface whole-pattern gaps): + F1, F2, S4, S5a, S5b.
   //   S4 passes as "contained": hamstrings sits inside a lower-body finding led by calves. It is not a direct hit.
   // After B3 (near-failure check carried to the headline): + G, J.
+  // Session C1, Part 1 (real coach review: 5/5 say B is fine, so expected.ts now says `none`): + B. No matcher or
+  //   engine change; the engine already said nothing about B.
+  // Session C1, Part 2 (daysPerWeek is read: PPLx3 supplies 6 and the engine reads its 3 listed days as a cycle run
+  //   twice, which is PPLx6's week): + PPLx3. No threshold moved.
   const PINNED_PASSING = [
-    "D", "E", "F1", "F2", "G", "J", "P1", "P3", "PPLx6", "S2", "S3", "S4", "S5a", "S5b", "S6", "S6b",
+    "B", "D", "E", "F1", "F2", "G", "J", "P1", "P3", "PPLx3", "PPLx6", "S2", "S3", "S4", "S5a", "S5b", "S6", "S6b",
   ];
   const PINNED_CONTAINED = ["S4"];
 

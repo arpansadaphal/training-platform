@@ -12,7 +12,7 @@ import { axisSentence } from "../../src/copy/axisSentence";
 import { HYPERTROPHY_CONFIG, hypertrophyProfile } from "../../src/goal-profiles/hypertrophy";
 import { scopeReferenceDataToGoal } from "../../src/reference/scopeReferenceData";
 import type { ProgramStructure, LoadScheme } from "../../src/types";
-import type { ExerciseReferenceData } from "../../src/analysis/types";
+import type { AnalysisContext, ExerciseReferenceData } from "../../src/analysis/types";
 import type { AssessedAxis } from "../../src/assessment/types";
 
 // ---- seed extraction (text slice of packages/db/prisma/seed.ts, evaluated as a JS literal) ----
@@ -61,9 +61,12 @@ export function build(p: Program, defaultRpe: number | null = 8): ProgramStructu
 const n1 = (x: number) => String(Math.round(x * 10) / 10);
 const label = (a: { axisType: string; scopeKey: string | null }) => (a.scopeKey ? `${a.axisType}:${a.scopeKey}` : a.axisType);
 
-export function run(p: Program, opts: { defaultRpe?: number | null; quiet?: boolean } = {}) {
+export function run(p: Program, opts: { defaultRpe?: number | null; quiet?: boolean; context?: AnalysisContext } = {}) {
   const structure = build(p, opts.defaultRpe === undefined ? 8 : opts.defaultRpe);
-  const analysis = computeAnalysis(structure, REF, HYPERTROPHY_CONFIG, { now: () => new Date("2026-01-01T00:00:00Z") });
+  const analysis = computeAnalysis(structure, REF, HYPERTROPHY_CONFIG, {
+    now: () => new Date("2026-01-01T00:00:00Z"),
+    ...(opts.context === undefined ? {} : { context: opts.context }),
+  });
   const result = computeAssessment(analysis, HYPERTROPHY_CONFIG, { goalId: "g" });
   const a = result.assessment;
   const fit = provisionalFitBand(result);

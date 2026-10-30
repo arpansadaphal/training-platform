@@ -9,9 +9,13 @@
 //   - a remedy ("add X") is listed only where the audit itself said the engine's finding for X was right (S2, S6)
 //     or where the problem is stated as the remedy's target (P3);
 //   - where the coach's diagnosis is program-level (A, C, P2) the remedies are not listed;
-//   - `none` means the coach found nothing to fix. It passes only on an empty engine headline (E, PPLx6), and it
-//     is the only way a program with zero findings can pass.
+//   - `none` means the coach found nothing to fix. It passes only on an empty engine headline, and it is the only
+//     way a program with zero findings can pass.
+// Real coach review (2026-10-30, five coaches, 25 programs) has landed for two things only: B (5/5 say it is fine, so
+// its entry is a `none` and its note says so) and the five goal-dependent entries (see `goalDependent`). Every other
+// entry is still audit-authored.
 // `rationale` says why each match reads the way it does, so a reviewer can disagree with one line at a time.
+import type { AnalysisContext } from "../../src/analysis/types";
 import type { Program } from "./lib";
 import { PROGRAMS_BY_ID } from "./programs";
 import type { ExpectedMatch } from "./matcher";
@@ -24,6 +28,14 @@ export interface ExpectedHeadline {
   readonly note: string;
   readonly match: readonly ExpectedMatch[];
   readonly rationale: string;
+  /**
+   * True where real coaches split on whether the finding matters, and the split tracks the lifter's goal (whether
+   * it cares about aesthetic priorities such as calves and delts), not the program. Annotation only: it never
+   * changes scoring. It marks contour cases that wait for a goal selector (Session C2).
+   */
+  readonly goalDependent: boolean;
+  /** What the lifter tells the checker beyond the program (days per week, minutes per session). Absent: none. */
+  readonly context?: AnalysisContext;
 }
 
 const AUDIT = "Audit-authored; awaiting real coach review";
@@ -46,8 +58,22 @@ function entry(
     note,
     match,
     rationale,
+    goalDependent: false,
   };
 }
+
+const GOAL_DEPENDENT_RATIONALE =
+  "Goal-dependent: 3 of 5 real coaches agreed with the engine's finding and 2 of 5 said 'fine, optional accessory work'; the split tracks whether the lifter's goal cares about aesthetic priorities (calves, delts).";
+
+/** Marks an entry as a contour case: real coaches split on it by goal. Scoring is untouched. */
+const goalDependent = (e: ExpectedHeadline): ExpectedHeadline => ({
+  ...e,
+  goalDependent: true,
+  rationale: `${e.rationale} ${GOAL_DEPENDENT_RATIONALE}`,
+});
+
+/** The same lifter told the checker something beyond the program, as /check will ask. */
+const withContext = (e: ExpectedHeadline, context: AnalysisContext): ExpectedHeadline => ({ ...e, context });
 
 const derived = (basis: string): string => `Derived (the audit has no line for this run): ${basis}. ${AUDIT}`;
 
@@ -60,9 +86,10 @@ export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
   ),
   entry(
     "B",
-    "Good. Saturday's 9-set arm day is the least valuable session; if you miss one, miss that. Side delts at 7.5 is your thinnest muscle.",
-    [m("muscle:side delts", "low"), m("region:arms", "high")],
-    "Two problems are stated. Side delts 7.5 sits inside the Adequate band and the arm-day remark is about one session, so the engine has no finding for either: B fails by design.",
+    "Good. Nothing to fix.",
+    [m("none", "none")],
+    "All five coaches called it fine. The audit had invented two minor findings (a 9-set arm day, side delts at 7.5) that no coach considers a problem; side delts 7.5 sits inside the Adequate band. A purely positive line, like E: it passes only on an empty engine headline.",
+    "Real coach review (5/5) is unanimous that this program is fine. The audit was stricter than real coaches. B passes honestly.",
   ),
   entry(
     "C",
@@ -113,17 +140,21 @@ export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
     [m("muscle:biceps", "high")],
     "The audit's 'arms out-train your legs' half was retracted in Session A (counted once per set: arms 28, legs 35), so only the curl volume is listed. Biceps at 24.5 is band High, which is information-only, so the engine has no finding for it.",
   ),
-  entry(
-    "S2",
-    "Solid. Add 3 sets of face pulls to each upper day. Chest and side delts are thin for an intermediate.",
-    [m("muscle:rear delts", "low"), m("muscle:chest", "low"), m("muscle:side delts", "low")],
-    "Rear delts is listed because the audit said of the engine's one finding: 'the finding is right'.",
+  goalDependent(
+    entry(
+      "S2",
+      "Solid. Add 3 sets of face pulls to each upper day. Chest and side delts are thin for an intermediate.",
+      [m("muscle:rear delts", "low"), m("muscle:chest", "low"), m("muscle:side delts", "low")],
+      "Rear delts is listed because the audit said of the engine's one finding: 'the finding is right'.",
+    ),
   ),
-  entry(
-    "S3",
-    "Lean 40-minute sessions. No calves, thin delts.",
-    [m("muscle:calves", "missing"), m("muscle:side delts", "low"), m("muscle:rear delts", "low")],
-    "The audit: 'mostly agrees'.",
+  goalDependent(
+    entry(
+      "S3",
+      "Lean 40-minute sessions. No calves, thin delts.",
+      [m("muscle:calves", "missing"), m("muscle:side delts", "low"), m("muscle:rear delts", "low")],
+      "The audit: 'mostly agrees'.",
+    ),
   ),
   entry(
     "S4",
@@ -144,18 +175,22 @@ export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
     "Same program as S5a with the real week (A, B, A).",
     derived("S5's line applies to the one-real-week entry too"),
   ),
-  entry(
-    "S6",
-    "The assistance work is thin: add laterals, rear delts and calves.",
-    [m("muscle:side delts", "low"), m("muscle:rear delts", "low"), m("muscle:calves", "missing")],
-    "The audit: 'the specifics are good', so the three muscles are the findings the engine should lead with.",
+  goalDependent(
+    entry(
+      "S6",
+      "The assistance work is thin: add laterals, rear delts and calves.",
+      [m("muscle:side delts", "low"), m("muscle:rear delts", "low"), m("muscle:calves", "missing")],
+      "The audit: 'the specifics are good', so the three muscles are the findings the engine should lead with.",
+    ),
   ),
-  entry(
-    "S6b",
-    "The assistance work is thin: add laterals, rear delts and calves.",
-    [m("muscle:side delts", "low"), m("muscle:rear delts", "low"), m("muscle:calves", "missing")],
-    "Same program as S6 with the BBB sets at RPE 6.",
-    derived("S6's line applies to the RPE-6 variant"),
+  goalDependent(
+    entry(
+      "S6b",
+      "The assistance work is thin: add laterals, rear delts and calves.",
+      [m("muscle:side delts", "low"), m("muscle:rear delts", "low"), m("muscle:calves", "missing")],
+      "Same program as S6 with the BBB sets at RPE 6.",
+      derived("S6's line applies to the RPE-6 variant"),
+    ),
   ),
   entry(
     "S7",
@@ -169,11 +204,13 @@ export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
     [m("push-pull", "high"), m("pattern:vertical-pull", "missing")],
     "The audit: 'it has all the pieces but never the pattern', so the per-muscle lows are not listed.",
   ),
-  entry(
-    "P1",
-    "Good structure. Thin delts and calves.",
-    [m("muscle:side delts", "low"), m("muscle:rear delts", "low"), m("muscle:calves", "low")],
-    "The audit's coach line; the 'where are you against your old numbers' question needs a history input.",
+  goalDependent(
+    entry(
+      "P1",
+      "Good structure. Thin delts and calves.",
+      [m("muscle:side delts", "low"), m("muscle:rear delts", "low"), m("muscle:calves", "low")],
+      "The audit's coach line; the 'where are you against your old numbers' question needs a history input.",
+    ),
   ),
   entry(
     "P2",
@@ -194,12 +231,15 @@ export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
     [m("pattern:hinge", "missing"), m("muscle:hamstrings", "missing"), m("push-pull", "high")],
     "The audit: 'the one thing that matters is buried'. The pattern and the muscle are stated together.",
   ),
-  entry(
-    "PPLx3",
-    "Solid: nothing to fix (a PPL run twice a week).",
-    [m("none", "none")],
-    "The title says the user runs it twice a week, so a coach reads the 6-day week. The engine reads 3 listed days as the week: a missing input (daysPerWeek), the case the probe exists to show.",
-    derived("same program as PPLx6; the audit gives only the engine's 3-day verdict (NEEDS WORK, 5 things)"),
+  withContext(
+    entry(
+      "PPLx3",
+      "Solid: nothing to fix (a PPL run twice a week).",
+      [m("none", "none")],
+      "The title says the user runs it twice a week, so a coach reads the 6-day week. Read with daysPerWeek 6 (ARCH-063, Session C1), the engine reads the 3 listed days as a cycle run twice, as the lifter does. Without it the engine reads 3 days as the week: the case the probe exists to show.",
+      derived("same program as PPLx6; the audit gives only the engine's 3-day verdict (NEEDS WORK, 5 things)"),
+    ),
+    { daysPerWeek: 6 },
   ),
   entry(
     "PPLx6",
