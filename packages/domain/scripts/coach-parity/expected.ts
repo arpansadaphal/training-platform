@@ -145,7 +145,7 @@ export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
       "S2",
       "Solid. Add 3 sets of face pulls to each upper day. Chest and side delts are thin for an intermediate.",
       [m("muscle:rear delts", "low"), m("muscle:chest", "low"), m("muscle:side delts", "low")],
-      "Rear delts is listed because the audit said of the engine's one finding: 'the finding is right'.",
+      "Rear delts is listed because the audit said of the engine's one finding: 'the finding is right'. The 2026-10-31 five-coach review split S2 as 1 unconditional agree / 2 conditional-on-goal / 2 said fine. Marked goalDependent: the finding is real; whether it warrants a headline depends on the lifter's goal.",
     ),
   ),
   goalDependent(
