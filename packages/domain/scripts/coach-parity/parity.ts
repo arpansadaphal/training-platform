@@ -1,4 +1,4 @@
-// Coach-parity score: runs the real engine on the 25 expected programs, in production muscle order (name
+// Coach-parity score: runs the real engine on the 24 expected programs, in production muscle order (name
 // ascending, as listMuscleGroups returns), and compares each engine headline with the coach's.
 //
 //   pnpm coach-parity:score

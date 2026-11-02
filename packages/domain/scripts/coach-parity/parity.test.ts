@@ -124,9 +124,10 @@ describe("matcher: program-level findings", () => {
 });
 
 describe("expected headlines", () => {
-  it("covers exactly the 25 programs the audit scored", () => {
-    expect(EXPECTED_HEADLINES).toHaveLength(25);
-    expect(new Set(EXPECTED_HEADLINES.map((e) => e.id)).size).toBe(25);
+  it("covers exactly the 24 programs scored (the audit's 25 less P2, which timeBudget.test.ts covers)", () => {
+    expect(EXPECTED_HEADLINES).toHaveLength(24);
+    expect(new Set(EXPECTED_HEADLINES.map((e) => e.id)).size).toBe(24);
+    expect(EXPECTED_HEADLINES.map((e) => e.id)).not.toContain("P2");
     expect(EXPECTED_HEADLINES.map((e) => e.id)).not.toContain("P2-noRPE");
   });
 
@@ -173,12 +174,9 @@ describe("expected headlines", () => {
     expect(s1?.rationale).toMatch(/INFORMATIONAL level below MINOR/);
   });
 
-  it("only P2 and PPLx3 supply context: P2 its 45-minute budget, PPLx3 the real week", () => {
+  it("only PPLx3 supplies context, and it supplies the real week", () => {
     const withContext = EXPECTED_HEADLINES.filter((e) => e.context !== undefined).map((e) => [e.id, e.context]);
-    expect(withContext).toEqual([
-      ["P2", { minutesPerSession: 45 }],
-      ["PPLx3", { daysPerWeek: 6 }],
-    ]);
+    expect(withContext).toEqual([["PPLx3", { daysPerWeek: 6 }]]);
   });
 });
 
@@ -203,19 +201,19 @@ describe("coach parity ratchet", () => {
   // Session D (engine 0.6.0, PROGRAM_STRUCTURE): + A (whole-program volume: 12 sets against a floor of 40) and
   //   + P2-1x (attendance: one training day; passes as "contained", because attendance CONTAINS the program-level
   //   under-dose it absorbs). The brief expected 22-23; the rules it specified can move these two (see the handoff):
-  //   S1 is E4-blocked, S8's 20:10 is exactly 2.0 (not above 2) and its pull side is 10 (not above 10), P2 is
-  //   `time-budget/none`, which "no finding" cannot produce, and S7 needs training age.
+  //   S1 is E4-blocked, S8's push:pull fires (20:10, at least 2 to 1) but is LOW leverage, so its headline is still the HIGH
+  //   lower-body finding, and S7 needs training age. P2 left the scored set (see expected.ts and timeBudget.test.ts).
   const PINNED_PASSING = [
     "A", "B", "C", "D", "E", "F1", "F2", "G", "J", "P1", "P2-1x", "P3", "PPLx3", "PPLx6", "S2", "S3", "S4", "S5a", "S5b",
     "S6", "S6b",
   ];
   const PINNED_CONTAINED = ["P2-1x", "S4"];
-  const PINNED_FAILING = ["P2", "S1", "S7", "S8"];
+  const PINNED_FAILING = ["S1", "S7", "S8"];
 
   it("the passing set is exactly the pinned set", () => {
     expect(passing()).toEqual(PINNED_PASSING);
     expect(score.passed).toBe(PINNED_PASSING.length);
-    expect(score.total).toBe(25);
+    expect(score.total).toBe(24);
   });
 
   it("the failing set is exactly the pinned set, and each failure has a reason that is not the engine's fault", () => {
