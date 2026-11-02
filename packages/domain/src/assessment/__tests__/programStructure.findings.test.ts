@@ -216,3 +216,48 @@ describe("copy and actions", () => {
     expect(actionTemplateFor(programAxis(fine, "total-volume"), "HYPERTROPHY")).toBeNull();
   });
 });
+
+describe("highVolume: the informational 'What's trending high' block", () => {
+  // Bench 24 sets (chest High), row 36 (lats Excessive), a squat day to keep the rest quiet.
+  const a = assess(program(day("A", rx("Barbell Bench Press", 24), rx("Barbell Row", 36)), day("B", rx("Back Squat", 12))));
+
+  it("lists High and Excessive muscles with their band name and set count, most sets first", () => {
+    const rows = (a.highVolume ?? []).filter((e) => e.muscle === "chest" || e.muscle === "lats");
+    expect(rows).toEqual([
+      { muscle: "lats", sets: 36, band: "Excessive" },
+      { muscle: "chest", sets: 24, band: "High" },
+    ]);
+    expect(a.highVolume!.map((e) => e.sets)).toEqual([...a.highVolume!.map((e) => e.sets)].sort((x, y) => y - x));
+  });
+
+  it("is a fact, not a finding: it adds no leverage, no finding and no Fit input", () => {
+    expect(keys(a).some((k) => k === "VOLUME:chest")).toBe(false); // a High band is severity NONE
+    const without = { ...a, highVolume: undefined };
+    expect(projectFitBand(without as Assessment).band).toBe(projectFitBand(a).band);
+  });
+
+  it("an Excessive muscle is both listed and a finding of its own", () => {
+    expect(keys(a)).toContain("VOLUME:lats");
+  });
+
+  it("is absent (not an empty list) when nothing is High or Excessive", () => {
+    const quiet = assess(program(day("A", rx("Barbell Bench Press", 12)), day("B", rx("Barbell Row", 12))));
+    expect("highVolume" in quiet).toBe(false);
+  });
+
+  it("copy: one line per muscle, in the founder's format, and clean", async () => {
+    const { highVolumeLines } = await import("../../copy/highVolumeLines");
+    const lines = highVolumeLines([
+      { muscle: "biceps", sets: 24.5, band: "High" },
+      { muscle: "hamstrings", sets: 24, band: "High" },
+      { muscle: "lats", sets: 36, band: "Excessive" },
+    ]);
+    expect(lines).toEqual([
+      "Biceps: 24.5 hard sets/week (High)",
+      "Hamstrings: 24 hard sets/week (High)",
+      "Lats: 36 hard sets/week (Excessive)",
+    ]);
+    assertCleanCopy(lines);
+    expect(highVolumeLines(undefined)).toEqual([]);
+  });
+});

@@ -59,6 +59,7 @@ import type {
   AssessmentFinding,
   AssessmentResult,
   ComputeAssessmentOptions,
+  HighVolumeEntry,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -321,6 +322,21 @@ function buildOverallSummary(
 }
 
 // ---------------------------------------------------------------------------
+// Informational: what is trending high (ARCH-063 / Session D)
+// ---------------------------------------------------------------------------
+
+/** VOLUME axes in the High or Excessive band, most sets first (ties by name). Reads the bands, creates none. */
+function highVolumeOf(axes: readonly AssessedAxis[]): HighVolumeEntry[] {
+  const out: HighVolumeEntry[] = [];
+  for (const axis of axes) {
+    if (axis.axisType !== "VOLUME" || axis.scopeKey === null || typeof axis.metricValue !== "number") continue;
+    const band = axis.status.band;
+    if (band === "High" || band === "Excessive") out.push({ muscle: axis.scopeKey, sets: axis.metricValue, band });
+  }
+  return out.sort((a, b) => b.sets - a.sets || a.muscle.localeCompare(b.muscle));
+}
+
+// ---------------------------------------------------------------------------
 // The entry point
 // ---------------------------------------------------------------------------
 
@@ -349,6 +365,8 @@ export function computeAssessment(
         headlineLabel: null,
       };
 
+  const highVolume = rollUpSucceeded ? highVolumeOf(rollUp.assessedAxes) : [];
+
   const inner: Assessment = {
     programVersionId: analysis.programVersionId,
     goalId: options.goalId,
@@ -368,6 +386,7 @@ export function computeAssessment(
     fitScoreProjection: config.fitScoreProjection,
     // Informational; copied through untouched. Nothing above reads it.
     ...(analysis.ratios ? { ratios: analysis.ratios } : {}),
+    ...(highVolume.length > 0 ? { highVolume } : {}),
   };
 
   if (overallValidated) {

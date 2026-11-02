@@ -173,6 +173,14 @@ test("Builder: build a draft, see the unvalidated Assessment state, commit a ver
   await expect(assessmentPanel.getByText(/Tier 3: a coaching comparison/)).toBeVisible();
   await expect(assessmentPanel.getByText("Progression & effort")).toHaveCount(0);
 
+  // AUDIT TRAIL (ARCH-063 / Session D, engine 0.6.0): a one-day draft is fewer than two training days, so the
+  // PROGRAM_STRUCTURE attendance finding leads, with its own action. The assertions above still hold because
+  // attendance absorbs only the volume findings; the structural ones (no lower-body training) survive.
+  await expect(
+    assessmentPanel.getByText("One training session a week cannot cover a full week's volume."),
+  ).toBeVisible();
+  await expect(assessmentPanel.locator('[data-root-cause="programStructure:add-session"]')).toBeVisible();
+
   // ── Commit, and verify the version on the program page ────────────────
   await page.getByRole("button", { name: "Commit", exact: true }).click();
 
@@ -189,4 +197,41 @@ test("Builder: build a draft, see the unvalidated Assessment state, commit a ver
   });
   await expect(versionsSection.getByText("Version 1")).toBeVisible();
   await expect(versionsSection.getByText("(active)")).toBeVisible();
+});
+
+test("Builder: a High-volume muscle shows under 'What's trending high', and it fits at 375px", async ({ page }) => {
+  test.setTimeout(120_000);
+
+  await signUpFreshUser(page);
+  const programHref = await createProgram(page, `E2E High ${Date.now()}`);
+  await page.goto(programHref);
+  await page.getByRole("link", { name: "Open Builder" }).click();
+  await expect(page).toHaveURL(/\/app\/programs\/[^/]+\/build$/);
+
+  await page.getByLabel("New draft label").fill("High volume");
+  await page.getByRole("button", { name: "Create draft" }).click();
+  await page.getByRole("button", { name: "+ Add workout day" }).click();
+  await page.getByLabel("Choose an exercise").selectOption({ index: 1 });
+  await page.getByRole("button", { name: "Add exercise" }).click();
+
+  // 24 sets of one exercise puts its primary muscle in the High band (20 up to 30).
+  await page.getByLabel("Sets", { exact: true }).first().fill("24");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  const trending = page.locator("[data-trending-high]");
+  await expect(trending.getByRole("heading", { name: "What's trending high" })).toBeVisible();
+  await expect(trending.getByRole("listitem").first()).toContainText(/: [\d.]+ hard sets\/week \((High|Excessive)\)/);
+
+  // The section fits the phone viewport: its box and its lines do not run past 375px or scroll sideways.
+  const fit = await trending.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    const lines = Array.from(el.querySelectorAll("li")).map((li) => li.scrollWidth - li.clientWidth);
+    return { right: box.right, overflow: Math.max(...lines, 0), vw: window.innerWidth };
+  });
+  expect(fit.vw).toBe(375);
+  expect(fit.right).toBeLessThanOrEqual(375);
+  expect(fit.overflow).toBeLessThanOrEqual(0);
+
+  if (process.env.A3A_SHOTS) await trending.screenshot({ path: `${process.env.A3A_SHOTS}/trending-high-375.png` });
 });
