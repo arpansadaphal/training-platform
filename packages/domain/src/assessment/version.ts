@@ -15,5 +15,13 @@
 //          a structure run more or fewer times than once a week is a repeating cycle. A structural read, not a
 //          threshold. The output for the same input is identical whenever no context is supplied or daysPerWeek equals
 //          the listed days, so no calibration program (none supplies context) changes.
+//   0.6.0  ARCH-063 Session D: a PROGRAM_STRUCTURE axis (opt-in via config.programStructure) with five scopes, each a roll-up
+//          axis so Fit reads it (invariant 8): attendance (fewer than two training days), total-volume (fewer than 40
+//          credited hard sets a week), session-size (a session of more than 30 sets), push-pull (more than 2 to 1 with
+//          more than 10 sets each side) and time-budget (only with AnalysisContext.minutesPerSession). Attendance and
+//          total-volume absorb the per-muscle VOLUME Lows; structural findings survive. Assessment gains an optional
+//          `highVolume` (High and Excessive muscles, informational). No existing band, severity, weight or threshold
+//          moved, and no Fit band moved on the calibration programs. biggestOpportunity, attentionAreas, actions and
+//          findings change for the same input on programs a new scope fires on (A, C, D).
 // packages/api/src/services/commit.test.ts compares a snapshot's engineVersion with this constant, not a literal.
-export const ASSESSMENT_ENGINE_VERSION = "0.5.1" as const;
+export const ASSESSMENT_ENGINE_VERSION = "0.6.0" as const;
