@@ -9,6 +9,16 @@ Two things to carry into the report, as decided with the founder:
 - **PROGRAM_STRUCTURE axis added despite the brief's "no new axes" rule; required by invariant 8.** A finding Fit cannot see would break "Fit is derived from the same leverage roll-up", so each rule is a roll-up axis.
 - **Attendance absorbs volume findings only.** Structural findings (region, pattern) survive; this preserves S5a/S5b's passes and reflects that "no pulling" is a different problem from "under-dosed".
 
+## Follow-up (same day): three fixes, engine 0.6.1
+
+Applied after the founder read this handoff. Where this section and an earlier one disagree, **this one is current**. **Parity is now 21/24** (P2 left the scored set; it was 21/25). No new rules, no new axes; the calibration baseline body is unchanged (not regenerated), and no Fit band moved.
+
+1. **S8's push:pull boundary (`> 2` became `>= 2`), and it was two boundaries, not one.** S8 counts press 20 and pull 10: exactly 2.0, and the pull side is exactly 10 sets, which the rule also required to be more than 10. Both are now inclusive (at least 2 to 1, at least 10 sets each side; `pushPull: { minRatio: 2, minSetsEachSide: 10 }`). The rule lives in `analysis/programStructure.ts` and `goal-profiles/hypertrophy.ts`, not `ratios.ts`. **The axis now fires on S8 and on no other harness program** (P3 is 27:18 = 1.5 in the engine's counts, not 2.0; nothing else is near), so no pass was lost. **S8 still fails**, and cannot pass this way: push-pull is MINOR severity, LOW leverage, so its headline is still the HIGH lower-body finding, and MINOR is below the MODERATE materiality bar, so the finding is not surfaced at all, not even as an attention area. Push:pull is therefore visible only through the existing "Cross-muscle balance" section and Fit never reads it. Making it surface is a severity decision (MODERATE would also count toward the Fit breadth floor), not a boundary fix; left for the founder.
+2. **P2 removed from the scored set (Option B).** Option A cannot work: P2's sessions are 11 sets, 27.5 minutes, inside a 45-minute budget, so there is no time-budget finding to match. P2 now has 1 action (it was 15 in the audit, 3 after Session B; the Session C1 "action cap" was never built and is not needed). `timeBudget.test.ts` covers it: no time-budget finding when the budget fits, at most 2 actions, and the finding, its sentence and its action when the budget is 20. The scored denominator is 24; the audit's 25 less P2. The `P2` entry and its `context` are gone from `expected.ts`; the P2 program stays in `programs.ts` for the print scripts.
+3. **The whole-program volume action names two additions** (`namedActions.ts`, `nameProgramVolumeAction`). A reads "Start with: Add 4 sets of Cable Lateral Raise on Mon → side delts 5 sets/week. Add 4 sets of Face Pull on Mon → rear delts 5 sets/week. The Adequate range starts at 6." It reuses `suggestForMuscle`, so each after-number is the engine's. It names the two **largest deficits among the muscles the program-level finding absorbed** (muscles a structural finding already explains keep their own action, so nothing is named twice), skipping a muscle with no eligible exercise. One finding, one action; headline and Fit unchanged. The after-number is per muscle, as in the other named actions, not a program total.
+
+The "Known limitations" bullet about lost named additions, and the S8 and P2 rows in the failure table above, are superseded by this section. **Version 0.6.1**; tests **81 files, 898** (domain 45 / 604).
+
 ## Repo state
 
 - **Branch:** `engine-output-session-d`, from `main` (`7bc0ebc`). **Not pushed.** No PR.
@@ -95,7 +105,7 @@ Push:pull, time-budget and attendance fire on no calibration program (balanced p
 
 ## Known limitations and consequences
 
-- **An under-dosed program loses its named additions.** A used to get "Add 4 sets of Hip Thrust on Mon → glutes 6 sets/week"; it now gets one program-level action ("Add hard sets across the program, starting with the muscles furthest below the 6-20 range"). That is the brief's design (one finding replaces the per-muscle Lows), but it costs actionability. The per-muscle numbers are still in the axis details.
+- **(Superseded by the follow-up: the action now names two additions.) An under-dosed program loses its named additions.** A used to get "Add 4 sets of Hip Thrust on Mon → glutes 6 sets/week"; it now gets one program-level action ("Add hard sets across the program, starting with the muscles furthest below the 6-20 range"). That is the brief's design (one finding replaces the per-muscle Lows), but it costs actionability. The per-muscle numbers are still in the axis details.
 - **One-day drafts in the Builder now read "One training session a week..."** as the headline. Correct per the rule, a visible change for an empty-ish draft.
 - **P2's real week (22 sets) is called under-dosed overall** while a coach says it fits. See the threshold flags.
 - **The cross-muscle ratios do not scale by `runsPerWeek`**, and push-pull reads them, so a cycle run twice reads half the press and pull totals (carried from C1; PPLx3's ratio is the same as PPLx6's either way).
