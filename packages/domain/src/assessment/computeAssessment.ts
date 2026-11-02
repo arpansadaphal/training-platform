@@ -103,7 +103,8 @@ const WEIGHT_RANK: Readonly<Record<Weight, number>> = {
 //   1. leverage, highest first                         (unchanged)
 //   2. axis weight, highest first                      (separates axis TYPES that tie on leverage; the weights
 //                                                       are already ordered by evidence strength)
-//   3. axis type, in the order the Analysis lists them (VOLUME, FREQUENCY, SELECTION, PROGRESSION, RECOVERY)
+//   3. axis type, in the order the Analysis lists them (VOLUME, FREQUENCY, SELECTION, PROGRESSION, RECOVERY,
+//                                                       PROGRAM_STRUCTURE); the attendance scope comes first of all
 //   4. deficit, largest first                          (only ever compared within one axis type, see below)
 //   5. the profile's `musclePriority`, earlier first   (Tier 3: breaks a deficit tie between muscles)
 //   6. original axis order
@@ -196,6 +197,9 @@ function classifyAxes(
   // problem. They remain visible in `allAssessedAxes` for the Fit Score.
   const eligible = new Set<AxisType>(config.strengthEligibleAxes);
   const typeOrder = new Map<AxisType, number>();
+  // ARCH-063 / Session D. Attendance outranks every other axis of equal leverage and weight: fewer than two training
+  // days is the limiter, whatever else is Low. (Every other PROGRAM_STRUCTURE scope ranks by its axis type, last.)
+  const ATTENDANCE_FIRST = -1;
   assessedAxes.forEach((axis, index) => {
     if (!typeOrder.has(axis.axisType)) typeOrder.set(axis.axisType, index);
   });
@@ -209,7 +213,10 @@ function classifyAxes(
       ranked.push({
         axis,
         index,
-        typeOrder: typeOrder.get(axis.axisType) ?? index,
+        typeOrder:
+          axis.axisType === "PROGRAM_STRUCTURE" && axis.scopeKey === "attendance"
+            ? ATTENDANCE_FIRST
+            : (typeOrder.get(axis.axisType) ?? index),
         deficit: deficitOf(axis, config),
         priority: priorityOf(axis, config),
       });

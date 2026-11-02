@@ -87,7 +87,11 @@ export type AxisType =
   | "FREQUENCY"
   | "EXERCISE_SELECTION_BALANCE"
   | "PROGRESSION_SOUNDNESS"
-  | "RECOVERY_COST";
+  | "RECOVERY_COST"
+  | "PROGRAM_STRUCTURE";
+
+/** The five axes every config must band. PROGRAM_STRUCTURE (ARCH-063 / Session D) is opt-in: see `programStructure`. */
+export type CoreAxisType = Exclude<AxisType, "PROGRAM_STRUCTURE">;
 
 /**
  * Discriminated union so callers cannot render a band name for an axis whose
@@ -110,6 +114,30 @@ export interface AxisFacts {
   readonly missingPatterns?: readonly MovementPattern[];
   /** PROGRESSION_SOUNDNESS: the checks that failed (ARCH-063 / B3), so a finding can say WHICH. */
   readonly failedChecks?: readonly FailedCheckFact[];
+  /** PROGRAM_STRUCTURE (ARCH-063 / Session D): the numbers a program-level finding states. */
+  readonly program?: ProgramFacts;
+}
+
+/**
+ * What a PROGRAM_STRUCTURE axis measured, so its sentence can state it. Every field is an engine output; the
+ * sentences add only the config's own thresholds. Which fields are set depends on the axis scope.
+ */
+export interface ProgramFacts {
+  /** total-volume: hard sets a week across the body, and the floor the program is read against. */
+  readonly totalSets?: number;
+  readonly floorSets?: number;
+  /** session-size and time-budget: the longest session, its credited sets and estimated minutes. */
+  readonly sessionName?: string;
+  readonly sessionSets?: number;
+  readonly sessionMinutes?: number;
+  /** time-budget: the budget the lifter stated and the sets that would bring the session inside it. */
+  readonly budgetMinutes?: number;
+  readonly trimSets?: number;
+  /** push-pull: the weekly hard-set totals the ratio was read from. */
+  readonly pushSets?: number;
+  readonly pullSets?: number;
+  /** attendance: training days a week. */
+  readonly trainingDays?: number;
 }
 
 /** One failed progression check: its id, the share it measured (0-1) when it measures one, and its detail line. */
@@ -395,8 +423,29 @@ export interface GoalProfileEvidence {
 // Goal-profile config (Phase 3 shape)
 // ---------------------------------------------------------------------------
 
+/**
+ * ARCH-063 / Session D. Thresholds for the program-level PROGRAM_STRUCTURE axis. All Tier 4: engine boundaries a
+ * product chose, not measurements. Absent on a config means the axis is not computed at all.
+ */
+export interface ProgramStructureConfig {
+  /** total-volume: fewer credited hard sets a week across the body than this is under-dosed. */
+  readonly minWeeklySets: number;
+  /** session-size: a session with MORE credited sets than this is long. */
+  readonly maxSessionSets: number;
+  /** Minutes one set takes, including rest. Turns sets into the minutes a session is said to take. */
+  readonly minutesPerSet: number;
+  /** time-budget: a session must exceed the lifter's stated budget by MORE than this many minutes to be flagged. */
+  readonly budgetSlackMinutes: number;
+  /** attendance: fewer training days a week than this cannot cover a week's volume. */
+  readonly minTrainingDays: number;
+  /** push-pull: pushing more than `maxRatio` times what you pull, with MORE than `minSetsEachSide` on each side. */
+  readonly pushPull: { readonly maxRatio: number; readonly minSetsEachSide: number };
+}
+
 export interface GoalProfileConfig {
   goalProfileKey: string;
+  /** ARCH-063 / Session D. Absent: no PROGRAM_STRUCTURE axis (every older config and fixture). */
+  readonly programStructure?: ProgramStructureConfig;
   /**
    * Keyed by `${axisType}:${scopeKey ?? ''}` per 05-analysis-engine.md.
    *
@@ -434,7 +483,7 @@ export interface GoalProfileConfig {
   readonly patternPhrases?: Readonly<Partial<Record<MovementPattern, PatternPhrase>>>;
 
   axisWeights: Record<string, AxisWeight>;
-  statusBands: Record<AxisType, AxisBandDefinition[]>;
+  statusBands: Record<CoreAxisType, AxisBandDefinition[]> & Partial<Record<AxisType, AxisBandDefinition[]>>;
   /** Per-axis status → severity. See ARCH-029. */
   severityMap: SeverityMap;
   /** The 12-cell Severity × Weight → Leverage table. See ARCH-029. */
@@ -475,10 +524,12 @@ export interface GoalProfileConfig {
 
 /**
  * What the engine may know about the lifter beyond the program. Passed in, never
- * stored. Read so far (ARCH-063, Session C1):
- *   - `daysPerWeek`: VOLUME and FREQUENCY, when it differs from the days listed (runsPerWeek.ts).
- * Omit it, or pass a value equal to the listed days, and every output is identical.
- * `trainingAgeMonths`, `equipment` and `minutesPerSession` are read by nothing yet.
+ * stored. Read so far (ARCH-063):
+ *   - `daysPerWeek`: VOLUME and FREQUENCY, when it differs from the days listed (runsPerWeek.ts, Session C1); and
+ *     the PROGRAM_STRUCTURE attendance check (Session D).
+ *   - `minutesPerSession`: the PROGRAM_STRUCTURE time-budget check (Session D). Absent: no such axis.
+ * Omit them, or pass a `daysPerWeek` equal to the listed days, and the older axes are identical.
+ * `trainingAgeMonths` and `equipment` are read by nothing yet.
  */
 export interface AnalysisContext {
   readonly daysPerWeek?: number;
@@ -489,7 +540,7 @@ export interface AnalysisContext {
 
 export interface ComputeAnalysisOptions {
   programVersionId?: string | null;
-  /** Optional lifter context. Only `daysPerWeek` is read today (VOLUME, FREQUENCY); see AnalysisContext. */
+  /** Optional lifter context. `daysPerWeek` and `minutesPerSession` are read; see AnalysisContext. */
   context?: AnalysisContext;
   /**
    * Injectable clock, used only so a determinism test can compare two runs

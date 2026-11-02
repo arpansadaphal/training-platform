@@ -7,6 +7,13 @@ import type { ExercisePrescriptionStructure, ProgramStructure } from "../../type
 import { computeAssessment } from "../computeAssessment";
 import { nameActions, type NamedAction, type NamedDaySuggestion } from "../namedActions";
 
+// AUDIT TRAIL (ARCH-063 / Session D, engine 0.6.0). These programs are a few dozen sets, under the PROGRAM_STRUCTURE
+// total-volume floor (40), so with the full profile one "under-dosed overall" finding absorbs their per-muscle Lows
+// and there is no per-muscle action left to name. What these tests guard (equipment, the engine's after-number, the
+// day, no exercise named twice, the template fallback) is independent of that rule, so they run against the same
+// profile without `programStructure`. The program-level action itself is tested in programStructure.test.ts.
+const PER_MUSCLE_CONFIG = { ...HYPERTROPHY_CONFIG, programStructure: undefined };
+
 // A small library with the real names, equipment and 1.0 / 0.5 involvement convention. Ids are the names.
 const MUSCLES = ["chest", "lats", "upper back", "side delts", "rear delts", "biceps", "triceps", "quads", "hamstrings", "glutes", "calves"];
 const EX: Array<[string, string, string, Record<string, number>]> = [
@@ -46,9 +53,9 @@ const DUMBBELLS_ONLY: ProgramStructure = {
 };
 
 function named(structure: ProgramStructure) {
-  const analysis = computeAnalysis(structure, REF, HYPERTROPHY_CONFIG, { now: () => new Date(0) });
-  const { assessment } = computeAssessment(analysis, HYPERTROPHY_CONFIG, { goalId: "g" });
-  return { assessment, actions: nameActions(assessment, structure, REF, HYPERTROPHY_CONFIG) };
+  const analysis = computeAnalysis(structure, REF, PER_MUSCLE_CONFIG, { now: () => new Date(0) });
+  const { assessment } = computeAssessment(analysis, PER_MUSCLE_CONFIG, { goalId: "g" });
+  return { assessment, actions: nameActions(assessment, structure, REF, PER_MUSCLE_CONFIG) };
 }
 
 // AUDIT TRAIL (ARCH-063 / B2, engine 0.5.0). Several tests below used to look an action up by one muscle's key
@@ -101,7 +108,7 @@ describe("nameActions: dumbbells only", () => {
     for (const a of actions) {
       for (const s of suggestionsOf(a)) {
         const target = structureWithAdded(DUMBBELLS_ONLY, s.workoutDayName, s.exerciseName, s.sets);
-        const analysis = computeAnalysis(target, REF, HYPERTROPHY_CONFIG, { now: () => new Date(0) });
+        const analysis = computeAnalysis(target, REF, PER_MUSCLE_CONFIG, { now: () => new Date(0) });
         const vol = analysis.axisResults.find((x) => x.axisType === "VOLUME" && x.scopeKey === s.muscle)!;
         expect(vol.metricValue).toBe(s.afterSets);
         expect(s.afterSets).toBeGreaterThan(s.beforeSets);
@@ -215,7 +222,7 @@ describe("nameActions: consolidated findings (ARCH-063 / B2)", () => {
 
   it("the new day's after-numbers equal an independent engine run over the structure with that day added", () => {
     const day = lower.newDay!;
-    const analysis = computeAnalysis(structureWithDay(NO_LEGS, day), REF, HYPERTROPHY_CONFIG, { now: () => new Date(0) });
+    const analysis = computeAnalysis(structureWithDay(NO_LEGS, day), REF, PER_MUSCLE_CONFIG, { now: () => new Date(0) });
     for (const { muscle, afterSets } of day.afterSets) {
       const vol = analysis.axisResults.find((x) => x.axisType === "VOLUME" && x.scopeKey === muscle)!;
       expect(vol.metricValue).toBe(afterSets);

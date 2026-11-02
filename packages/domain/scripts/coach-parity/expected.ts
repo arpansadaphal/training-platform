@@ -229,11 +229,14 @@ export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
       "The audit's coach line; the 'where are you against your old numbers' question needs a history input.",
     ),
   ),
-  entry(
-    "P2",
-    "For two 45-minute sessions this is close to what you can fit.",
-    [m("time-budget", "none")],
-    "Needs minutesPerSession. Superset, add a lateral raise and a leg curl are fixes, not listed.",
+  withContext(
+    entry(
+      "P2",
+      "For two 45-minute sessions this is close to what you can fit.",
+      [m("time-budget", "none")],
+      "Needs minutesPerSession, supplied here as the 45 minutes of the title (ARCH-063, Session D). Superset, add a lateral raise and a leg curl are fixes, not listed. Stays a FAIL: the sessions are 11 sets (27.5 minutes), so the time-budget check correctly says nothing, and an engine that says nothing cannot produce `time-budget/none`; the engine also calls the 22-set week under-dosed overall.",
+    ),
+    { minutesPerSession: 45 },
   ),
   entry(
     "P2-1x",

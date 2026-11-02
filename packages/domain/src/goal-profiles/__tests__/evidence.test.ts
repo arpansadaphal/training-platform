@@ -43,6 +43,7 @@ describe("HYPERTROPHY evidence block", () => {
       EXERCISE_SELECTION_BALANCE: "Tier 3–4",
       PROGRESSION_SOUNDNESS: "Tier 3–4",
       RECOVERY_COST: "Tier 4",
+      PROGRAM_STRUCTURE: "Tier 4",
     };
     for (const [axis, expected] of Object.entries(tiers) as [AxisType, string][]) {
       expect(formatTierRange(evidence!.axes[axis].thresholdTier)).toBe(expected);

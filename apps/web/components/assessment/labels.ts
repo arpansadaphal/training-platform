@@ -21,6 +21,16 @@ export const AXIS_NAMES: Readonly<Record<AxisType, string>> = {
   EXERCISE_SELECTION_BALANCE: "Exercise selection",
   PROGRESSION_SOUNDNESS: "Effort & rep ranges",
   RECOVERY_COST: "Recovery cost",
+  PROGRAM_STRUCTURE: "Program structure",
+};
+
+/** ARCH-063 / Session D. The title of each program-level check (a scope of PROGRAM_STRUCTURE). */
+const PROGRAM_SCOPE_NAMES: Readonly<Record<string, string>> = {
+  attendance: "Training days",
+  "total-volume": "Whole-program volume",
+  "session-size": "Session size",
+  "push-pull": "Push and pull",
+  "time-budget": "Time budget",
 };
 
 /** "rear delts" -> "Rear delts". Scope keys are muscle-group names since Phase 10.5. */
@@ -31,6 +41,7 @@ function scopeName(scopeKey: string): string {
 /** "Weekly volume · Chest", or "Recovery cost" for program-wide axes. */
 export function axisLabel(axis: Pick<AssessedAxis, "axisType" | "scopeKey">): string {
   const name = AXIS_NAMES[axis.axisType] ?? axis.axisType;
+  if (axis.axisType === "PROGRAM_STRUCTURE") return (axis.scopeKey && PROGRAM_SCOPE_NAMES[axis.scopeKey]) || name;
   return axis.scopeKey ? `${name} · ${scopeName(axis.scopeKey)}` : name;
 }
 
@@ -76,7 +87,7 @@ function plural(n: number, one: string, many: string): string {
 }
 
 /** The metric with its unit, e.g. "6 hard sets / week". */
-export function metricText(axis: Pick<AssessedAxis, "axisType" | "metricValue">): string {
+export function metricText(axis: Pick<AssessedAxis, "axisType" | "scopeKey" | "metricValue">): string {
   const value = axis.metricValue;
   if (typeof value !== "number") return String(value);
   switch (axis.axisType) {
@@ -94,6 +105,21 @@ export function metricText(axis: Pick<AssessedAxis, "axisType" | "metricValue">)
       return value === 0 ? "No issues" : plural(value, "issue", "issues");
     case "RECOVERY_COST":
       return `Recovery index ${num(value)}`;
+    case "PROGRAM_STRUCTURE":
+      switch (axis.scopeKey) {
+        case "attendance":
+          return plural(value, "training day", "training days") + " a week";
+        case "total-volume":
+          return `${num(value)} hard sets / week in total`;
+        case "session-size":
+          return `${num(value)} hard sets in the longest session`;
+        case "push-pull":
+          return value > 0 ? `Press to pull ${num(value)} to 1` : "No pulling or no pressing";
+        case "time-budget":
+          return `About ${Math.round(value)} minutes in the longest session`;
+        default:
+          return num(value);
+      }
     default:
       return num(value);
   }
@@ -106,7 +132,7 @@ function bounds(axisType: AxisType, band: string): { lo: number | null; hi: numb
 }
 
 /** One plain sentence on what the band means for this axis. Empty when there is nothing useful to say. */
-export function meaningText(axis: Pick<AssessedAxis, "axisType" | "status">): string {
+export function meaningText(axis: Pick<AssessedAxis, "axisType" | "scopeKey" | "status">): string {
   const band = axis.status.band;
   if (band === "N/A") return "Not assessed for this goal.";
   const { lo, hi } = bounds(axis.axisType, band);
@@ -140,6 +166,13 @@ export function meaningText(axis: Pick<AssessedAxis, "axisType" | "status">): st
       if (band === "Moderate") return "Moderate estimated fatigue across the week.";
       if (band === "High") return "Heavy estimated fatigue across the week. Worth watching.";
       if (band === "Excessive") return "Very heavy estimated fatigue across the week.";
+      return "";
+    case "PROGRAM_STRUCTURE":
+      if (band === "Single session") return "Fewer than two training days a week.";
+      if (band === "Under-dosed") return "Fewer hard sets across the body than the profile's whole-program floor.";
+      if (band === "Long session") return "More hard sets in one session than the profile's session limit.";
+      if (band === "Push-heavy") return "Pressing sets are more than twice the pulling sets. Informational.";
+      if (band === "Over budget") return "The longest session runs past the time you said you have.";
       return "";
     default:
       return "";
