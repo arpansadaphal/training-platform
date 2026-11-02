@@ -438,8 +438,8 @@ export interface ProgramStructureConfig {
   readonly budgetSlackMinutes: number;
   /** attendance: fewer training days a week than this cannot cover a week's volume. */
   readonly minTrainingDays: number;
-  /** push-pull: pushing more than `maxRatio` times what you pull, with MORE than `minSetsEachSide` on each side. */
-  readonly pushPull: { readonly maxRatio: number; readonly minSetsEachSide: number };
+  /** push-pull: pushing AT LEAST `minRatio` times what you pull, with AT LEAST `minSetsEachSide` on each side. */
+  readonly pushPull: { readonly minRatio: number; readonly minSetsEachSide: number };
 }
 
 export interface GoalProfileConfig {

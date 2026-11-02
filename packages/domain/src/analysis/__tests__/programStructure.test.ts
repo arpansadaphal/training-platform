@@ -122,7 +122,7 @@ describe("session-size: more than 30 credited sets in one session", () => {
   });
 });
 
-describe("push-pull: more than 2 to 1, with more than 10 sets on each side", () => {
+describe("push-pull: at least 2 to 1, with at least 10 sets on each side", () => {
   const pushPull = (push: number, pull: number): ProgramStructure =>
     program(day("A", rx("Barbell Bench Press", push), rx("Barbell Row", pull)));
 
@@ -130,14 +130,19 @@ describe("push-pull: more than 2 to 1, with more than 10 sets on each side", () 
     expect(band(axes(pushPull(23, 11)), "push-pull")).toBe("Push-heavy");
   });
 
-  it("does not fire at exactly 2 to 1 (S8: 20 against 10)", () => {
-    expect(band(axes(pushPull(22, 11)), "push-pull")).toBe("Within range");
-    expect(band(axes(pushPull(20, 10)), "push-pull")).toBe("Within range");
+  it("fires at exactly 2 to 1 and exactly 10 sets (S8: 20 against 10): a coach flags 'twice what you pull'", () => {
+    expect(band(axes(pushPull(20, 10)), "push-pull")).toBe("Push-heavy");
+    expect(band(axes(pushPull(22, 11)), "push-pull")).toBe("Push-heavy");
   });
 
-  it("does not fire when the pulling side is 10 or fewer, however lopsided", () => {
-    expect(band(axes(pushPull(30, 10)), "push-pull")).toBe("Within range");
-    expect(band(axes(pushPull(24, 10)), "push-pull")).toBe("Within range");
+  it("does not fire just under 2 to 1", () => {
+    expect(band(axes(pushPull(19, 10)), "push-pull")).toBe("Within range");
+    expect(band(axes(pushPull(21, 11)), "push-pull")).toBe("Within range");
+  });
+
+  it("does not fire when the pulling side is under 10 sets, however lopsided", () => {
+    expect(band(axes(pushPull(30, 9)), "push-pull")).toBe("Within range");
+    expect(band(axes(pushPull(24, 5)), "push-pull")).toBe("Within range");
   });
 
   it("does not fire when pulling is the larger side", () => {

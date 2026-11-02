@@ -262,7 +262,9 @@ const HYPERTROPHY_PROGRAM_STRUCTURE: ProgramStructureConfig = {
   minutesPerSet: 2.5,
   budgetSlackMinutes: 5,
   minTrainingDays: 2,
-  pushPull: { maxRatio: 2, minSetsEachSide: 10 },
+  // At least 2 to 1 with at least 10 sets each side. Inclusive: a coach flags "you press twice what you pull" at exactly
+  // twice, and S8 (20 press, 10 pull) sits on both boundaries.
+  pushPull: { minRatio: 2, minSetsEachSide: 10 },
 };
 
 // ---------------------------------------------------------------------------
@@ -538,7 +540,7 @@ const HYPERTROPHY_EVIDENCE: GoalProfileEvidence = {
       },
       {
         claim:
-          "Pressing more than twice what you pull, with more than 10 sets on each side, is noted. It is a coaching comparison whose importance is contested.",
+          "Pressing at least twice what you pull, with at least 10 sets on each side, is noted. It is a coaching comparison whose importance is contested.",
         tier: { from: 3, to: 4 },
         sources: [],
       },

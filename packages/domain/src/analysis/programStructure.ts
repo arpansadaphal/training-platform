@@ -6,7 +6,7 @@
 //   attendance    training days a week. Fewer than `minTrainingDays` cannot cover a week's volume.
 //   total-volume  credited hard sets a week across the whole body, against `minWeeklySets`.
 //   session-size  the longest session's credited sets, against `maxSessionSets`.
-//   push-pull     pushing more than `maxRatio` times what you pull, with more than `minSetsEachSide` on each side.
+//   push-pull     pushing at least `minRatio` times what you pull, with at least `minSetsEachSide` on each side.
 //   time-budget   the longest session's estimated minutes against the lifter's stated budget. Only computed when
 //                 `AnalysisContext.minutesPerSession` is supplied.
 //
@@ -104,9 +104,9 @@ export function computeProgramStructureAxes(
   const ratio = pp && pp.pullSets > 0 ? pp.pushSets / pp.pullSets : 0;
   const pushHeavy =
     pp !== null &&
-    pp.pushSets > rules.pushPull.minSetsEachSide &&
-    pp.pullSets > rules.pushPull.minSetsEachSide &&
-    ratio > rules.pushPull.maxRatio;
+    pp.pushSets >= rules.pushPull.minSetsEachSide &&
+    pp.pullSets >= rules.pushPull.minSetsEachSide &&
+    ratio >= rules.pushPull.minRatio;
   out.push(axis("push-pull", ratio, pushHeavy, pp ? { pushSets: pp.pushSets, pullSets: pp.pullSets } : undefined));
 
   const budget = context?.minutesPerSession;
