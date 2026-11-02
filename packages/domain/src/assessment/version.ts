@@ -23,5 +23,9 @@
 //          `highVolume` (High and Excessive muscles, informational). No existing band, severity, weight or threshold
 //          moved, and no Fit band moved on the calibration programs. biggestOpportunity, attentionAreas, actions and
 //          findings change for the same input on programs a new scope fires on (A, C, D).
+//   0.6.1  ARCH-063 Session D follow-up: the push-pull scope fires at AT LEAST 2 to 1 with AT LEAST 10 sets on each side
+//          (was more than 2 and more than 10), so exactly 2.0 with exactly 10 pulling sets (S8) now fires. Changes the
+//          Assessment for a program that sits on either boundary and nothing else; no calibration program does, so
+//          calibration-before.txt is unchanged. (The named whole-program volume action is a post-step and is not stored.)
 // packages/api/src/services/commit.test.ts compares a snapshot's engineVersion with this constant, not a literal.
-export const ASSESSMENT_ENGINE_VERSION = "0.6.0" as const;
+export const ASSESSMENT_ENGINE_VERSION = "0.6.1" as const;
