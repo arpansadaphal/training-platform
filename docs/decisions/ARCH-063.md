@@ -1,7 +1,7 @@
 # ARCH-063 — Engine output improvements (rank by deficit, consolidation, near-failure check)
 
 **Date:** 2026-10-28
-**Status:** Accepted (Session B shipped 2026-10-29; Session C1 shipped 2026-10-30). Session A (2026-10-28) shipped the five changes that leave calibration alone; Session B shipped the three that change it, with engine version 0.5.0, a regenerated calibration baseline and a coach-parity test; Session C1 corrected the parity table against a real coach review and made `daysPerWeek` matter (engine 0.5.1). Branches `coach-parity-session-a` and `coach-parity-session-b` (C1 is on the latter).
+**Status:** Accepted (Session B shipped 2026-10-29; Session C1 shipped 2026-10-30; Session D shipped 2026-11-02, engine 0.6.0). Session A (2026-10-28) shipped the five changes that leave calibration alone; Session B shipped the three that change it, with engine version 0.5.0, a regenerated calibration baseline and a coach-parity test; Session C1 corrected the parity table against a real coach review and made `daysPerWeek` matter (engine 0.5.1). Branches `coach-parity-session-a` and `coach-parity-session-b` (C1 is on the latter).
 **Supersedes:** none
 **Related:** ARCH-051 (config and scope), ARCH-052 (axis rebuild), ARCH-053 (breadth-aware Fit), ARCH-054 (evidence-graded thresholds)
 
@@ -135,6 +135,18 @@ It lands with Session D's program-level volume rule, with the design questions a
 
 The brief gave the parity before Part 1 as 6 (and the first target as 7). The measured baseline was 16, Session B's result; 6 was Session B's pre-change score. The brief's later checkpoints (18 after PPLx3) fit 16. Actual: 16, 17 after B, 18 after PPLx3.
 
+## Shipped in Session D (2026-11-02, engine 0.6.0)
+
+Six missing-rule fixes from the parity test's classified fails. Branch `engine-output-session-d` (not pushed). No schema change, nothing under `packages/ai`, no goal profile, per-muscle weight, goal selector or existing threshold, no `/check`. **Coach parity 18/25 to 21/25** (19 after one `expected.ts` change for C, 21 after the rules). **No Fit band moved on any calibration program.** The brief expected 22-23; the gap is the brief's error (PPL sessions are 17 / 15 / 17 sets, not 34; push:pull fires on no harness program; VOLUME High as MINOR is MODERATE leverage, not NONE), not an implementation shortfall.
+
+- **`PROGRAM_STRUCTURE`, a new axis type, added despite the brief's "no new axes" rule; required by invariant 8** (Fit must read the same roll-up the narrative does). Five scopes, opt-in by `config.programStructure` (Tier 4 thresholds, so configs without it are untouched). **attendance** (fewer than 2 training days, HIGH leverage); **total-volume** (fewer than 40 credited hard sets a week, HIGH); **session-size** (more than 30 sets in a session, MODERATE); **push-pull** (more than 2 to 1 with more than 10 sets each side, MINOR so LOW leverage); **time-budget** (only with `AnalysisContext.minutesPerSession`; 2.5 minutes a set; more than 5 minutes over, MODERATE).
+- **Composition.** Attendance and total-volume absorb the per-muscle VOLUME Lows; **attendance absorbs volume findings only; structural findings (an absent region, a missing pattern group) survive**, which keeps S5a and S5b passing and reflects that "no pulling" is a different problem from "under-dosed". Attendance ranks first of all. `allAssessedAxes` keeps every per-muscle axis (invariant 8).
+- **VOLUME High is information, not a finding** (`Assessment.highVolume`, "What's trending high": every High or Excessive muscle with band and sets). A finding at any severity above NONE would be MODERATE leverage on VOLUME's HIGH weight, which would move Fit on every program with a High muscle. Hence **S1 is E4-blocked**: the leverage table has no level between NONE and MINOR.
+- **Still failing, for principled reasons:** S1 (E4), S8 (20:10 is exactly 2.0; the rule does not fire), P2 (`time-budget/none` is unproducible; "no finding" cannot match it), S7 (training age). **Passing now:** A (lead), P2-1x (contained: attendance contains the program-level under-dose it absorbs), C (via its broadened expected match).
+- **Threshold flags for E4:** the 40-set floor fires on two-session programs (P2 22, S7 24) and sits on the boundary for S3 (exactly 40) and S6b (about 42): [SCIENTIFIC INPUT REQUIRED].
+- **Matcher:** `headlineOf` learned the new axes (mappings only, no match rule changed). **Cost:** an under-dosed program loses its named per-muscle additions; it gets one program-level action.
+- Handoff: `docs/handoffs/2026-11-02-engine-output-session-d.md`.
+
 ## Proposed for Session B (each changes calibration; shipped, see "Shipped in Session B")
 
 **B1. Rank the headline by deficit.** `biggestOpportunity` is the first axis with the highest leverage, in axis order, and production loads muscle groups sorted by name, so among tied Lows the headline is alphabetical ("biceps" for Starting Strength, which has no pulling at all; "calves" for a program with no leg day). Change: among equal leverage, rank by distance below the band's lower bound, then by a configured muscle priority (Tier 3).
@@ -156,7 +168,7 @@ The brief gave the parity before Part 1 as 6 (and the first target as 7). The me
 
 ## Not in this ARCH
 
-`AnalysisContext` is read only for `daysPerWeek` (Session C1: the same PPL used to read STRONG as 6 days and NEEDS WORK as 3, because the listed days were the week; with `daysPerWeek` it no longer does). `minutesPerSession`, training age and equipment are read by nothing. Novice bands (a `[SCIENTIFIC INPUT REQUIRED]` item) and attaching sources to the Adequate-band claim are later decisions.
+`AnalysisContext` is read for `daysPerWeek` (Session C1: the same PPL used to read STRONG as 6 days and NEEDS WORK as 3, because the listed days were the week; with `daysPerWeek` it no longer does) and, since Session D, for `minutesPerSession` (the time-budget scope) and the attendance check. Training age and equipment are read by nothing. Novice bands (a `[SCIENTIFIC INPUT REQUIRED]` item) and attaching sources to the Adequate-band claim are later decisions.
 
 ## Freeze check
 
