@@ -132,6 +132,13 @@ describe("expected headlines", () => {
     }
   });
 
+  it("only S1 is blocked by a named dependency (E4), and it stays a FAIL until that lands", () => {
+    const blocked = EXPECTED_HEADLINES.filter((e) => e.blockedBy !== undefined).map((e) => [e.id, e.blockedBy]);
+    expect(blocked).toEqual([["S1", "E4"]]);
+    const s1 = EXPECTED_HEADLINES.find((e) => e.id === "S1");
+    expect(s1?.rationale).toMatch(/INFORMATIONAL level below MINOR/);
+  });
+
   it("only PPLx3 supplies context, and it supplies the real week", () => {
     const withContext = EXPECTED_HEADLINES.filter((e) => e.context !== undefined).map((e) => [e.id, e.context]);
     expect(withContext).toEqual([["PPLx3", { daysPerWeek: 6 }]]);
@@ -153,8 +160,11 @@ describe("coach parity ratchet", () => {
   //   engine change; the engine already said nothing about B.
   // Session C1, Part 2 (daysPerWeek is read: PPLx3 supplies 6 and the engine reads its 3 listed days as a cycle run
   //   twice, which is PPLx6's week): + PPLx3. No threshold moved.
+  // Session D, step 0 (founder decision): C's expected match also lists the Excessive-volume findings the engine
+  //   already surfaces (biceps, lats, triceps), so C passes on the 0.5.1 engine: + C. An expected.ts change, not an
+  //   engine or matcher change.
   const PINNED_PASSING = [
-    "B", "D", "E", "F1", "F2", "G", "J", "P1", "P3", "PPLx3", "PPLx6", "S2", "S3", "S4", "S5a", "S5b", "S6", "S6b",
+    "B", "C", "D", "E", "F1", "F2", "G", "J", "P1", "P3", "PPLx3", "PPLx6", "S2", "S3", "S4", "S5a", "S5b", "S6", "S6b",
   ];
   const PINNED_CONTAINED = ["S4"];
 

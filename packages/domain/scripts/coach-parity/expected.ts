@@ -36,6 +36,12 @@ export interface ExpectedHeadline {
   readonly goalDependent: boolean;
   /** What the lifter tells the checker beyond the program (days per week, minutes per session). Absent: none. */
   readonly context?: AnalysisContext;
+  /**
+   * Set only where the engine cannot express the coach's point yet because of a named dependency (not an engine
+   * bug and not a matcher gap). Annotation only: scoring is unchanged, and the entry stays a FAIL until the
+   * dependency lands.
+   */
+  readonly blockedBy?: string;
 }
 
 const AUDIT = "Audit-authored; awaiting real coach review";
@@ -75,6 +81,13 @@ const goalDependent = (e: ExpectedHeadline): ExpectedHeadline => ({
 /** The same lifter told the checker something beyond the program, as /check will ask. */
 const withContext = (e: ExpectedHeadline, context: AnalysisContext): ExpectedHeadline => ({ ...e, context });
 
+/** Marks an entry as waiting on a named dependency. Scoring is untouched; the entry stays a FAIL until it lands. */
+const blockedBy = (e: ExpectedHeadline, dependency: string, why: string): ExpectedHeadline => ({
+  ...e,
+  blockedBy: dependency,
+  rationale: `${e.rationale} ${why}`,
+});
+
 const derived = (basis: string): string => `Derived (the audit has no line for this run): ${basis}. ${AUDIT}`;
 
 export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
@@ -94,8 +107,8 @@ export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
   entry(
     "C",
     "Every session is about 32 sets; cut 1-2 sets from each exercise and stop isolation sets 1-2 reps short.",
-    [m("session-size", "high")],
-    "The diagnosis is session length (audit item F8); the audit called the engine's frequency advice wrong for this program.",
+    [m("session-size", "high"), m("muscle:biceps", "high"), m("muscle:lats", "high"), m("muscle:triceps", "high")],
+    "The diagnosis is session length (audit item F8). Excessive volume is the same problem from the other side: C already surfaces biceps 36, lats 36 and triceps 31 as HIGH-leverage findings, and 'cut 1-2 sets from each exercise' is what a coach does about excessive volume, so those three are listed beside session size (founder decision, Session D).",
   ),
   entry(
     "D",
@@ -134,11 +147,15 @@ export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
     [m("check:near-failure", "high")],
     "The rest-day remark is not listed: consecutive days are not representable in ProgramStructure.",
   ),
-  entry(
-    "S1",
-    "Each pull day has 8 sets of curls on top of rows; drop one curl, or add a set to squats and RDLs.",
-    [m("muscle:biceps", "high")],
-    "The audit's 'arms out-train your legs' half was retracted in Session A (counted once per set: arms 28, legs 35), so only the curl volume is listed. Biceps at 24.5 is band High, which is information-only, so the engine has no finding for it.",
+  blockedBy(
+    entry(
+      "S1",
+      "Each pull day has 8 sets of curls on top of rows; drop one curl, or add a set to squats and RDLs.",
+      [m("muscle:biceps", "high")],
+      "The audit's 'arms out-train your legs' half was retracted in Session A (counted once per set: arms 28, legs 35), so only the curl volume is listed. Biceps at 24.5 is band High, which is information-only, so the engine has no finding for it.",
+    ),
+    "E4",
+    "The engine surfaces biceps at 24.5 sets in the informational 'What's trending high' section. Coaching consensus (3 of 5) treats this as worth trimming, but the current leverage table has no severity below MINOR, so the engine cannot express 'notable but not a warning' as a finding. S1 will pass when E4 (graded severity) adds an INFORMATIONAL level below MINOR. Documented as an E4 dependency rather than a parity pass.",
   ),
   goalDependent(
     entry(
