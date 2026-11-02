@@ -268,3 +268,58 @@ function structureWithAdded(base: ProgramStructure, dayName: string, exerciseNam
     ),
   };
 }
+
+// ARCH-063 / Session D follow-up. The whole-program volume finding replaces the per-muscle Lows with ONE action; that
+// action now names the two largest deficits, so an under-dosed program still hears "Add 3 sets of Leg Curl on Day 2",
+// not only "you are under-dosed". These run against the FULL profile (with `programStructure`), unlike the rest of
+// this file.
+describe("nameActions: the whole-program volume action names the largest deficits", () => {
+  const analysis = computeAnalysis(DUMBBELLS_ONLY, REF, HYPERTROPHY_CONFIG, { now: () => new Date(0) });
+  const { assessment } = computeAssessment(analysis, HYPERTROPHY_CONFIG, { goalId: "g" });
+  const actions = nameActions(assessment, DUMBBELLS_ONLY, REF, HYPERTROPHY_CONFIG);
+  const program = actions.find((a) => a.rootCauseKey === "programStructure:add-volume")!;
+
+  it("is still ONE finding and ONE action", () => {
+    expect(assessment.findings?.map((f) => f.key)).toContain("PROGRAM_STRUCTURE:total-volume");
+    expect(assessment.actions.filter((a) => a.rootCauseKey === "programStructure:add-volume")).toHaveLength(1);
+    expect(actions).toHaveLength(assessment.actions.length);
+  });
+
+  it("names two exercises, each with the engine's after-number for the muscle it raises", () => {
+    expect(program.description).toMatch(/^Start with: Add \d sets? of .+ on Day \d → [\w ]+ [\d.]+ sets\/week\./);
+    expect(program.suggestions).toHaveLength(2);
+    const [a, b] = program.suggestions!;
+    expect(a!.exerciseName).not.toBe(b!.exerciseName);
+    expect(a!.muscle).not.toBe(b!.muscle);
+    for (const s of program.suggestions!) expect(s.afterSets).toBeGreaterThan(s.beforeSets);
+  });
+
+  it("names only muscles the program-level finding absorbed, the ones furthest below the Adequate range", () => {
+    // Hamstrings and glutes are explained by the "no hinge" finding, which has its own action; calves has no
+    // equipment in this program. That leaves side delts (0 sets) and then the next-lowest.
+    const explained = new Set((assessment.findings ?? []).flatMap((f) => f.members.map((m) => m.muscle)));
+    expect(explained.has("hamstrings")).toBe(true);
+    const names = program.suggestions!.map((s) => s.muscle);
+    for (const m of names) expect(explained.has(m)).toBe(false);
+    expect(names[0]).toBe("side delts");
+    const beforeSets = program.suggestions!.map((s) => s.beforeSets);
+    expect(beforeSets).toEqual([...beforeSets].sort((a, b) => a - b));
+    expect(Math.max(...beforeSets)).toBeLessThan(6);
+  });
+
+  it("leaves the persisted assessment's template sentence alone and passes the forbidden-copy lint", () => {
+    expect(assessment.actions.find((a) => a.rootCauseKey === "programStructure:add-volume")?.description).toBe(
+      "Add hard sets across the program, starting with the muscles furthest below the 6–20 range.",
+    );
+    assertCleanCopy([program.description]);
+  });
+
+  it("falls back to the template sentence when no muscle can be named", () => {
+    const empty: ExerciseReferenceData = { ...REF, exercises: REF.exercises.filter((e) => e.equipment === "barbell") };
+    const a = computeAnalysis(DUMBBELLS_ONLY, empty, HYPERTROPHY_CONFIG, { now: () => new Date(0) });
+    const { assessment: asm } = computeAssessment(a, HYPERTROPHY_CONFIG, { goalId: "g" });
+    const out = nameActions(asm, DUMBBELLS_ONLY, empty, HYPERTROPHY_CONFIG).find((x) => x.rootCauseKey === "programStructure:add-volume");
+    expect(out?.suggestions).toBeUndefined();
+    expect(out?.description).toBe("Add hard sets across the program, starting with the muscles furthest below the 6–20 range.");
+  });
+});
