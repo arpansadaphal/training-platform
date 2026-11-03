@@ -59,6 +59,7 @@ import type {
   AssessmentFinding,
   AssessmentResult,
   ComputeAssessmentOptions,
+  HighVolumeEntry,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -103,7 +104,8 @@ const WEIGHT_RANK: Readonly<Record<Weight, number>> = {
 //   1. leverage, highest first                         (unchanged)
 //   2. axis weight, highest first                      (separates axis TYPES that tie on leverage; the weights
 //                                                       are already ordered by evidence strength)
-//   3. axis type, in the order the Analysis lists them (VOLUME, FREQUENCY, SELECTION, PROGRESSION, RECOVERY)
+//   3. axis type, in the order the Analysis lists them (VOLUME, FREQUENCY, SELECTION, PROGRESSION, RECOVERY,
+//                                                       PROGRAM_STRUCTURE); the attendance scope comes first of all
 //   4. deficit, largest first                          (only ever compared within one axis type, see below)
 //   5. the profile's `musclePriority`, earlier first   (Tier 3: breaks a deficit tie between muscles)
 //   6. original axis order
@@ -196,6 +198,9 @@ function classifyAxes(
   // problem. They remain visible in `allAssessedAxes` for the Fit Score.
   const eligible = new Set<AxisType>(config.strengthEligibleAxes);
   const typeOrder = new Map<AxisType, number>();
+  // ARCH-063 / Session D. Attendance outranks every other axis of equal leverage and weight: fewer than two training
+  // days is the limiter, whatever else is Low. (Every other PROGRAM_STRUCTURE scope ranks by its axis type, last.)
+  const ATTENDANCE_FIRST = -1;
   assessedAxes.forEach((axis, index) => {
     if (!typeOrder.has(axis.axisType)) typeOrder.set(axis.axisType, index);
   });
@@ -209,7 +214,10 @@ function classifyAxes(
       ranked.push({
         axis,
         index,
-        typeOrder: typeOrder.get(axis.axisType) ?? index,
+        typeOrder:
+          axis.axisType === "PROGRAM_STRUCTURE" && axis.scopeKey === "attendance"
+            ? ATTENDANCE_FIRST
+            : (typeOrder.get(axis.axisType) ?? index),
         deficit: deficitOf(axis, config),
         priority: priorityOf(axis, config),
       });
@@ -314,6 +322,21 @@ function buildOverallSummary(
 }
 
 // ---------------------------------------------------------------------------
+// Informational: what is trending high (ARCH-063 / Session D)
+// ---------------------------------------------------------------------------
+
+/** VOLUME axes in the High or Excessive band, most sets first (ties by name). Reads the bands, creates none. */
+function highVolumeOf(axes: readonly AssessedAxis[]): HighVolumeEntry[] {
+  const out: HighVolumeEntry[] = [];
+  for (const axis of axes) {
+    if (axis.axisType !== "VOLUME" || axis.scopeKey === null || typeof axis.metricValue !== "number") continue;
+    const band = axis.status.band;
+    if (band === "High" || band === "Excessive") out.push({ muscle: axis.scopeKey, sets: axis.metricValue, band });
+  }
+  return out.sort((a, b) => b.sets - a.sets || a.muscle.localeCompare(b.muscle));
+}
+
+// ---------------------------------------------------------------------------
 // The entry point
 // ---------------------------------------------------------------------------
 
@@ -342,6 +365,8 @@ export function computeAssessment(
         headlineLabel: null,
       };
 
+  const highVolume = rollUpSucceeded ? highVolumeOf(rollUp.assessedAxes) : [];
+
   const inner: Assessment = {
     programVersionId: analysis.programVersionId,
     goalId: options.goalId,
@@ -361,6 +386,7 @@ export function computeAssessment(
     fitScoreProjection: config.fitScoreProjection,
     // Informational; copied through untouched. Nothing above reads it.
     ...(analysis.ratios ? { ratios: analysis.ratios } : {}),
+    ...(highVolume.length > 0 ? { highVolume } : {}),
   };
 
   if (overallValidated) {

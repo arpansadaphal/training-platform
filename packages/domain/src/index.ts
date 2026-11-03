@@ -79,6 +79,7 @@ export type {
 export { computeAnalysis } from "./analysis/computeAnalysis";
 export { computeCrossMuscleRatios } from "./analysis/ratios";
 export { ratioLines, RATIO_TIER_NOTE } from "./copy/ratioLines";
+export { highVolumeLines, HIGH_VOLUME_HEADING } from "./copy/highVolumeLines";
 export { computeVolumeAxis } from "./analysis/volume";
 export { computeFrequencyAxis } from "./analysis/frequency";
 export { computeExerciseSelectionBalanceAxis } from "./analysis/exerciseSelectionBalance";
@@ -126,6 +127,7 @@ export type {
   ComputeAssessmentOptions,
   FindingKind,
   FindingMember,
+  HighVolumeEntry,
   FitScore,
   FitScoreResult,
 } from "./assessment/types";

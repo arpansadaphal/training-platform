@@ -90,12 +90,13 @@ describe("AnalysisContext", () => {
   const p = program(rx("Barbell Bench Press", 4), rx("Barbell Row", 3), rx("Back Squat", 3), rx("Lateral Raise", 2));
   const options = { now: () => new Date("2026-01-01T00:00:00Z") };
   // daysPerWeek is read since Session C1 (runsPerWeek.ts, tested in runsPerWeek.test.ts), so a value that differs from
-  // the listed days is no longer inert. Here it equals them; the other three fields are still read by nothing.
+  // the listed days is no longer inert. Here it equals them. minutesPerSession is read since Session D (the
+  // PROGRAM_STRUCTURE time-budget axis, tested in programStructure.test.ts), so it is left out; trainingAgeMonths and
+  // equipment are still read by nothing.
   const full: AnalysisContext = {
     daysPerWeek: p.workoutDays.length,
     trainingAgeMonths: 18,
     equipment: "home_dumbbells",
-    minutesPerSession: 45,
   };
 
   it("leaves the whole Analysis and Assessment byte-identical whether context is undefined, empty or full", () => {

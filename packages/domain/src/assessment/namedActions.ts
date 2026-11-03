@@ -12,7 +12,10 @@
 //   - a region with NO training at all ("No lower-body training"): a new day with one exercise per muscle at 3
 //     sets, run through ONE simulate(ADD_WORKOUT_DAY) so its after-numbers are the engine's, not the sum of
 //     separate guesses;
-//   - a pattern finding led by the Exercise-selection axis ("no overhead press"): the template stands.
+//   - a pattern finding led by the Exercise-selection axis ("no overhead press"): the template stands;
+//   - (ARCH-063 / Session D follow-up) the whole-program volume finding: it replaces the per-muscle Lows with one
+//     program-level action, so the action names the two largest deficits ("Start with: Add 3 sets of ...") and
+//     keeps the specificity the replaced actions had. Still one finding and one action.
 //
 // Why a post-step and not part of computeAssessment: the Assessment is persisted verbatim in
 // AssessmentSnapshot and is a pure function of the Analysis, which carries no structure. Naming an exercise
@@ -54,13 +57,15 @@ import { joinList } from "../copy/findingSentence";
 import { simulate } from "../mutation/simulate";
 import type { MutationSpec } from "../mutation/types";
 import type { ExercisePrescriptionStructure, ProgramStructure, WorkoutDayStructure } from "../types";
-import type { ActionSuggestion, Assessment, AssessmentFinding } from "./types";
+import type { ActionSuggestion, AssessedAxis, Assessment, AssessmentFinding } from "./types";
 
 const ADDED_RPE = 8;
 const MIN_SETS = 2;
 const MAX_SETS = 4;
 const MAX_SETS_HALF_FACTOR = 6;
 const NEW_DAY_SETS = 3;
+/** How many muscles the whole-program volume action names: the largest deficits first. */
+const PROGRAM_VOLUME_NAMED = 2;
 const SIM_GOAL_ID = "named-actions";
 
 /** Usual first picks per muscle, best first. Names are library exercise names. Tier 3/4: a convention, not a measurement. */
@@ -375,6 +380,56 @@ function nameMemberAction(
   return { rootCauseKey: action.rootCauseKey, description, suggestions: named };
 }
 
+/**
+ * The whole-program volume finding absorbed every per-muscle Low, so its one action would otherwise say only "add
+ * hard sets across the program". Name the two muscles furthest below the start of the Adequate range, through the
+ * same `suggestForMuscle` the per-muscle actions use (so every after-number is the engine's). A muscle with no
+ * eligible exercise is skipped for the next-largest deficit; with none nameable the template stands.
+ */
+function nameProgramVolumeAction(
+  action: ActionSuggestion,
+  ctx: Ctx,
+  taken: ReadonlySet<string>,
+  assessment: Assessment,
+): NamedAction {
+  const fallback: NamedAction = { rootCauseKey: action.rootCauseKey, description: action.description };
+  // A muscle a structural finding (an absent region, a missing pattern group) already explains has its own action;
+  // this one names only what the program-level finding absorbed.
+  const explained = new Set((assessment.findings ?? []).flatMap((f) => f.members.map((m) => m.muscle)));
+  const priority = (muscle: string): number => {
+    const at = ctx.config.musclePriority?.indexOf(muscle) ?? -1;
+    return at < 0 ? Number.MAX_SAFE_INTEGER : at;
+  };
+  const lows = assessment.allAssessedAxes
+    .filter(
+      (a: AssessedAxis) =>
+        a.axisType === "VOLUME" &&
+        a.status.band === "Low" &&
+        a.scopeKey !== null &&
+        !explained.has(a.scopeKey) &&
+        typeof a.metricValue === "number",
+    )
+    .map((a) => ({ muscle: a.scopeKey as string, sets: a.metricValue as number }))
+    .sort((a, b) => a.sets - b.sets || priority(a.muscle) - priority(b.muscle) || a.muscle.localeCompare(b.muscle));
+
+  const local = new Set(taken);
+  const named: NamedActionSuggestion[] = [];
+  for (const low of lows) {
+    if (named.length >= PROGRAM_VOLUME_NAMED) break;
+    const muscle = findMuscle(ctx, low.muscle);
+    const suggestion = muscle ? suggestForMuscle(ctx, low.muscle, muscle, low.sets, local) : null;
+    if (!suggestion) continue;
+    named.push(suggestion);
+    for (const id of proposedIds({ rootCauseKey: "", description: "", suggestion }, ctx.referenceData)) local.add(id);
+  }
+  if (named.length === 0) return fallback;
+  const belowRange = ctx.lowerBound !== null && named.some((s) => s.afterSets < (ctx.lowerBound as number));
+  const description =
+    `Start with: ${named.map(memberSentence).join(" ")}` +
+    (belowRange ? ` The Adequate range starts at ${num(ctx.lowerBound as number)}.` : "");
+  return { rootCauseKey: action.rootCauseKey, description, suggestions: named };
+}
+
 const article = (word: string): string => (/^[aeiou]/i.test(word) ? "an" : "a");
 const capitalise = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1);
 
@@ -449,7 +504,9 @@ function nameOne(
   finding: AssessmentFinding | undefined,
   ctx: Ctx,
   taken: ReadonlySet<string>,
+  assessment: Assessment,
 ): NamedAction {
+  if (action.rootCauseKey === "programStructure:add-volume") return nameProgramVolumeAction(action, ctx, taken, assessment);
   if (finding === undefined || finding.kind === "AXIS") return nameAxisAction(action, ctx, taken);
   if (finding.kind === "REGION") {
     return finding.absent ? nameNewDayAction(action, finding, ctx, taken) : nameMemberAction(action, finding, ctx, taken);
@@ -475,7 +532,7 @@ export function nameActions(
   return assessment.actions.map((action) => {
     if (ctx === null) return { rootCauseKey: action.rootCauseKey, description: action.description };
     const finding = assessment.findings?.find((f) => sameAxis(f.lead, action.relatedAxis));
-    const named = nameOne(action, finding, ctx, proposed);
+    const named = nameOne(action, finding, ctx, proposed, assessment);
     for (const id of proposedIds(named, referenceData)) proposed.add(id);
     return named;
   });

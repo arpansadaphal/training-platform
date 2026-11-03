@@ -1,7 +1,8 @@
 // apps/web/components/assessment/AssessmentDisplay.tsx
 //
 // The generic Assessment renderer, in the Final Freeze §9's fixed order:
-// Overall → Strengths → Attention → Biggest Opportunity → Actions.
+// Overall → Strengths → Attention → What's trending high → Biggest Opportunity → Actions.
+// ("What's trending high", ARCH-063 / Session D, is informational: no leverage, nothing in Fit.)
 //
 // Reused (not copied) by Phase 7's Review screen and Phase 8's Coach panel.
 // Per 16-repository-structure.md's "no shared UI package" rule, those phases
@@ -42,6 +43,8 @@
 
 import { useState } from "react";
 import {
+  HIGH_VOLUME_HEADING,
+  highVolumeLines,
   isClassified,
   provisionalFitBand,
   ratioLines,
@@ -153,6 +156,7 @@ function AssessmentBody({
 }) {
   const namedText = new Map((namedActions ?? []).map((n) => [n.rootCauseKey, n.description]));
   const balance = ratioLines(a.ratios);
+  const trendingHigh = highVolumeLines(a.highVolume);
   // ARCH-063 / B2: findings (engine 0.5.0) say each problem once. A snapshot saved before that has none, and
   // renders as it always did, axis by axis.
   const headline = a.biggestOpportunity ? (a.findings?.[0] ?? null) : null;
@@ -220,6 +224,17 @@ function AssessmentBody({
                   <AxisCard key={axisKey(axis)} axis={axis} variant="attention" />
                 ))}
           </div>
+        </section>
+      ) : null}
+
+      {trendingHigh.length > 0 ? (
+        <section className={styles.section} data-trending-high>
+          <h2 className={styles.sectionHeading}>{HIGH_VOLUME_HEADING}</h2>
+          <ul className={styles.trendingList}>
+            {trendingHigh.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
         </section>
       ) : null}
 

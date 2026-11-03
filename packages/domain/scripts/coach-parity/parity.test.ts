@@ -89,10 +89,45 @@ describe("matcher rules", () => {
   });
 });
 
+// ARCH-063 / Session D. The matcher learned the PROGRAM_STRUCTURE axis. These are mappings from a finding to the
+// subject a coach uses; no match rule changed and nothing was loosened.
+describe("matcher: program-level findings", () => {
+  const programAxis = (scopeKey: string, band: string, over: Partial<AssessedAxis> = {}): AssessedAxis =>
+    axis({ axisType: "PROGRAM_STRUCTURE", scopeKey, status: { kind: "BAND", band }, severity: "MODERATE", ...over });
+  const subjects = (a: AssessedAxis) => headlineOf({ biggestOpportunity: a }).subjects.map((s) => `${s.subject}/${s.direction}/${s.via}`);
+
+  it("maps each firing scope to the subject a coach names", () => {
+    expect(subjects(programAxis("total-volume", "Under-dosed"))).toEqual(["global-volume/low/lead"]);
+    expect(subjects(programAxis("session-size", "Long session"))).toEqual(["session-size/high/lead"]);
+    expect(subjects(programAxis("push-pull", "Push-heavy"))).toEqual(["push-pull/high/lead"]);
+    expect(subjects(programAxis("time-budget", "Over budget"))).toEqual(["time-budget/high/lead"]);
+  });
+
+  it("attendance names itself and CONTAINS the program-level under-dose (a region contains its muscles)", () => {
+    expect(subjects(programAxis("attendance", "Single session"))).toEqual(["attendance/low/lead", "global-volume/low/member"]);
+    const h = headlineOf({ biggestOpportunity: programAxis("attendance", "Single session") });
+    const hit = matchHeadline([exp("global-volume", "low")], h);
+    expect(hit.pass).toBe(true);
+    expect(hit.kind).toBe("contained");
+  });
+
+  it("a scope that is within range names nothing, and containment stays one-way", () => {
+    expect(subjects(programAxis("total-volume", "Within range"))).toEqual([]);
+    const total = headlineOf({ biggestOpportunity: programAxis("total-volume", "Under-dosed") });
+    expect(matchHeadline([exp("attendance", "low")], total).pass).toBe(false);
+  });
+
+  it("the wrong direction still fails: an under-dose is not 'high' volume", () => {
+    const total = headlineOf({ biggestOpportunity: programAxis("total-volume", "Under-dosed") });
+    expect(matchHeadline([exp("global-volume", "high")], total).pass).toBe(false);
+  });
+});
+
 describe("expected headlines", () => {
-  it("covers exactly the 25 programs the audit scored", () => {
-    expect(EXPECTED_HEADLINES).toHaveLength(25);
-    expect(new Set(EXPECTED_HEADLINES.map((e) => e.id)).size).toBe(25);
+  it("covers exactly the 24 programs scored (the audit's 25 less P2, which timeBudget.test.ts covers)", () => {
+    expect(EXPECTED_HEADLINES).toHaveLength(24);
+    expect(new Set(EXPECTED_HEADLINES.map((e) => e.id)).size).toBe(24);
+    expect(EXPECTED_HEADLINES.map((e) => e.id)).not.toContain("P2");
     expect(EXPECTED_HEADLINES.map((e) => e.id)).not.toContain("P2-noRPE");
   });
 
@@ -132,6 +167,13 @@ describe("expected headlines", () => {
     }
   });
 
+  it("only S1 is blocked by a named dependency (E4), and it stays a FAIL until that lands", () => {
+    const blocked = EXPECTED_HEADLINES.filter((e) => e.blockedBy !== undefined).map((e) => [e.id, e.blockedBy]);
+    expect(blocked).toEqual([["S1", "E4"]]);
+    const s1 = EXPECTED_HEADLINES.find((e) => e.id === "S1");
+    expect(s1?.rationale).toMatch(/INFORMATIONAL level below MINOR/);
+  });
+
   it("only PPLx3 supplies context, and it supplies the real week", () => {
     const withContext = EXPECTED_HEADLINES.filter((e) => e.context !== undefined).map((e) => [e.id, e.context]);
     expect(withContext).toEqual([["PPLx3", { daysPerWeek: 6 }]]);
@@ -153,15 +195,30 @@ describe("coach parity ratchet", () => {
   //   engine change; the engine already said nothing about B.
   // Session C1, Part 2 (daysPerWeek is read: PPLx3 supplies 6 and the engine reads its 3 listed days as a cycle run
   //   twice, which is PPLx6's week): + PPLx3. No threshold moved.
+  // Session D, step 0 (founder decision): C's expected match also lists the Excessive-volume findings the engine
+  //   already surfaces (biceps, lats, triceps), so C passes on the 0.5.1 engine: + C. An expected.ts change, not an
+  //   engine or matcher change.
+  // Session D (engine 0.6.0, PROGRAM_STRUCTURE): + A (whole-program volume: 12 sets against a floor of 40) and
+  //   + P2-1x (attendance: one training day; passes as "contained", because attendance CONTAINS the program-level
+  //   under-dose it absorbs). The brief expected 22-23; the rules it specified can move these two (see the handoff):
+  //   S1 is E4-blocked, S8's push:pull fires (20:10, at least 2 to 1) but is LOW leverage, so its headline is still the HIGH
+  //   lower-body finding, and S7 needs training age. P2 left the scored set (see expected.ts and timeBudget.test.ts).
   const PINNED_PASSING = [
-    "B", "D", "E", "F1", "F2", "G", "J", "P1", "P3", "PPLx3", "PPLx6", "S2", "S3", "S4", "S5a", "S5b", "S6", "S6b",
+    "A", "B", "C", "D", "E", "F1", "F2", "G", "J", "P1", "P2-1x", "P3", "PPLx3", "PPLx6", "S2", "S3", "S4", "S5a", "S5b",
+    "S6", "S6b",
   ];
-  const PINNED_CONTAINED = ["S4"];
+  const PINNED_CONTAINED = ["P2-1x", "S4"];
+  const PINNED_FAILING = ["S1", "S7", "S8"];
 
   it("the passing set is exactly the pinned set", () => {
     expect(passing()).toEqual(PINNED_PASSING);
     expect(score.passed).toBe(PINNED_PASSING.length);
-    expect(score.total).toBe(25);
+    expect(score.total).toBe(24);
+  });
+
+  it("the failing set is exactly the pinned set, and each failure has a reason that is not the engine's fault", () => {
+    const failing = score.rows.filter((r) => !r.result.pass).map((r) => r.expected.id).sort();
+    expect(failing).toEqual(PINNED_FAILING);
   });
 
   it("the contained (not a direct hit) set is exactly the pinned set", () => {

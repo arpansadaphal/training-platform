@@ -11,6 +11,11 @@
 //      It also absorbs any whole-pattern group that explains only that region's muscles (no squat, no hinge).
 //   B. A whole missing pattern group (no pulling, no hinge, no squat) that explains VOLUME Lows: one PATTERN
 //      finding, led by the explained muscle with the largest deficit.
+//   P. (ARCH-063 / Session D) A program-level finding absorbs the VOLUME Lows still unexplained: attendance
+//      (fewer than two training days) or total-volume (an under-dosed program). Structural findings above (an absent
+//      region, a missing pattern group) survive: "no pulling" is a different problem from "under-dosed". When
+//      attendance fires it also absorbs the total-volume finding, because a one-session week is the same
+//      under-dose said more precisely.
 //   C. Two or more remaining VOLUME Lows in one region: one REGION finding ("Lower-body volume is low").
 //   D. A whole missing pattern group that explains no VOLUME Low (no overhead press): one PATTERN finding led by
 //      the Exercise-selection axis, which also names the other required patterns still missing.
@@ -109,6 +114,19 @@ export function composeFindings(
     });
     for (const axis of axes) consumed.add(axis);
     absorbedGroups.add(group.key);
+  }
+
+  // P. program-level absorption (see the header). A PROGRAM_STRUCTURE axis stays a finding of its own through step F.
+  const programAxis = (scope: string): AssessedAxis | undefined =>
+    assessedAxes.find((axis) => axis.axisType === "PROGRAM_STRUCTURE" && axis.scopeKey === scope);
+  const firing = (axis: AssessedAxis | undefined): axis is AssessedAxis => axis !== undefined && rankIndex.has(axis);
+  const attendance = programAxis("attendance");
+  const totalVolume = programAxis("total-volume");
+  if (firing(attendance) || firing(totalVolume)) {
+    for (const axis of ranked) {
+      if (isLow(axis) && !consumed.has(axis)) consumed.add(axis);
+    }
+    if (firing(attendance) && firing(totalVolume)) consumed.add(totalVolume);
   }
 
   // C. two or more remaining VOLUME Lows in one region

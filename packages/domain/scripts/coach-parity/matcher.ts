@@ -52,7 +52,7 @@ export const VOCAB_CHECKS: readonly string[] = [
   "effort-defined", "near-failure", "far-from-failure", "rep-range", "percent-1rm",
 ];
 const VOCAB_BARE: readonly string[] = [
-  "frequency", "recovery", "global-volume", "session-size", "time-budget", "push-pull", "none",
+  "frequency", "recovery", "global-volume", "session-size", "time-budget", "push-pull", "attendance", "none",
 ];
 
 /** True when an EXPECTED subject is in the closed vocabulary. */
@@ -103,6 +103,29 @@ function axisSubjects(axis: AssessedAxis, via: Via): HeadlineSubject[] {
     }
     case "RECOVERY_COST":
       return band === "High" || band === "Excessive" ? [{ subject: "recovery", direction: "high", via }] : [];
+    case "PROGRAM_STRUCTURE":
+      // ARCH-063 / Session D. A mapping, not a match rule: each program-level scope names the subject a coach uses.
+      // A one-session week is a program-level under-dose by definition (it absorbs the total-volume finding), so it
+      // also contains `global-volume/low`, the way a region contains its muscles.
+      switch (axis.scopeKey) {
+        case "total-volume":
+          return band === "Under-dosed" ? [{ subject: "global-volume", direction: "low", via }] : [];
+        case "attendance":
+          return band === "Single session"
+            ? [
+                { subject: "attendance", direction: "low", via },
+                { subject: "global-volume", direction: "low", via: "member" },
+              ]
+            : [];
+        case "session-size":
+          return band === "Long session" ? [{ subject: "session-size", direction: "high", via }] : [];
+        case "push-pull":
+          return band === "Push-heavy" ? [{ subject: "push-pull", direction: "high", via }] : [];
+        case "time-budget":
+          return band === "Over budget" ? [{ subject: "time-budget", direction: "high", via }] : [];
+        default:
+          return [];
+      }
   }
 }
 

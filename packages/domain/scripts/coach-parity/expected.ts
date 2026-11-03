@@ -1,4 +1,4 @@
-// What a coach says first about each of the 25 harness programs, written BEFORE the engine changes it measures
+// What a coach says first about each of the 24 scored harness programs, written BEFORE the engine changes it measures
 // (ARCH-063, Session B). The lines are the 2026-10-28 audit's "Coach:" lines, shortened to the observation; the
 // audit's author is not a certified coach, so every entry says so in `note`.
 //
@@ -11,6 +11,9 @@
 //   - where the coach's diagnosis is program-level (A, C, P2) the remedies are not listed;
 //   - `none` means the coach found nothing to fix. It passes only on an empty engine headline, and it is the only
 //     way a program with zero findings can pass.
+// P2 ("close to what you can fit" in 45 minutes) is NOT scored here: its expected `time-budget/none` is the engine saying
+// nothing, which a headline matcher cannot tell from the engine saying nothing for any other reason, and its sessions fit
+// the budget. What P2 exercises is the time-budget axis and the action count; that is tested in timeBudget.test.ts.
 // Real coach review (2026-10-30, five coaches, 25 programs) has landed for two things only: B (5/5 say it is fine, so
 // its entry is a `none` and its note says so) and the five goal-dependent entries (see `goalDependent`). Every other
 // entry is still audit-authored.
@@ -36,6 +39,12 @@ export interface ExpectedHeadline {
   readonly goalDependent: boolean;
   /** What the lifter tells the checker beyond the program (days per week, minutes per session). Absent: none. */
   readonly context?: AnalysisContext;
+  /**
+   * Set only where the engine cannot express the coach's point yet because of a named dependency (not an engine
+   * bug and not a matcher gap). Annotation only: scoring is unchanged, and the entry stays a FAIL until the
+   * dependency lands.
+   */
+  readonly blockedBy?: string;
 }
 
 const AUDIT = "Audit-authored; awaiting real coach review";
@@ -75,6 +84,13 @@ const goalDependent = (e: ExpectedHeadline): ExpectedHeadline => ({
 /** The same lifter told the checker something beyond the program, as /check will ask. */
 const withContext = (e: ExpectedHeadline, context: AnalysisContext): ExpectedHeadline => ({ ...e, context });
 
+/** Marks an entry as waiting on a named dependency. Scoring is untouched; the entry stays a FAIL until it lands. */
+const blockedBy = (e: ExpectedHeadline, dependency: string, why: string): ExpectedHeadline => ({
+  ...e,
+  blockedBy: dependency,
+  rationale: `${e.rationale} ${why}`,
+});
+
 const derived = (basis: string): string => `Derived (the audit has no line for this run): ${basis}. ${AUDIT}`;
 
 export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
@@ -94,8 +110,8 @@ export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
   entry(
     "C",
     "Every session is about 32 sets; cut 1-2 sets from each exercise and stop isolation sets 1-2 reps short.",
-    [m("session-size", "high")],
-    "The diagnosis is session length (audit item F8); the audit called the engine's frequency advice wrong for this program.",
+    [m("session-size", "high"), m("muscle:biceps", "high"), m("muscle:lats", "high"), m("muscle:triceps", "high")],
+    "The diagnosis is session length (audit item F8). Excessive volume is the same problem from the other side: C already surfaces biceps 36, lats 36 and triceps 31 as HIGH-leverage findings, and 'cut 1-2 sets from each exercise' is what a coach does about excessive volume, so those three are listed beside session size (founder decision, Session D).",
   ),
   entry(
     "D",
@@ -134,11 +150,15 @@ export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
     [m("check:near-failure", "high")],
     "The rest-day remark is not listed: consecutive days are not representable in ProgramStructure.",
   ),
-  entry(
-    "S1",
-    "Each pull day has 8 sets of curls on top of rows; drop one curl, or add a set to squats and RDLs.",
-    [m("muscle:biceps", "high")],
-    "The audit's 'arms out-train your legs' half was retracted in Session A (counted once per set: arms 28, legs 35), so only the curl volume is listed. Biceps at 24.5 is band High, which is information-only, so the engine has no finding for it.",
+  blockedBy(
+    entry(
+      "S1",
+      "Each pull day has 8 sets of curls on top of rows; drop one curl, or add a set to squats and RDLs.",
+      [m("muscle:biceps", "high")],
+      "The audit's 'arms out-train your legs' half was retracted in Session A (counted once per set: arms 28, legs 35), so only the curl volume is listed. Biceps at 24.5 is band High, which is information-only, so the engine has no finding for it.",
+    ),
+    "E4",
+    "The engine surfaces biceps at 24.5 sets in the informational 'What's trending high' section. Coaching consensus (3 of 5) treats this as worth trimming, but the current leverage table has no severity below MINOR, so the engine cannot express 'notable but not a warning' as a finding. S1 will pass when E4 (graded severity) adds an INFORMATIONAL level below MINOR. Documented as an E4 dependency rather than a parity pass.",
   ),
   goalDependent(
     entry(
@@ -211,12 +231,6 @@ export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
       [m("muscle:side delts", "low"), m("muscle:rear delts", "low"), m("muscle:calves", "low")],
       "The audit's coach line; the 'where are you against your old numbers' question needs a history input.",
     ),
-  ),
-  entry(
-    "P2",
-    "For two 45-minute sessions this is close to what you can fit.",
-    [m("time-budget", "none")],
-    "Needs minutesPerSession. Superset, add a lateral raise and a leg curl are fixes, not listed.",
   ),
   entry(
     "P2-1x",

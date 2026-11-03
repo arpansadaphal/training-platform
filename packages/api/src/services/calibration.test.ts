@@ -486,6 +486,8 @@ interface Snapshot {
   attention: string; // number of attention areas, or "?" when the baseline has none
   actions: string; // number of actions, or "?"
   findings: string; // the surfaced findings, "key | key"; "?" when the baseline predates findings
+  // ARCH-063 / Session D (engine 0.6.0): the informational "What's trending high" list, "muscle band sets | ...".
+  trending: string; // "none" when empty; "?" when the baseline predates it
 }
 const snapshots = new Map<string, Snapshot>();
 const PROGRAM_AXES = ["EXERCISE_SELECTION_BALANCE", "PROGRESSION_SOUNDNESS", "RECOVERY_COST"] as const;
@@ -598,6 +600,12 @@ function report(label: string, description: string, ev: Evaluated): void {
       );
     }
   }
+  // ARCH-063 / Session D: the program-level checks, one line per scope.
+  for (const x of axes("PROGRAM_STRUCTURE")) {
+    L.push(
+      `PROGRAM_STRUCTURE:${x.scopeKey ?? ""} metric=${fmt(x.metricValue)} band=${x.status.band} severity=${x.severity} weight=${x.weight} leverage=${x.leverage}`,
+    );
+  }
   L.push(`material findings (leverage >= LOW): ${material.map((x) => `${axisLabel(x)} [${x.status.band}, ${x.severity} x ${x.weight} -> ${x.leverage}]`).join("; ") || "none"}`);
   L.push(`strengths (${a.strengths.length}): ${a.strengths.map(axisLabel).sort().join(", ") || "none"}`);
   L.push(`attention areas (${a.attentionAreas.length}): ${a.attentionAreas.map(axisLabel).join(", ") || "none"}`);
@@ -619,6 +627,8 @@ function report(label: string, description: string, ev: Evaluated): void {
       L.push(`PROGRESSION facts: failed checks [${x.facts.failedChecks.map((c) => c.id).join(", ")}]`);
     }
   }
+  const trendingText = (a.highVolume ?? []).map((e) => `${named(e.muscle)} ${e.band} ${fmt(e.sets)}`).join(" | ") || "none";
+  L.push(`trending high (${(a.highVolume ?? []).length}): ${trendingText}`);
   L.push(
     `actions (${a.actions.length}): ${a.actions.map((x) => `${named(x.rootCauseKey)} :: ${named(x.description)}`).join(" | ") || "none"}`,
   );
@@ -646,6 +656,7 @@ function report(label: string, description: string, ev: Evaluated): void {
     attention: String(a.attentionAreas.length),
     actions: String(a.actions.length),
     findings: (a.findings ?? []).map(findingText).join(" | ") || "none",
+    trending: trendingText,
   };
   for (const x of axes("VOLUME"))
     snap.volume.set(nameOf(x), { metric: fmt(x.metricValue), band: x.status.band, severity: x.severity, leverage: x.leverage });
@@ -653,6 +664,10 @@ function report(label: string, description: string, ev: Evaluated): void {
   for (const t of PROGRAM_AXES)
     for (const x of axes(t))
       snap.program.set(t, { metric: fmt(x.metricValue), band: x.status.band, severity: x.severity, leverage: x.leverage });
+  for (const x of axes("PROGRAM_STRUCTURE"))
+    snap.program.set(`PROGRAM_STRUCTURE:${x.scopeKey ?? ""}`, {
+      metric: fmt(x.metricValue), band: x.status.band, severity: x.severity, leverage: x.leverage,
+    });
   snapshots.set(label, snap);
 
   const vol = axes("VOLUME");
@@ -679,7 +694,9 @@ function assertStructural(ev: Evaluated): void {
   expect(ev.complete).toBe(true);
   expect(ev.analysis.axisResults.filter((x) => x.status.kind !== "BAND")).toEqual([]);
   // Scope: VOLUME and FREQUENCY cover exactly the profile's goal-relevant groups.
-  expect(ev.analysis.axisResults).toHaveLength(scopeNames.length * 2 + 3);
+  // ARCH-063 / Session D (engine 0.6.0): + the four PROGRAM_STRUCTURE axes (attendance, total-volume, session-size,
+  // push-pull; time-budget needs a stated budget and no calibration program supplies one).
+  expect(ev.analysis.axisResults).toHaveLength(scopeNames.length * 2 + 3 + 4);
     const volNames = ev.result.assessment.allAssessedAxes
     .filter((x) => x.axisType === "VOLUME")
     .map((x) => nameById.get(x.scopeKey ?? "") ?? x.scopeKey ?? "?")
@@ -819,7 +836,35 @@ describe("calibration harness: real engine + real seed + HYPERTROPHY candidate c
   //   MINOR to MODERATE; both are separate ARCHs. A stays NEEDS_WORK (11 VOLUME Lows at HIGH leverage are still
   //   in allAssessedAxes; only what is surfaced is grouped).
   //
-  // Programs not listed (B, E, G, H, L and the G-pct probes) have no change except the new FINDINGS line.
+  // AUDIT TRAIL: engine 0.6.0 (ARCH-063, Session D). No Fit band moved on any program (the CHANGES list has no FIT
+  // line). What changed, tied to the six fixes. Fix numbers are the Session D brief's:
+  //
+  //   #1 whole-program volume (PROGRAM_STRUCTURE:total-volume, HIGH leverage, replaces the per-muscle Lows)
+  //     A  new axis: Under-dosed, MODERATE/HIGH (12 sets against a floor of 40)
+  //        BIGGEST OPPORTUNITY VOLUME:calves -> PROGRAM_STRUCTURE:total-volume; ATTENTION AREAS 2 -> 0; ACTIONS 3 -> 1
+  //        FINDINGS the three region findings (lower, upper, arms) -> the one program-level finding. The 11 VOLUME
+  //        Lows stay in allAssessedAxes (invariant 8), so A still reads NEEDS_WORK. Cost: the three named additions
+  //        ("Add 4 sets of Hip Thrust ...") are gone; one action says to add volume across the program.
+  //   #2 session size (PROGRAM_STRUCTURE:session-size, more than 30 sets, MODERATE leverage)
+  //     C  new axis: Long session, MODERATE/MODERATE (32 sets, Push and Pull). ATTENTION AREAS 9 -> 10, ACTIONS 10 -> 11,
+  //        one new finding after RECOVERY_COST. The headline stays VOLUME:lats (Excessive is HIGH leverage); C passes
+  //        parity through its expected.ts match, not through this finding.
+  //     D  new axis: Long session, MODERATE/MODERATE (31 sets, Legs). BIGGEST OPPORTUNITY FREQUENCY:quads ->
+  //        PROGRAM_STRUCTURE:session-size (MODERATE outranks FREQUENCY's LOW); ATTENTION AREAS 4 -> 5; ACTIONS 5 -> 6.
+  //        D stays DECENT: five FREQUENCY findings already trip the breadth floor.
+  //        J (30) and F1 (29) are NOT flagged: the limit is "more than 30". PPL days are 17 / 15 / 17.
+  //   #3 VOLUME High as information (Assessment.highVolume, "What's trending high")
+  //     C, F2, J, K (+ J(probe))  TRENDING HIGH new: every muscle in the High or Excessive band, with band and sets.
+  //        No leverage, no finding, no Fit input: nothing else in these programs changed because of it.
+  //   #4 push:pull (PROGRAM_STRUCTURE:push-pull, more than 2 to 1 with more than 10 sets each side)
+  //     No program fires it. The calibration programs press and pull about evenly (C 64:64, J 36:36, D 30:27).
+  //   #5 time budget (PROGRAM_STRUCTURE:time-budget)
+  //     Not computed: no calibration program supplies minutesPerSession.
+  //   #6 attendance (PROGRAM_STRUCTURE:attendance, fewer than two training days)
+  //     No program fires it: every program lists at least two days.
+  //   The new axes are NONE severity wherever they do not fire, so they add no strength, finding or Fit input.
+  //
+  // Programs not listed (B, E, G, H, L and the G-pct probes) have no change except the new axis and trending lines.
   describe("comparison against calibration-before.txt (logs only, never asserts engine output)", () => {
     const HERE = dirname(fileURLToPath(import.meta.url));
     const candidates = [
@@ -836,7 +881,7 @@ describe("calibration harness: real engine + real seed + HYPERTROPHY candidate c
         const line = raw.trim();
         const head = /^=== Program ([^:]+): /.exec(line);
         if (head !== null) {
-          cur = { volume: new Map(), frequency: new Map(), program: new Map(), biggest: "?", fit: "?", attention: "?", actions: "?", findings: "?" };
+          cur = { volume: new Map(), frequency: new Map(), program: new Map(), biggest: "?", fit: "?", attention: "?", actions: "?", findings: "?", trending: "?" };
           out.set((head[1] ?? "").trim(), cur);
           continue;
         }
@@ -854,7 +899,7 @@ describe("calibration harness: real engine + real seed + HYPERTROPHY candidate c
           }
           continue;
         }
-        const ax = /^(EXERCISE_SELECTION_BALANCE|PROGRESSION_SOUNDNESS|RECOVERY_COST)\s+metric=(\S+) band=(.+?) severity=(\S+) weight=(\S+) leverage=(\S+)$/.exec(line);
+        const ax = /^(EXERCISE_SELECTION_BALANCE|PROGRESSION_SOUNDNESS|RECOVERY_COST|PROGRAM_STRUCTURE:[a-z-]+)\s+metric=(\S+) band=(.+?) severity=(\S+) weight=(\S+) leverage=(\S+)$/.exec(line);
         if (ax !== null) {
           cur.program.set(ax[1] ?? "", { metric: ax[2] ?? "", band: ax[3] ?? "", severity: ax[4] ?? "", leverage: ax[6] ?? "" });
           continue;
@@ -865,6 +910,8 @@ describe("calibration harness: real engine + real seed + HYPERTROPHY candidate c
         if (act !== null) { cur.actions = act[1] ?? "?"; continue; }
         const fnd = /^findings \((\d+)\): (.+)$/.exec(line);
         if (fnd !== null) { cur.findings = fnd[2] ?? "?"; continue; }
+        const trend = /^trending high \(\d+\): (.+)$/.exec(line);
+        if (trend !== null) { cur.trending = trend[1] ?? "?"; continue; }
         const big = /^biggest opportunity: (.+)$/.exec(line);
         if (big !== null) { cur.biggest = big[1] ?? "?"; continue; }
         const fit = /^FIT \(.*?\): (.+)$/.exec(line);
@@ -898,12 +945,28 @@ describe("calibration harness: real engine + real seed + HYPERTROPHY candidate c
         if (bv.severity !== av.severity || bv.leverage !== av.leverage)
           L.push(`${label} ${t} severity/leverage ${bv.severity}/${bv.leverage} -> ${av.severity}/${av.leverage}`);
       }
+      // ARCH-063 / Session D: the program-level checks. Absent from an older baseline, so a scope that fires is
+      // reported as new; one that is within range says nothing, and one in both baselines is diffed like the rest.
+      for (const [key, av] of a.program) {
+        if (!key.startsWith("PROGRAM_STRUCTURE:")) continue;
+        const bv = b.program.get(key);
+        if (bv === undefined) {
+          if (av.severity !== "NONE") L.push(`${label} ${key} (new in 0.6.0): ${av.band}, ${av.severity}/${av.leverage} (metric ${av.metric})`);
+          continue;
+        }
+        if (bv.band !== av.band) L.push(`${label} ${key} BAND ${bv.band} -> ${av.band} (metric ${bv.metric} -> ${av.metric})`);
+        else if (bv.metric !== av.metric) L.push(`${label} ${key} metric ${bv.metric} -> ${av.metric} (band ${av.band})`);
+        if (bv.severity !== av.severity || bv.leverage !== av.leverage)
+          L.push(`${label} ${key} severity/leverage ${bv.severity}/${bv.leverage} -> ${av.severity}/${av.leverage}`);
+      }
       if (b.biggest !== a.biggest) L.push(`${label} BIGGEST OPPORTUNITY ${b.biggest} -> ${a.biggest}`);
       // ARCH-063: how much the narrative says (consolidation) and, from engine 0.5.0, what the findings are.
       if (b.attention !== a.attention) L.push(`${label} ATTENTION AREAS ${b.attention} -> ${a.attention}`);
       if (b.actions !== a.actions) L.push(`${label} ACTIONS ${b.actions} -> ${a.actions}`);
       if (b.findings !== "?" && b.findings !== a.findings) L.push(`${label} FINDINGS ${b.findings} -> ${a.findings}`);
       if (b.findings === "?") L.push(`${label} FINDINGS (new in 0.5.0): ${a.findings}`);
+      if (b.trending === "?" && a.trending !== "none") L.push(`${label} TRENDING HIGH (new in 0.6.0): ${a.trending}`);
+      else if (b.trending !== "?" && b.trending !== a.trending) L.push(`${label} TRENDING HIGH ${b.trending} -> ${a.trending}`);
       if (b.fit !== a.fit) L.push(`${label} FIT (provisional) ${b.fit} -> ${a.fit}`);
       return L;
     }

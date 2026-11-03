@@ -100,6 +100,13 @@ export interface AssessmentFinding {
   readonly missingPatterns?: readonly MovementPattern[];
 }
 
+/** One muscle getting a lot of volume: its band name and weekly hard sets. */
+export interface HighVolumeEntry {
+  readonly muscle: string;
+  readonly sets: number;
+  readonly band: string;
+}
+
 /**
  * A deterministic, template-generated suggestion tied to one assessed axis.
  *
@@ -171,6 +178,14 @@ export interface Assessment {
    * consumer written before this field keeps working. Absent on assessments persisted before it existed.
    */
   readonly findings?: readonly AssessmentFinding[];
+  /**
+   * ARCH-063 / Session D. Every muscle whose weekly volume is in the High or Excessive band, highest first, with the
+   * band's own name and the set count. A fact the engine already computed, shown so a lifter can see which muscles
+   * are getting a lot even when none is a defect. Informational: no leverage, no Fit input, nothing reads it. Set
+   * only when non-empty, so an assessment with nothing to report keeps the shape it had before. An Excessive muscle
+   * is also a finding of its own; listing it here does not replace that.
+   */
+  readonly highVolume?: readonly HighVolumeEntry[];
 }
 
 /**

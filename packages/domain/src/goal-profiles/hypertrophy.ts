@@ -31,6 +31,7 @@ import type {
   GoalProfileEvidence,
   MovementPattern,
   PatternPhrase,
+  ProgramStructureConfig,
   RegionDefinition,
   SeverityMap,
   SeverityWeightTable,
@@ -129,6 +130,19 @@ const SEVERITY_MAP: SeverityMap = {
     High: "MINOR",
     Excessive: "MODERATE",
   },
+  // ARCH-063 / Session D. Tier 4. One band name per scope (analysis/programStructure.ts), so each scope can carry its
+  // own severity; the scope's weight (below) then gives the leverage:
+  //   attendance, total-volume   MODERATE x HIGH   = HIGH       (a program that cannot cover the week is the limiter)
+  //   session-size, time-budget  MODERATE x MEDIUM = MODERATE   (one input among many)
+  //   push-pull                  MINOR    x MEDIUM = LOW        (contested whether it matters; information, not warning)
+  PROGRAM_STRUCTURE: {
+    "Single session": "MODERATE",
+    "Under-dosed": "MODERATE",
+    "Long session": "MODERATE",
+    "Push-heavy": "MINOR",
+    "Over budget": "MODERATE",
+    "Within range": "NONE",
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -209,6 +223,48 @@ const HYPERTROPHY_AXIS_WEIGHTS: GoalProfileConfig["axisWeights"] = {
     rationale:
       "Tier 4: movement-pattern coverage is a coaching heuristic (Tier 3), redundant with per-muscle VOLUME.",
   },
+  // ARCH-063 / Session D. Scoped, because the five program-level checks differ in how much they matter.
+  "PROGRAM_STRUCTURE:attendance": {
+    weight: "HIGH",
+    rationale: "Tier 4: weekly volume is the best-supported driver, and one session a week cannot hold a week of it.",
+  },
+  "PROGRAM_STRUCTURE:total-volume": {
+    weight: "HIGH",
+    rationale: "Tier 4: the whole-body total is weekly volume restated across the program (ACSM 2026; Pelland 2026).",
+  },
+  "PROGRAM_STRUCTURE:session-size": {
+    weight: "MEDIUM",
+    rationale: "Tier 4: session length is one input among many; it must not outvote per-muscle volume.",
+  },
+  "PROGRAM_STRUCTURE:push-pull": {
+    weight: "MEDIUM",
+    rationale: "Tier 3-4: a coaching comparison whose importance is contested; with a MINOR severity it stays LOW leverage.",
+  },
+  "PROGRAM_STRUCTURE:time-budget": {
+    weight: "MEDIUM",
+    rationale: "Tier 4: a program that does not fit the time the lifter says they have is a real problem, but a stated preference.",
+  },
+};
+
+// ---------------------------------------------------------------------------
+// PROGRAM_STRUCTURE thresholds (ARCH-063 / Session D). Tier 4 throughout: engine boundaries a product chose, not
+// measurements. No existing band, severity or weight moved.
+// ---------------------------------------------------------------------------
+const HYPERTROPHY_PROGRAM_STRUCTURE: ProgramStructureConfig = {
+  // 40 credited hard sets a week across the body. About 3.6 sets for each of the 11 goal-relevant muscles, below the
+  // 6-set Adequate floor of every one of them. Boundary programs: S3 is exactly 40 (not under) and S6b credits about 42.
+  // Whether 40 is too high for someone who trains twice a week is [SCIENTIFIC INPUT REQUIRED].
+  minWeeklySets: 40,
+  // MORE than 30 credited sets in a session. Chosen on the calibration and coach-parity programs: it fires on C (32) and
+  // D (31) and not on J (30), F1 (29) or any PPL day (17 / 15 / 17).
+  maxSessionSets: 30,
+  // 2.5 minutes a set including rest: a round number inside the 2-3 minute range coaches quote.
+  minutesPerSet: 2.5,
+  budgetSlackMinutes: 5,
+  minTrainingDays: 2,
+  // At least 2 to 1 with at least 10 sets each side. Inclusive: a coach flags "you press twice what you pull" at exactly
+  // twice, and S8 (20 press, 10 pull) sits on both boundaries.
+  pushPull: { minRatio: 2, minSetsEachSide: 10 },
 };
 
 // ---------------------------------------------------------------------------
@@ -467,6 +523,35 @@ const HYPERTROPHY_EVIDENCE: GoalProfileEvidence = {
         },
       ],
     },
+  PROGRAM_STRUCTURE: {
+    thresholdTier: { from: 4, to: 4 },
+    claims: [
+      {
+        claim:
+          "Fewer than 40 hard sets a week across the whole body is called under-dosed. 40 is an engine boundary (about 3.6 sets per muscle); whether it suits someone who trains twice a week is not settled.",
+        tier: { from: 4, to: 4 },
+        sources: [],
+      },
+      {
+        claim:
+          "A session of more than 30 hard sets is called long, with an estimate of 2.5 minutes a set. Both numbers are engine boundaries, not measurements.",
+        tier: { from: 4, to: 4 },
+        sources: [],
+      },
+      {
+        claim:
+          "Pressing at least twice what you pull, with at least 10 sets on each side, is noted. It is a coaching comparison whose importance is contested.",
+        tier: { from: 3, to: 4 },
+        sources: [],
+      },
+      {
+        claim:
+          "One training session a week is called too few to cover a week of volume, and a session more than 5 minutes over the time you say you have is flagged.",
+        tier: { from: 4, to: 4 },
+        sources: [],
+      },
+    ],
+  },
   },
   fitScoreProjection: {
     thresholdTier: { from: 4, to: 4 },
@@ -508,6 +593,8 @@ export const HYPERTROPHY_CONFIG: GoalProfileConfig = {
   },
   severityMap: SEVERITY_MAP,
   severityWeightTable: SEVERITY_WEIGHT_TABLE,
+  // ARCH-063 / Session D. Opts this profile in to the PROGRAM_STRUCTURE axis.
+  programStructure: HYPERTROPHY_PROGRAM_STRUCTURE,
   materialitySeverityThreshold: "MODERATE",
   strengthEligibleAxes: [
     "VOLUME",

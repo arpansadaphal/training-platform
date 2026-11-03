@@ -111,6 +111,50 @@ export function actionTemplateFor(
         return null;
       }
 
+      case "PROGRAM_STRUCTURE": {
+        // ARCH-063 / Session D. One action per scope; the key owner is the scope, never a per-muscle key, so these
+        // never dedupe with a volume action.
+        switch (axis.scopeKey) {
+          case "attendance":
+            return band === "Single session"
+              ? {
+                  description: "Add a second training session a week before adding anything to this one.",
+                  rootCauseKey: "programStructure:add-session",
+                }
+              : null;
+          case "total-volume":
+            return band === "Under-dosed"
+              ? {
+                  description: "Add hard sets across the program, starting with the muscles furthest below the 6–20 range.",
+                  rootCauseKey: "programStructure:add-volume",
+                }
+              : null;
+          case "session-size":
+            return band === "Long session"
+              ? {
+                  description: "Split the longest session across two days, or trim its lowest-priority sets.",
+                  rootCauseKey: "programStructure:split-session",
+                }
+              : null;
+          case "push-pull":
+            return band === "Push-heavy"
+              ? {
+                  description: "Add pulling sets, or trim pressing sets, to bring the two closer to 1 to 1.",
+                  rootCauseKey: "programStructure:balance-push-pull",
+                }
+              : null;
+          case "time-budget":
+            return band === "Over budget"
+              ? {
+                  description: "Superset exercises or trim sets so the longest session fits the time you have.",
+                  rootCauseKey: "programStructure:fit-budget",
+                }
+              : null;
+          default:
+            return null;
+        }
+      }
+
       case "RECOVERY_COST": {
         if (band === "Moderate") {
           return {

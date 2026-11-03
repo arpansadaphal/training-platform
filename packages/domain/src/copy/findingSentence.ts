@@ -84,6 +84,42 @@ function progressionSentence(axis: AssessedAxis, config: GoalProfileConfig): str
 }
 
 /**
+ * ARCH-063 / Session D. The sentence for a PROGRAM_STRUCTURE finding. Every number is one the engine measured
+ * (`facts.program`) or a threshold the profile's own config holds; none claims an outcome (invariant 9) or a cause
+ * (invariant 10). Null for a scope or band this module has no wording for, and when the facts are absent.
+ */
+function programSentence(axis: AssessedAxis): string | null {
+  const f = axis.facts?.program;
+  if (f === undefined) return null;
+  const sets = (n: number): string => `${num(n)} ${n === 1 ? "set" : "sets"}`;
+  switch (axis.scopeKey) {
+    case "total-volume":
+      return f.totalSets === undefined || f.floorSets === undefined
+        ? null
+        : `Your program is under-dosed overall: ${num(f.totalSets)} hard sets per week across the body. A general floor is around ${num(f.floorSets)}.`;
+    case "session-size":
+      return f.sessionName === undefined || f.sessionSets === undefined || f.sessionMinutes === undefined
+        ? null
+        : `Session ${f.sessionName} is ${num(f.sessionSets)} sets, roughly ${Math.round(f.sessionMinutes)} minutes. Consider splitting it.`;
+    case "push-pull": {
+      if (f.pushSets === undefined || f.pullSets === undefined || !(f.pullSets > 0)) return null;
+      return `You press ${num(f.pushSets)} sets for every ${num(f.pullSets)} you pull (${num(f.pushSets / f.pullSets)} to 1). A typical ratio is closer to 1:1.`;
+    }
+    case "time-budget":
+      return f.sessionName === undefined ||
+        f.sessionMinutes === undefined ||
+        f.budgetMinutes === undefined ||
+        f.trimSets === undefined
+        ? null
+        : `Session ${f.sessionName} is about ${Math.round(f.sessionMinutes)} minutes. You said ${num(f.budgetMinutes)}. Consider supersetting or trimming ${sets(f.trimSets)}.`;
+    case "attendance":
+      return "One training session a week cannot cover a full week's volume. Get a second session in before adding anything to this one.";
+    default:
+      return null;
+  }
+}
+
+/**
  * The leading sentence for a REGION or PATTERN finding, or for an Effort & rep ranges finding that knows which
  * checks failed. Null for every other AXIS finding (those keep their `axisSentence`) and for a finding the
  * profile cannot word.
@@ -118,5 +154,6 @@ export function findingSentence(finding: AssessmentFinding, config: GoalProfileC
   }
 
   if (finding.lead.axisType === "PROGRESSION_SOUNDNESS") return progressionSentence(finding.lead, config);
+  if (finding.lead.axisType === "PROGRAM_STRUCTURE") return programSentence(finding.lead);
   return null;
 }

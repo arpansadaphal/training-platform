@@ -44,17 +44,17 @@ test("rest day: build, rotate, pick, move past (375px for the session part)", as
 
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Overall" })).toBeVisible();
-  // Phase A3a.1: volume and frequency findings lead with a plain sentence, and the numbers stay under it.
-  const sentence = page.getByText(/ volume is (low|in range|on the high side|past the well-studied range):/).first();
-  await expect(sentence).toBeVisible();
-  const axisCard = sentence.locator("xpath=ancestor::div[contains(@class,'axisCard')][1]");
-// Session B (findings consolidation) hides per-axis metrics behind a
-// disclosure. This test's intent is "the assessment rendered with real
-// data" — proven by the sentence assertion above — not "the exact number
-// is painted above the fold." toContainText checks textContent, so it
-// works whether or not the disclosure is expanded.
-await expect(axisCard).toContainText(/hard sets? \/ week/);
-  
+  // The assessment rendered with computed content. Which findings fire depends on the program (this one-exercise
+  // draft gets structural findings, not per-muscle volume sentences), so the assertions stay off finding copy: the
+  // Overall section always carries the fit line and the strengths/things count once the engine has run.
+  const overall = page.getByRole("heading", { name: "Overall" }).locator("xpath=..");
+  await expect(overall).toContainText(/Provisional fit: [A-Z ]+/);
+  await expect(overall).toContainText(/\d+ strengths? · \d+ things? to look at/);
+  // At least one finding or axis card is painted below it, with a status chip and a collapsed Details disclosure.
+  // toContainText reads textContent, so it holds whether or not the disclosure is expanded.
+  const axisCard = page.locator("[class*='axisCard']").first();
+  await expect(axisCard).toBeVisible();
+  await expect(axisCard).toContainText("Details");
   if (process.env.A3A_SHOTS) await axisCard.screenshot({ path: `${process.env.A3A_SHOTS}/axis-card.png` });
   await page.getByRole("button", { name: "Commit", exact: true }).click();
   await expect(page.getByText(/Committed as version 1\./)).toBeVisible();
@@ -103,6 +103,6 @@ await expect(axisCard).toContainText(/hard sets? \/ week/);
   await expect(page.getByText(/No systematic deviations|Adherence/i).first()).toBeVisible();
   // The commit-time assessment is folded away on Review until opened.
   await page.getByRole("heading", { name: "Assessment at commit time" }).click();
-  await expect(page.getByText(/ (volume|frequency) is /).first()).toBeVisible();
+  await expect(page.getByText(/\d+ things? to look at/).first()).toBeVisible();
   await expect(page.getByText(/sessions? skipped/i)).toHaveCount(0);
 });
