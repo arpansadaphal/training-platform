@@ -4,6 +4,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { createUser, findUserByEmailWithHash } from "@training/db";
+import { decodeCompactProgram } from "@training/domain";
 import { signIn } from "@/src/server/auth";
 
 const signupSchema = z.object({
@@ -45,11 +46,17 @@ export async function signupAction(formData: FormData): Promise<void> {
     displayName: parsed.data.name ?? "Anonymous",
   });
 
+  // Program Checker handoff, no-sessionStorage path: the checked program came along as a hash in the form.
+  // Only a hash that decodes to a program is trusted; anything else lands on /app as usual.
+  const checkHash = String(formData.get("checkHash") ?? "");
+  const redirectTo =
+    checkHash !== "" && decodeCompactProgram(checkHash) !== null ? `/check/${checkHash}?import=1` : "/app";
+
   // signIn with redirectTo throws NEXT_REDIRECT on success; that's the
   // intended control flow for a Server Action.
   await signIn("credentials", {
     email: parsed.data.email,
     password: parsed.data.password,
-    redirectTo: "/app",
+    redirectTo,
   });
 }

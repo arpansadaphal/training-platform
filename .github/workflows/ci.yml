@@ -53,6 +53,9 @@ jobs:
       # packages/ai/src/provider/MockProvider.ts.
       MODEL_PROVIDER: mock
       MOCK_SCENARIO: coach-regression
+      # Program Checker (/check) is public-flagged off by default; the E2E
+      # suite exercises it, so CI turns it on.
+      CHECK_PUBLIC: "true"
       # Rate limiting fails open when Upstash is not configured, which is
       # what CI wants — no network calls to Upstash, no false 429s against
       # the E2E suite.
@@ -106,6 +109,7 @@ jobs:
           AUTH_TRUST_HOST=${AUTH_TRUST_HOST}
           MODEL_PROVIDER=${MODEL_PROVIDER}
           MOCK_SCENARIO=${MOCK_SCENARIO}
+          CHECK_PUBLIC=${CHECK_PUBLIC}
           NEXT_PUBLIC_SENTRY_DSN=
           SENTRY_AUTH_TOKEN=
           SENTRY_ORG=
@@ -200,6 +204,11 @@ jobs:
       # CI instead of skipping on a missing ANTHROPIC_API_KEY.
       - name: E2E (Playwright)
         run: pnpm --filter web test:e2e
+
+      # Program Checker rate limit (ARCH-064). The in-memory test driver has to be on when the server starts, so
+      # this is a second, small run with its own server. The default run above covers the fail-open path.
+      - name: E2E rate limit (memory driver)
+        run: RATE_LIMIT_DRIVER=memory pnpm --filter web test:e2e rate-limit.spec.ts
 
       # Keep test-results/ available as a run artifact so a future
       # failure can be diagnosed from the page snapshot

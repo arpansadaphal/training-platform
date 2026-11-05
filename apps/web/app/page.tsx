@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { isCheckPublic } from "@training/config";
+import { CHECK_COPY } from "@training/domain";
 
 /**
  * Public landing page (unauthenticated). Phase 0 shipped it as a shell;
@@ -42,6 +44,11 @@ export default function LandingPage() {
         <p>
           <Link href="/signup">Create an account</Link>
         </p>
+        {isCheckPublic() ? (
+          <p>
+            <Link href="/check">{CHECK_COPY.landingLink}</Link>
+          </p>
+        ) : null}
       </main>
     </>
   );

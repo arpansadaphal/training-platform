@@ -15,6 +15,7 @@
 //   /api/trpc/coach.postMessage  →  10 / min  (LLM cost — strictest)
 //   /api/trpc/* (other)          → 120 / min  (ordinary CRUD)
 //   /api/auth/*                  →  20 / min  (login/signup brute-force)
+//   /api/trpc/check.analyze      →  20 / hour (public Program Checker, by IP, ARCH-064)
 //
 // The limiter is Upstash's sliding-window implementation over Upstash
 // Redis (REST API — Edge-compatible). On failure — misconfigured env,
@@ -25,10 +26,11 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import type { NextRequest } from "next/server";
+import { memoryDriverEnabled, memoryLimit } from "./rateLimitMemory";
 
 // ── Policy ──────────────────────────────────────────────────────────────
 
-export type RateLimitCategory = "coach" | "trpc" | "auth";
+export type RateLimitCategory = "coach" | "trpc" | "auth" | "check";
 
 interface Policy {
   limit: number;
@@ -43,7 +45,23 @@ export const RATE_LIMIT_POLICIES: Record<RateLimitCategory, Policy> = {
   coach: { limit: 10, window: "1 m", prefix: "rl:coach" },
   trpc: { limit: 120, window: "1 m", prefix: "rl:trpc" },
   auth: { limit: 20, window: "1 m", prefix: "rl:auth" },
+  // The key is `${prefix}:${identifier}` = "check:ip:<IP>". Always IP, never the
+  // session cookie: the Checker is the no-account funnel, and a cookie is free to clear.
+  check: { limit: 20, window: "1 h", prefix: "check:ip" },
 };
+
+/** Body text of the 429, per category. Unlisted categories use the generic message. */
+export const RATE_LIMIT_MESSAGES: Partial<Record<RateLimitCategory, string>> = {
+  check: "You've reached the limit for today. Create an account to continue checking programs.",
+};
+export const GENERIC_RATE_LIMIT_MESSAGE = "Too many requests. Please slow down and try again shortly.";
+
+const WINDOW_UNIT_MS = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 } as const;
+
+function windowMs(window: Policy["window"]): number {
+  const [amount, unit] = window.split(" ") as [string, keyof typeof WINDOW_UNIT_MS];
+  return Number(amount) * WINDOW_UNIT_MS[unit];
+}
 
 // ── Classification ──────────────────────────────────────────────────────
 
@@ -64,6 +82,7 @@ export function classifyRequest(pathname: string): RateLimitCategory | null {
 
   const ops = pathname.slice("/api/trpc/".length).split(",");
   if (ops.includes("coach.postMessage")) return "coach";
+  if (ops.includes("check.analyze")) return "check";
   return "trpc";
 }
 
@@ -86,7 +105,13 @@ export function classifyRequest(pathname: string): RateLimitCategory | null {
  * the collision probability across the sessions a single 60-second
  * window sees is negligible.
  */
-export async function deriveIdentifier(req: NextRequest): Promise<string> {
+export async function deriveIdentifier(
+  req: NextRequest,
+  category?: RateLimitCategory,
+): Promise<string> {
+  // The Checker's key is the bare IP so the Redis key reads "check:ip:<IP>".
+  if (category === "check") return getClientIp(req);
+
   const cookieValue =
     req.cookies.get("__Secure-authjs.session-token")?.value ??
     req.cookies.get("authjs.session-token")?.value;
@@ -183,6 +208,11 @@ export async function checkRateLimit(
   category: RateLimitCategory,
   identifier: string,
 ): Promise<RateLimitCheckResult | null> {
+  if (memoryDriverEnabled()) {
+    const policy = RATE_LIMIT_POLICIES[category];
+    return memoryLimit(`${policy.prefix}:${identifier}`, policy.limit, windowMs(policy.window));
+  }
+
   const limiter = getLimiter(category);
 
   if (!limiter) {

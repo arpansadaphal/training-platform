@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { loadServerEnv, loadClientEnv } from "./index";
+import { loadServerEnv, loadClientEnv, isCheckPublic } from "./index";
 
 describe("@training/config", () => {
   it("parses a valid server environment", () => {
@@ -22,5 +22,12 @@ describe("@training/config", () => {
   it("loads client env without requiring secrets", () => {
     const env = loadClientEnv({} as NodeJS.ProcessEnv);
     expect(env.NEXT_PUBLIC_SENTRY_DSN).toBeUndefined();
+  });
+
+  it("keeps the Program Checker off unless CHECK_PUBLIC is exactly 'true'", () => {
+    expect(isCheckPublic({} as NodeJS.ProcessEnv)).toBe(false);
+    expect(isCheckPublic({ CHECK_PUBLIC: "false" } as NodeJS.ProcessEnv)).toBe(false);
+    expect(isCheckPublic({ CHECK_PUBLIC: "1" } as NodeJS.ProcessEnv)).toBe(false);
+    expect(isCheckPublic({ CHECK_PUBLIC: "true" } as NodeJS.ProcessEnv)).toBe(true);
   });
 });

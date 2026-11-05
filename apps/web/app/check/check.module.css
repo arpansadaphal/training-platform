@@ -1,0 +1,267 @@
+/* Program Checker (/check). Mobile-first: everything stacks at 375px and every control is at least 44px. */
+
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.nav {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 0.5rem;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.navLink:hover {
+  text-decoration: underline;
+}
+
+.navSpacer {
+  flex: 1;
+}
+
+.heading {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.25;
+}
+
+.lead {
+  margin: 0;
+  color: var(--muted);
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tab {
+  flex: 1;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.tab[aria-selected="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 12rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 1rem;
+  resize: vertical;
+}
+
+.note {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.panelHeading {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.dayList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dayName {
+  font-weight: 600;
+}
+
+.exerciseList {
+  margin: 0.15rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+}
+
+.textLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--fg);
+}
+
+.lineCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.lineCard:first-of-type {
+  border-top: none;
+}
+
+.lineText {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.cards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-height: 44px;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.card:hover,
+.card:focus-visible {
+  border-color: var(--accent);
+}
+
+.cardTitle {
+  font-weight: 600;
+}
+
+.cta {
+  border-top: 1px solid var(--border);
+  padding-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ctaHeading {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.error {
+  margin: 0;
+  color: #b00020;
+}
+
+.prose {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.prose p,
+.prose ul {
+  margin: 0;
+}
+
+@media (min-width: 40rem) {
+  .cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Phone touch targets for the shared AssessmentDisplay controls. Scoped to this page (the component itself is
+   not touched): its small "See evidence" buttons and "Details" summaries are about 20px tall on their own. */
+.assessment button,
+.assessment summary {
+  min-height: 44px;
+}
+
+.assessment button {
+  display: inline-flex;
+  align-items: center;
+}
+
+.assessment summary {
+  padding-block: 0.8rem;
+  box-sizing: border-box;
+}

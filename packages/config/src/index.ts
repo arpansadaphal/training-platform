@@ -29,3 +29,17 @@ export * from './env';
  * this package for a flag it does not own.
  */
 export const L2_ENABLED = false as const;
+
+/**
+ * Program Checker (/check) public-launch flag.
+ *
+ * A RUNTIME env read, unlike L2_ENABLED: launching is one env flip in Vercel
+ * plus a redeploy, and turning it off again is the same flip. Default is
+ * false everywhere; development sets CHECK_PUBLIC=true in .env.local.
+ *
+ * Read on the server only (the /check pages and the check.* procedures both
+ * gate on it). Only the exact string "true" turns it on.
+ */
+export function isCheckPublic(source: NodeJS.ProcessEnv = process.env): boolean {
+  return source.CHECK_PUBLIC === 'true';
+}

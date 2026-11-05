@@ -97,6 +97,28 @@
   box-sizing: border-box;
 }
 
+/* ── Program Checker handoff banner ─────────────────────────────────── */
+
+.pendingBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--accent, #2b6cb0);
+  border-radius: 8px;
+}
+
+.pendingText {
+  margin: 0;
+}
+
+.pendingActions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 /* ── Stats ──────────────────────────────────────────────────────────── */
 
 .statsRow {
