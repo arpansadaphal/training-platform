@@ -1,0 +1,114 @@
+// tRPC router for the public Program Checker (/check).
+//
+// analyze and exercises are PUBLIC procedures: a stranger can call them with no
+// account. Rate limiting is Edge middleware keyed on the procedure name
+// (apps/web/src/lib/rateLimit.ts, category "check"), so analyze must stay reachable over
+// HTTP; an in-process caller (RSC, server action) would bypass the limit.
+//
+// A routine travels as a hash (base64url of exercise NAMES, see
+// packages/domain/src/check). analyze resolves names against the seeded library
+// and runs the same engine calls as analysis.previewAnalyze, without persisting
+// anything. save is the only procedure that writes, and it needs a signed-in user.
+//
+// All three refuse when CHECK_PUBLIC is not "true", so turning the flag off
+// closes the API as well as the pages.
+
+import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { isCheckPublic } from "@training/config";
+import {
+  CHECK_LIMITS,
+  computeAnalysis,
+  computeAssessment,
+  computeFitScore,
+  decodeCompactProgram,
+  goalProfileRegistry,
+  nameActions,
+  toProgramStructure,
+  withoutRestDays,
+  type AssessmentResult,
+  type FitScoreResult,
+  type NamedAction,
+  type ProgramStructure,
+} from "@training/domain";
+import { listExercises, type ExerciseRecord } from "@training/db";
+import { router, publicProcedure, protectedProcedure } from "../trpc";
+import { loadExerciseReferenceData } from "../services/referenceDataService";
+import { createMyProgram } from "../services/programService";
+import { createMyDraft, updateMyDraftStructure } from "../services/draftService";
+
+const CHECK_GOAL_PROFILE_KEY = "HYPERTROPHY";
+/** Not a Goal row: the engine only copies goalId into the result. */
+const CHECK_GOAL_ID = "program-checker";
+const SAVED_PROGRAM_NAME = "Checked program";
+const SAVED_DRAFT_LABEL = "From the Program Checker";
+
+const hashInput = z.object({ hash: z.string().min(1).max(CHECK_LIMITS.maxHashLength) });
+
+export interface CheckAnalyzeResult {
+  assessment: AssessmentResult;
+  fitScore: FitScoreResult;
+  namedActions: NamedAction[];
+  summary: { days: number; exercises: number };
+}
+
+function assertCheckEnabled(): void {
+  if (!isCheckPublic()) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
+}
+
+async function resolveHash(hash: string) {
+  const program = decodeCompactProgram(hash);
+  if (program === null) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "This link is not a valid program." });
+  }
+  const referenceData = await loadExerciseReferenceData({ goalProfileKey: CHECK_GOAL_PROFILE_KEY });
+  const structure = toProgramStructure(program, new Map(referenceData.exercises.map((e) => [e.name, e.id])));
+  if (!structure.ok) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Unknown exercise: ${structure.unknownExercises.join(", ")}`,
+    });
+  }
+  return { program, structure: structure.structure, referenceData };
+}
+
+export const checkRouter = router({
+  /** The exercise library the parser matches against. Reference data, not user data. */
+  exercises: publicProcedure.query(async (): Promise<ExerciseRecord[]> => {
+    assertCheckEnabled();
+    return listExercises();
+  }),
+
+  analyze: publicProcedure.input(hashInput).query(async ({ input }): Promise<CheckAnalyzeResult> => {
+    assertCheckEnabled();
+    const { program, structure, referenceData } = await resolveHash(input.hash);
+    const config = goalProfileRegistry.get(CHECK_GOAL_PROFILE_KEY).loadConfig();
+
+    // Same calls, in the same order, as analysis.previewAnalyze.
+    const analysed = withoutRestDays(structure);
+    const analysis = computeAnalysis(analysed, referenceData, config);
+    const assessment = computeAssessment(analysis, config, { goalId: CHECK_GOAL_ID });
+    const fitScore = computeFitScore(assessment);
+    const namedActions = nameActions(assessment.assessment, analysed, referenceData, config);
+
+    return {
+      assessment,
+      fitScore,
+      namedActions,
+      summary: {
+        days: program.days.length,
+        exercises: program.days.reduce((n, d) => n + d.rows.length, 0),
+      },
+    };
+  }),
+
+  /** Signed-in only: the checked routine becomes the user's first Program with one draft. */
+  save: protectedProcedure.input(hashInput).mutation(async ({ ctx, input }) => {
+    assertCheckEnabled();
+    const { structure } = await resolveHash(input.hash);
+    const program = await createMyProgram(ctx.user.id, SAVED_PROGRAM_NAME);
+    const draft = await createMyDraft(ctx.user.id, program.id, { label: SAVED_DRAFT_LABEL, baseVersionId: null });
+    await updateMyDraftStructure(ctx.user.id, draft.id, structure as ProgramStructure);
+    return { programId: program.id, draftId: draft.id };
+  }),
+});

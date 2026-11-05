@@ -22,3 +22,6 @@ Alternatives considered:
   (e) A Vitest/Playwright test for the limiter. Rejected — Vitest cannot exercise middleware (a Next.js construct, not a Node module); Playwright would require real Upstash credentials, and mocking Upstash verifies the mock, not the limiter. The verification is a curl-based shell script (`apps/web/scripts/load-test-ratelimit.sh`) run manually against a running instance.
 
 Consequence: `apps/web` gains `@upstash/ratelimit` and `@upstash/redis` dependencies. `turbo.json`'s `globalEnv` gains `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. `.env.example` gains both. Vercel's env vars must be set for all environments (see `docs/LAUNCH_CHECKLIST.md` §4). The rate-limiting verification procedure and expected output are documented in `docs/LAUNCH_CHECKLIST.md` §10. If the free-tier quota proves insufficient, upgrade Upstash before considering a self-hosted Redis — the code change would be contained to `apps/web/src/lib/rateLimit.ts`.
+
+
+Addendum (2026-11-03): ARCH-064 adds a `check` category (20 / hour, key `check:ip:<IP>`) and a test-only in-memory driver, superseding alternative (e) for that category only.

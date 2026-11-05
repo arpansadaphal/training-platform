@@ -17,9 +17,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { appRouter, type TodayPlan } from "@training/api";
+import { isCheckPublic } from "@training/config";
 import { auth } from "@/src/server/auth";
 import { AppNav } from "@/components/nav/AppNav";
 import { AccountMenu } from "@/components/nav/AccountMenu";
+import { PendingCheckBanner } from "./PendingCheckBanner";
 import { startTrainingAction } from "@/app/train/actions";
 import { loadUnitLabel } from "@/src/lib/loadLabels";
 import styles from "./dashboard.module.css";
@@ -65,6 +67,8 @@ export default async function DashboardPage() {
           </h1>
           <AccountMenu />
         </div>
+
+        {isCheckPublic() ? <PendingCheckBanner /> : null}
 
         {primaryProgram === null ? (
           <EmptyState />

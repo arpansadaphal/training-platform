@@ -21,6 +21,8 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import {
+  GENERIC_RATE_LIMIT_MESSAGE,
+  RATE_LIMIT_MESSAGES,
   checkRateLimit,
   classifyRequest,
   deriveIdentifier,
@@ -42,7 +44,7 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
     // classify, so `null` should not occur. If it ever does, skip.
     if (!category) return NextResponse.next();
 
-    const identifier = await deriveIdentifier(req);
+    const identifier = await deriveIdentifier(req, category);
     const result = await checkRateLimit(category, identifier);
 
     // null = fail open (Upstash unconfigured, network error, quota
@@ -67,7 +69,7 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
 
     return new NextResponse(
       JSON.stringify({
-        error: "Too many requests. Please slow down and try again shortly.",
+        error: RATE_LIMIT_MESSAGES[category] ?? GENERIC_RATE_LIMIT_MESSAGE,
       }),
       {
         status: 429,

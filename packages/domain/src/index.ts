@@ -235,3 +235,38 @@ export {
   buildTrainingCsv, csvText, isoDate, TRAINING_CSV_HEADER,
 } from "./progress/trainingCsv";
 export type { TrainingCsvRow } from "./progress/trainingCsv";
+
+// ── Program Checker (/check, Session E) ─────────────────────────────────────
+// Pure parsing, matching, encoding and copy for the public checker. No engine
+// change: these only build the ProgramStructure the engine already reads.
+
+export type {
+  CompactDay,
+  CompactProgram,
+  CompactRow,
+  ExerciseOption,
+  MatchResult,
+  MatchStatus,
+  ParseOptions,
+  ParseResult,
+  ParsedDay,
+  ParsedLine,
+  Resolutions,
+  SingletonMergeNote,
+  UnparsedLine,
+} from "./check/types";
+export { fold, matchExercise } from "./check/exerciseMatch";
+export {
+  countResolved,
+  mergeAllDays,
+  parseRoutine,
+  resolvedName,
+  toCompactProgram,
+  unresolvedLines,
+} from "./check/routineParser";
+export { CHECK_LIMITS, decodeCompactProgram, encodeCompactProgram } from "./check/compactProgram";
+export { CHECK_DEFAULT_RPE, toProgramStructure } from "./check/toStructure";
+export type { StructureResult } from "./check/toStructure";
+export { CHECK_PRESETS, findPreset } from "./check/presets";
+export type { CheckPreset } from "./check/presets";
+export { CHECK_COPY, allCheckCopy } from "./check/copy";
