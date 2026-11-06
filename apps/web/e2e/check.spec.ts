@@ -75,10 +75,14 @@ test("pick PPL 6-day -> assessment renders", async ({ page }) => {
 });
 
 test("an unmatched exercise shows the confirmation step and blocks checking until answered", async ({ page }) => {
-  await paste(page, ["Bench 3x8", "Back Squat 3x8", "Barbell Row 3x8", "Zottman Spin 3x8"].join("\n"));
+  // AUDIT TRAIL (ARCH-065 / Fix 5a): this used a bare "Bench 3x8" as the line that needs an answer. A bare Bench,
+  // Squat, Row or Deadlift is now accepted as the standard barbell lift, so the real choice here is "Curl" (barbell,
+  // dumbbell or cable). What the test guards is unchanged: a line that needs an answer shows the confirmation step and
+  // blocks checking until it is answered, and the answer replaces the typed name.
+  await paste(page, ["Curl 3x8", "Back Squat 3x8", "Barbell Row 3x8", "Zottman Spin 3x8"].join("\n"));
 
   await expect(page.getByRole("heading", { name: "Confirm these exercises" })).toBeVisible();
-  await expect(page.getByText('Line 1: "Bench 3x8". Did you mean "Barbell Bench Press"?')).toBeVisible();
+  await expect(page.getByText('Line 1: "Curl 3x8". Did you mean "Dumbbell Curl"?')).toBeVisible();
   await expect(page.getByText(/Line 4: "Zottman Spin 3x8". No exercise in the library matches\./)).toBeVisible();
 
   await page.getByRole("button", { name: "Looks right" }).click();
@@ -87,8 +91,19 @@ test("an unmatched exercise shows the confirmation step and blocks checking unti
   await page.getByRole("button", { name: "Yes" }).click();
   await page.getByRole("button", { name: "Remove line" }).click();
   await expect(page.getByRole("heading", { name: "Confirm these exercises" })).toHaveCount(0);
-  await expect(page.getByText("Barbell Bench Press 3×8")).toBeVisible();
+  await expect(page.getByText("Dumbbell Curl 3×8")).toBeVisible();
   await expect(page.getByRole("button", { name: "Check my program" })).toBeEnabled();
+});
+
+// ARCH-065 / Fix 5a. The two audit programs: the obvious lifts are accepted (and shown by name), and the one real
+// choice is asked about with the right default (Incline is a press on a chest day, not a curl).
+test("bare Bench, Squat and Row need no answer; Incline defaults to a press", async ({ page }) => {
+  await paste(page, ["Chest", "Bench 4x8", "Incline 3x8", "", "Back", "Row 4x8", "", "Legs", "Squat 4x8"].join("\n"));
+  await expect(page.getByText("Barbell Bench Press 4×8")).toBeVisible();
+  await expect(page.getByText("Back Squat 4×8")).toBeVisible();
+  await expect(page.getByText('Line 3: "Incline 3x8". Did you mean "Incline Dumbbell Press"?')).toBeVisible();
+  await expect(page.getByText(/Did you mean "Barbell Bench Press"/)).toHaveCount(0);
+  await expect(page.getByText(/Did you mean "Incline Curl"/)).toHaveCount(0);
 });
 
 test("'Choose different' opens the exercise picker", async ({ page }) => {
@@ -157,7 +172,8 @@ test.describe("sign-up handoff", () => {
     await page.getByRole("link", { name: /Beginner 2-day/ }).click();
     await page.getByRole("button", { name: "Create account and save this program" }).click();
     await expect(page).toHaveURL(/\/signup\?from=check$/);
-    await expect(page.getByText("Sign up to save the program you just checked")).toBeVisible();
+    // ARCH-065 / D2: "Sign up (it's free) to save the program you just checked as your first program."
+    await expect(page.getByText("to save the program you just checked")).toBeVisible();
 
     await signUp(page);
     await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });

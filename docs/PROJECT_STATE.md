@@ -85,6 +85,7 @@ What changed: reads that hang off a Session's own ids run side by side as flat q
 - A bodyweight exercise with no history is not "first time": it shows the rep range and keeps the effort picker.
 - The Builder still overflows at 375 px (496 px page); out of scope.
 - **Never run `next build` (it is part of `turbo typecheck`) while a dev server is running from the same `apps/web`: it overwrites `.next` and the dev server then serves pages whose client JavaScript never hydrates.** Use `tsc --noEmit` per package.
+- **Pre-paid-tier requirement (founder, 2026-11-06): a days-per-week input must ship before we charge money.** `/check` reads one week as the days listed; a 3-day rotation run twice a week is told it is under-dosed. ARCH-065 softens this (the paste hint, and "Run your 3 days twice a week → 48 hard sets a week" computed from the engine's `daysPerWeek`) but does not remove it. Not a launch blocker for the free tier. Asking it on `/check` changes the share-link format. If a paid tier ships, add a notice on the sign-up page at that time (the sign-up box says the account is free).
 
 **Phase A2 ("lazy-lifter friction fixes") is done on branch `phase-a2-friction-fixes`, awaiting review and merge.** It follows Phase A (merged to `main`, PR #23) and implements the 2026-10-21 lazy-lifter diagnostic's recommendations 1–6, 9, 11 and 12, plus the founder's session timer and auto-close. Deferred: per-exercise progress (7), starter templates (8), back-dating sessions (10). Phase B is **not started**.
 
