@@ -11,7 +11,9 @@ export const CHECK_COPY = {
   pageTitle: "Program Checker",
   pageDescription:
     "Paste a training routine and see how its structure reads against evidence-graded thresholds for muscle growth.",
-  intro: "Paste a routine or pick a common split. The result is a structural read, labeled provisional.",
+  // ARCH-065 / Fix 6. Says what the visitor gets, then that it is free; "provisional" stays, in plain words.
+  intro:
+    "Paste your routine to see how many hard sets each muscle gets, what is missing, and what to add first. It is free and needs no account. The read is provisional.",
   tabPaste: "Paste a routine",
   tabPick: "Pick a common split",
   pasteLabel: "Your routine",
@@ -88,17 +90,21 @@ export const CHECK_COPY = {
   pendingDiscard: "Discard",
 
   aboutTitle: "About the Program Checker",
+  // ARCH-065 / Fix 6. What it does, in lifter words, before how it was checked. The claim about the coaches is
+  // unchanged: it is the founder's to confirm (Session E handoff, manual action 4), and is not strengthened here.
+  aboutWhat:
+    "The Program Checker counts the hard sets each muscle gets in a week, checks which movement patterns your program covers, and compares both with evidence-graded thresholds for muscle growth. The same program always gets the same answer.",
   aboutIntro:
-    "This engine analyzes a training program against evidence-graded thresholds for hypertrophy. It has been tested against 24 test programs, reviewed by 5 coaches. 21 match the headline the coaches gave. 3 are documented exceptions awaiting either:",
+    "It has been tested against 24 test programs, reviewed by 5 coaches. 21 match the headline the coaches gave. 3 are documented exceptions awaiting either:",
   aboutExceptions: [
-    "Severity gradation, which moves severity decisions into per-program buckets rather than one-size-fits-all",
+    "A way to grade how big a shortfall is, instead of treating every shortfall alike",
     "Scientific input on novice training ranges",
   ],
   aboutNotJudgedHeading: "The analysis does not judge:",
   aboutNotJudged: ["Movement quality", "Whether a given lift suits you", "Medical conditions"],
   aboutPain: "If any exercise causes pain, stop and consult a professional.",
   aboutProvisional:
-    "The thresholds are provisional. Every assessment carries an evidence tier. See the evidence link on any analysis for what each finding rests on.",
+    "The thresholds are provisional. The coach check above covers what the checker says on those test programs, not the thresholds themselves, and no expert has signed them off yet. Every assessment carries an evidence tier. See the evidence link on any analysis for what each finding rests on.",
   aboutContinue: "Continue to the checker →",
 } as const;
 

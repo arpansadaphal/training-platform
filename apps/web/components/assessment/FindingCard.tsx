@@ -15,15 +15,17 @@ interface Props {
   variant: AxisCardVariant;
   /** ARCH-065 / Fix 3a: the sentence naming the muscles behind a whole-program finding. */
   detail?: string | null;
+  /** ARCH-065 / Fix 6: the public checker keeps each muscle's sets under Details and drops the engine's Severity and Leverage. */
+  plain?: boolean;
 }
 
 function num(value: number): string {
   return String(Math.round(value * 10) / 10);
 }
 
-export function FindingCard({ finding, variant, detail }: Props) {
+export function FindingCard({ finding, variant, detail, plain }: Props) {
   const sentence = findingSentence(finding, HYPERTROPHY_CONFIG);
-  if (finding.kind === "AXIS") return <AxisCard axis={finding.lead} variant={variant} sentence={sentence} detail={detail} />;
+  if (finding.kind === "AXIS") return <AxisCard axis={finding.lead} variant={variant} sentence={sentence} detail={detail} plain={plain} />;
 
   return (
     <div
@@ -44,14 +46,18 @@ export function FindingCard({ finding, variant, detail }: Props) {
               <dd>{num(member.sets)} hard sets / week</dd>
             </div>
           ))}
-          <div>
-            <dt>Severity</dt>
-            <dd>{finding.lead.severity}</dd>
-          </div>
-          <div>
-            <dt>Leverage</dt>
-            <dd>{finding.lead.leverage}</dd>
-          </div>
+          {plain ? null : (
+            <>
+              <div>
+                <dt>Severity</dt>
+                <dd>{finding.lead.severity}</dd>
+              </div>
+              <div>
+                <dt>Leverage</dt>
+                <dd>{finding.lead.leverage}</dd>
+              </div>
+            </>
+          )}
         </dl>
       </details>
     </div>

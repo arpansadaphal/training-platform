@@ -227,7 +227,7 @@ function AssessmentBody({
           <h2 className={styles.sectionHeading}>Strengths</h2>
           <div className={styles.axisList}>
             {strengths.map((axis) => (
-              <AxisCard key={axisKey(axis)} axis={axis} variant="strength" />
+              <AxisCard key={axisKey(axis)} axis={axis} variant="strength" plain={checkMode} />
             ))}
           </div>
         </section>
@@ -239,10 +239,10 @@ function AssessmentBody({
           <div className={styles.axisList}>
             {attention
               ? attention.map((finding) => (
-                  <FindingCard key={finding.key} finding={finding} variant="attention" detail={detailFor(finding)} />
+                  <FindingCard key={finding.key} finding={finding} variant="attention" detail={detailFor(finding)} plain={checkMode} />
                 ))
               : a.attentionAreas.map((axis) => (
-                  <AxisCard key={axisKey(axis)} axis={axis} variant="attention" />
+                  <AxisCard key={axisKey(axis)} axis={axis} variant="attention" plain={checkMode} />
                 ))}
           </div>
         </section>
@@ -263,9 +263,9 @@ function AssessmentBody({
         <section className={styles.section}>
           <h2 className={styles.sectionHeading}>Biggest Opportunity</h2>
           {headline ? (
-            <FindingCard finding={headline} variant="opportunity" detail={detailFor(headline)} />
+            <FindingCard finding={headline} variant="opportunity" detail={detailFor(headline)} plain={checkMode} />
           ) : (
-            <AxisCard axis={a.biggestOpportunity} variant="opportunity" />
+            <AxisCard axis={a.biggestOpportunity} variant="opportunity" plain={checkMode} />
           )}
         </section>
       ) : null}

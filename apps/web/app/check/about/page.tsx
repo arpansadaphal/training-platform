@@ -23,6 +23,7 @@ export default function CheckAboutPage() {
       <main className={styles.page}>
         <h1 className={styles.heading}>{CHECK_COPY.aboutTitle}</h1>
         <div className={styles.prose}>
+          <p>{CHECK_COPY.aboutWhat}</p>
           <p>{CHECK_COPY.aboutIntro}</p>
           <ul>
             {CHECK_COPY.aboutExceptions.map((line) => (

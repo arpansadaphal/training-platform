@@ -31,9 +31,14 @@ interface Props {
   sentence?: string | null;
   /** ARCH-065 / Fix 3a: a second sentence under the first (which muscles are behind a whole-program finding). */
   detail?: string | null;
+  /**
+   * ARCH-065 / Fix 6. The public checker: no engine table. "Metric 6 / Weight HIGH / Severity NONE / Leverage NONE" tells
+   * a lifter nothing, and the card already says the number in words. Every other surface keeps its Details.
+   */
+  plain?: boolean;
 }
 
-export function AxisCard({ axis, variant, sentence: given, detail }: Props) {
+export function AxisCard({ axis, variant, sentence: given, detail, plain }: Props) {
   const sentence = given ?? axisSentence(axis, HYPERTROPHY_CONFIG.statusBands[axis.axisType] ?? []);
   const meaning = sentence === null ? meaningText(axis) : "";
   return (
@@ -46,27 +51,29 @@ export function AxisCard({ axis, variant, sentence: given, detail }: Props) {
       {detail ? <p className={styles.axisSentence}>{detail}</p> : null}
       <p className={styles.axisMetric}>{metricText(axis)}</p>
       {meaning ? <p className={styles.axisMeaning}>{meaning}</p> : null}
-      <details className={styles.details}>
-        <summary>Details</summary>
-        <dl className={styles.axisMeta}>
-          <div>
-            <dt>Metric</dt>
-            <dd>{String(axis.metricValue)}</dd>
-          </div>
-          <div>
-            <dt>Weight</dt>
-            <dd>{axis.weight}</dd>
-          </div>
-          <div>
-            <dt>Severity</dt>
-            <dd>{axis.severity}</dd>
-          </div>
-          <div>
-            <dt>Leverage</dt>
-            <dd>{axis.leverage}</dd>
-          </div>
-        </dl>
-      </details>
+      {plain ? null : (
+        <details className={styles.details}>
+          <summary>Details</summary>
+          <dl className={styles.axisMeta}>
+            <div>
+              <dt>Metric</dt>
+              <dd>{String(axis.metricValue)}</dd>
+            </div>
+            <div>
+              <dt>Weight</dt>
+              <dd>{axis.weight}</dd>
+            </div>
+            <div>
+              <dt>Severity</dt>
+              <dd>{axis.severity}</dd>
+            </div>
+            <div>
+              <dt>Leverage</dt>
+              <dd>{axis.leverage}</dd>
+            </div>
+          </dl>
+        </details>
+      )}
     </div>
   );
 }
