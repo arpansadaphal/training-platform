@@ -1,6 +1,8 @@
 // apps/web/components/assessment/ProvisionalBanner.tsx
 //
-// The provisional-thresholds banner (ARCH-046; copy revised by ARCH-054).
+// The provisional-thresholds banner (ARCH-046; copy revised by ARCH-054 and again by ARCH-065 / D3: the same fact in the
+// words a lifter reads, from the domain constant in copy/provisionalBanner.ts; the tier-by-tier detail is under "See
+// evidence").
 //
 // Mounted inside AssessmentDisplay, so every consumer — Review, Builder,
 // Coach panel, History — gets it without needing to remember to render it.
@@ -19,7 +21,7 @@
 // No "use client" directive: no hooks and no state. The "See evidence"
 // handler is passed in by AssessmentDisplay, which owns the panel.
 
-import { HYPERTROPHY_CONFIG, thresholdTierSpan } from "@training/domain";
+import { PROVISIONAL_BANNER_BODY, PROVISIONAL_BANNER_LEAD } from "@training/domain";
 import styles from "./ProvisionalBanner.module.css";
 
 export function ProvisionalBanner({
@@ -29,8 +31,6 @@ export function ProvisionalBanner({
   onSeeEvidence?: () => void;
   evidenceOpen?: boolean;
 }) {
-  const evidence = HYPERTROPHY_CONFIG.evidence;
-  const span = evidence ? thresholdTierSpan(evidence) : null;
   return (
     <aside
       className={styles.banner}
@@ -38,9 +38,7 @@ export function ProvisionalBanner({
       aria-label="Provisional thresholds disclaimer"
     >
       <p className={styles.text}>
-        <strong>Thresholds are evidence-graded, not human-validated.</strong>{" "}
-        Tier 1 rests on meta-analyses and trials; Tier 4 is engine-derived.
-        {span ? ` These thresholds range from Tier ${span.from} to Tier ${span.to}.` : null}{" "}
+        <strong>{PROVISIONAL_BANNER_LEAD}</strong> {PROVISIONAL_BANNER_BODY}{" "}
         {onSeeEvidence ? (
           <button
             type="button"
