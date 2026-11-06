@@ -461,3 +461,65 @@ describe("nameActions: half credit and shared day names (ARCH-065 / Fix 1)", () 
     expect(text).not.toMatch(/on Full Body and \d on Full Body/);
   });
 });
+
+// ARCH-065 / Fix 3b. The whole-program volume action leads with the cheapest fix a lifter can make when the program is
+// a once-a-week rotation of 3 days or fewer: run it twice. The total is the engine's (daysPerWeek doubled), never
+// multiplied here, and the advice is withheld wherever it would be wrong.
+describe("nameActions: run the rotation twice a week (ARCH-065 / Fix 3b)", () => {
+  const run = (structure: ProgramStructure) => {
+    const analysis = computeAnalysis(structure, PPL_REF, HYPERTROPHY_CONFIG, { now: () => new Date(0) });
+    const { assessment } = computeAssessment(analysis, HYPERTROPHY_CONFIG, { goalId: "g" });
+    return nameActions(assessment, structure, PPL_REF, HYPERTROPHY_CONFIG).find(
+      (a) => a.rootCauseKey === "programStructure:add-volume",
+    );
+  };
+
+  it("a 3-day once-a-week rotation under the floor leads with 'Run your 3 days twice a week → 48 hard sets a week.'", () => {
+    const action = run(PPL_ONCE);
+    expect(action?.rotation).toEqual({ days: 3, totalSets: 48 });
+    expect(action?.description).toMatch(/^Run your 3 days twice a week → 48 hard sets a week\. Or, on 3 days a week: Add /);
+  });
+
+  it("the 48 is the engine's own number for the same program run twice a week", () => {
+    const analysis = computeAnalysis(PPL_ONCE, PPL_REF, HYPERTROPHY_CONFIG, {
+      now: () => new Date(0),
+      context: { daysPerWeek: 6 },
+    });
+    const total = analysis.axisResults.find((a) => a.axisType === "PROGRAM_STRUCTURE" && a.scopeKey === "total-volume");
+    expect(total?.metricValue).toBe(48);
+    expect(run(PPL_ONCE)?.rotation?.totalSets).toBe(total?.metricValue);
+  });
+
+  it("still names the additions for a lifter who keeps 3 days", () => {
+    expect(run(PPL_ONCE)?.suggestions?.length).toBeGreaterThan(0);
+  });
+
+  it("is withheld when running it twice would still be under the floor", () => {
+    const small: ProgramStructure = {
+      workoutDays: [
+        day("a", "Push", [rx("Barbell Bench Press", 3), rx("Tricep Pushdown", 2)]),
+        day("b", "Pull", [rx("Barbell Row", 3), rx("Barbell Curl", 2)]),
+        day("c", "Legs", [rx("Back Squat", 3), rx("Romanian Deadlift", 2)]),
+      ],
+    };
+    const action = run(small);
+    expect(action?.rotation).toBeUndefined();
+    expect(action?.description).not.toMatch(/twice a week/);
+  });
+
+  it("is withheld when muscles are already trained more than once (a 3-day full-body program is not a rotation)", () => {
+    const fullBody = (id: string) => day(id, "Full body", [rx("Barbell Bench Press", 3), rx("Barbell Row", 3), rx("Back Squat", 3)]);
+    const action = run({ workoutDays: [fullBody("a"), fullBody("b"), fullBody("c")] });
+    expect(action?.rotation).toBeUndefined();
+  });
+
+  it("is withheld for more than 3 listed days", () => {
+    const d = (id: string, name: string) => day(id, name, [rx("Barbell Bench Press", 1), rx("Barbell Row", 1)]);
+    const action = run({ workoutDays: [d("a", "A"), d("b", "B"), d("c", "C"), d("d", "D")] });
+    expect(action?.rotation).toBeUndefined();
+  });
+
+  it("the copy passes the forbidden-copy lint", () => {
+    assertCleanCopy([run(PPL_ONCE)!.description]);
+  });
+});

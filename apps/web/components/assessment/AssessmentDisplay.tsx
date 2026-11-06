@@ -43,14 +43,17 @@
 
 import { useState } from "react";
 import {
+  HYPERTROPHY_CONFIG,
   HIGH_VOLUME_HEADING,
   highVolumeLines,
   isClassified,
+  programVolumeDetail,
   provisionalFitBand,
   ratioLines,
   RATIO_TIER_NOTE,
   type AssessedAxis,
   type Assessment,
+  type AssessmentFinding,
   type AssessmentResult,
   type FitScoreBand,
   type FitScoreResult,
@@ -157,6 +160,12 @@ function AssessmentBody({
   const namedText = new Map((namedActions ?? []).map((n) => [n.rootCauseKey, n.description]));
   const balance = ratioLines(a.ratios);
   const trendingHigh = highVolumeLines(a.highVolume);
+  // ARCH-065 / Fix 3a: the whole-program finding also says which muscles are behind it.
+  const programDetail = programVolumeDetail(a, HYPERTROPHY_CONFIG);
+  const detailFor = (finding: AssessmentFinding): string | null =>
+    finding.kind === "AXIS" && finding.lead.axisType === "PROGRAM_STRUCTURE" && finding.lead.scopeKey === "total-volume"
+      ? programDetail
+      : null;
   // ARCH-063 / B2: findings (engine 0.5.0) say each problem once. A snapshot saved before that has none, and
   // renders as it always did, axis by axis.
   const headline = a.biggestOpportunity ? (a.findings?.[0] ?? null) : null;
@@ -218,7 +227,7 @@ function AssessmentBody({
           <div className={styles.axisList}>
             {attention
               ? attention.map((finding) => (
-                  <FindingCard key={finding.key} finding={finding} variant="attention" />
+                  <FindingCard key={finding.key} finding={finding} variant="attention" detail={detailFor(finding)} />
                 ))
               : a.attentionAreas.map((axis) => (
                   <AxisCard key={axisKey(axis)} axis={axis} variant="attention" />
@@ -242,7 +251,7 @@ function AssessmentBody({
         <section className={styles.section}>
           <h2 className={styles.sectionHeading}>Biggest Opportunity</h2>
           {headline ? (
-            <FindingCard finding={headline} variant="opportunity" />
+            <FindingCard finding={headline} variant="opportunity" detail={detailFor(headline)} />
           ) : (
             <AxisCard axis={a.biggestOpportunity} variant="opportunity" />
           )}

@@ -13,15 +13,17 @@ import styles from "./assessment.module.css";
 interface Props {
   finding: AssessmentFinding;
   variant: AxisCardVariant;
+  /** ARCH-065 / Fix 3a: the sentence naming the muscles behind a whole-program finding. */
+  detail?: string | null;
 }
 
 function num(value: number): string {
   return String(Math.round(value * 10) / 10);
 }
 
-export function FindingCard({ finding, variant }: Props) {
+export function FindingCard({ finding, variant, detail }: Props) {
   const sentence = findingSentence(finding, HYPERTROPHY_CONFIG);
-  if (finding.kind === "AXIS") return <AxisCard axis={finding.lead} variant={variant} sentence={sentence} />;
+  if (finding.kind === "AXIS") return <AxisCard axis={finding.lead} variant={variant} sentence={sentence} detail={detail} />;
 
   return (
     <div

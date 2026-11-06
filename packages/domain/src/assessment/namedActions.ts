@@ -56,10 +56,12 @@ import type {
   MovementPattern,
   MuscleGroupReference,
 } from "../analysis/types";
+import { computeAnalysis } from "../analysis/computeAnalysis";
 import { hardSetCredit } from "../analysis/hardSetCredit";
 import { joinList } from "../copy/findingSentence";
 import { applyMutation } from "../mutation/apply-mutation";
 import { simulate } from "../mutation/simulate";
+import { withoutRestDays } from "../structure/restDay";
 import { MutationError, type MutationSpec } from "../mutation/types";
 import type { ExercisePrescriptionStructure, ProgramStructure, WorkoutDayStructure } from "../types";
 import type { ActionSuggestion, AssessedAxis, Assessment, AssessmentFinding } from "./types";
@@ -71,6 +73,8 @@ const MAX_SETS_HALF_FACTOR = 6;
 const NEW_DAY_SETS = 3;
 /** How many muscles the whole-program volume action names: the largest deficits first. */
 const PROGRAM_VOLUME_NAMED = 2;
+/** A rotation of this many listed days or fewer can sensibly be run twice a week (3 x 2 = 6 days). */
+const MAX_ROTATION_DAYS = 3;
 const SIM_GOAL_ID = "named-actions";
 
 /** Usual first picks per muscle, best first. Names are library exercise names. Tier 3/4: a convention, not a measurement. */
@@ -123,6 +127,8 @@ export interface NamedAction {
   readonly suggestions?: readonly NamedActionSuggestion[];
   /** Present only when `description` proposes a new day for a region with no training. */
   readonly newDay?: NamedDaySuggestion;
+  /** Present only when `description` offers to run the listed days twice a week, with the engine's weekly total. */
+  readonly rotation?: { readonly days: number; readonly totalSets: number };
 }
 
 const num = (n: number): string => String(Math.round(n * 10) / 10);
@@ -471,6 +477,28 @@ function nameMemberAction(
 }
 
 /**
+ * ARCH-065 / Fix 3b. "Run your 3 days twice a week → 48 hard sets a week." Offered only where it is true to the
+ * program: 2-3 listed days (so doubling is 4-6 days), every muscle already hit at most once a week (a 3-day full-body
+ * program run twice is six full-body days, not a rotation), and the doubled week clears the profile's whole-program
+ * floor. The number is the engine's: the program is analysed again with `daysPerWeek` doubled, the same input
+ * Session C1 made VOLUME read, and nothing is multiplied here. Null when any condition fails.
+ */
+function rotationOption(ctx: Ctx, assessment: Assessment): { days: number; totalSets: number } | null {
+  const floor = ctx.config.programStructure?.minWeeklySets;
+  const days = ctx.days.length;
+  if (floor === undefined || days < 2 || days > MAX_ROTATION_DAYS) return null;
+  const exposed = assessment.allAssessedAxes.filter((a) => a.axisType === "FREQUENCY" && typeof a.metricValue === "number");
+  if (exposed.some((a) => (a.metricValue as number) > 1)) return null;
+  const doubled = computeAnalysis(withoutRestDays(ctx.structure), ctx.referenceData, ctx.config, {
+    now: () => new Date(0),
+    context: { daysPerWeek: days * 2 },
+  });
+  const total = doubled.axisResults.find((a) => a.axisType === "PROGRAM_STRUCTURE" && a.scopeKey === "total-volume");
+  if (!total || typeof total.metricValue !== "number" || total.metricValue < floor) return null;
+  return { days, totalSets: total.metricValue };
+}
+
+/**
  * The whole-program volume finding absorbed every per-muscle Low, so its one action would otherwise say only "add
  * hard sets across the program". Name the two muscles furthest below the start of the Adequate range, through the
  * same `suggestForMuscle` the per-muscle actions use (so every after-number is the engine's). A muscle with no
@@ -512,12 +540,22 @@ function nameProgramVolumeAction(
     named.push(suggestion);
     for (const id of proposedIds({ rootCauseKey: "", description: "", suggestion }, ctx.referenceData)) local.add(id);
   }
-  if (named.length === 0) return fallback;
+  const rotation = rotationOption(ctx, assessment);
+  if (named.length === 0 && rotation === null) return fallback;
   const belowRange = ctx.lowerBound !== null && named.some((s) => s.afterSets < (ctx.lowerBound as number));
-  const description =
-    `Start with: ${named.map(memberSentence).join(" ")}` +
+  const additions =
+    named.map(memberSentence).join(" ") +
     (belowRange ? ` The Adequate range starts at ${num(ctx.lowerBound as number)}.` : "");
-  return { rootCauseKey: action.rootCauseKey, description, suggestions: named };
+  const lead = rotation
+    ? `Run your ${rotation.days} days twice a week → ${num(rotation.totalSets)} hard sets a week.` +
+      (named.length > 0 ? ` Or, on ${rotation.days} days a week: ${additions}` : "")
+    : `Start with: ${additions}`;
+  return {
+    rootCauseKey: action.rootCauseKey,
+    description: lead,
+    ...(named.length > 0 ? { suggestions: named } : {}),
+    ...(rotation ? { rotation } : {}),
+  };
 }
 
 const article = (word: string): string => (/^[aeiou]/i.test(word) ? "an" : "a");

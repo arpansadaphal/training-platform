@@ -151,6 +151,7 @@ export { actionForFinding, actionTemplateFor } from "./assessment/actionTemplate
 export type { ActionTemplateResult } from "./assessment/actionTemplates";
 export { absentPatternGaps, regionOf } from "./assessment/patternGaps";
 export { findingSentence, joinList } from "./copy/findingSentence";
+export { programVolumeDetail } from "./copy/programVolumeDetail";
 export { nameActions } from "./assessment/namedActions";
 export type { NamedAction, NamedActionSuggestion, NamedDaySuggestion } from "./assessment/namedActions";
 

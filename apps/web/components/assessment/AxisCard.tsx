@@ -29,9 +29,11 @@ interface Props {
    * band-level one when the engine produced it.
    */
   sentence?: string | null;
+  /** ARCH-065 / Fix 3a: a second sentence under the first (which muscles are behind a whole-program finding). */
+  detail?: string | null;
 }
 
-export function AxisCard({ axis, variant, sentence: given }: Props) {
+export function AxisCard({ axis, variant, sentence: given, detail }: Props) {
   const sentence = given ?? axisSentence(axis, HYPERTROPHY_CONFIG.statusBands[axis.axisType] ?? []);
   const meaning = sentence === null ? meaningText(axis) : "";
   return (
@@ -41,6 +43,7 @@ export function AxisCard({ axis, variant, sentence: given }: Props) {
         <span className={styles.axisBand}>{axis.status.band}</span>
       </div>
       {sentence !== null ? <p className={styles.axisSentence}>{sentence}</p> : null}
+      {detail ? <p className={styles.axisSentence}>{detail}</p> : null}
       <p className={styles.axisMetric}>{metricText(axis)}</p>
       {meaning ? <p className={styles.axisMeaning}>{meaning}</p> : null}
       <details className={styles.details}>
