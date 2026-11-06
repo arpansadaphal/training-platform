@@ -1,9 +1,19 @@
 // packages/domain/src/check/exerciseMatch.ts
 //
 // Match free text ("bench", "RDL", "pullups") to a library exercise name.
-// Tiers: exact (after abbreviation expansion) -> contained in a name ->
-// close spelling. Only exact and unique matches are accepted without a
-// confirmation; everything else comes back with ranked candidates.
+// Tiers: exact (after abbreviation expansion) -> a few bare lifts that mean one thing in practice -> contained in a
+// name -> close spelling. Only exact and unique matches are accepted without a confirmation; everything else comes
+// back with ranked candidates.
+//
+// ARCH-065 / Fix 5a (the /check stranger audit). Two changes, both about not making a lifter answer questions a coach
+// would not ask:
+//   1. BARE_DEFAULTS. "Bench", "Squat", "Row" and "Deadlift" are accepted as the standard barbell lift, with status
+//      "unique". The confirmation step still shows the resolved name ("Barbell Bench Press 3x8") for the lifter to
+//      read, and "DB Bench" or "Cable Row" are exact or contained matches that never reach this table.
+//   2. COMMON_FIRST. Candidates that are several names containing the text are ranked with the usual lifts first, so
+//      "Incline" offers the presses before "Incline Curl" (which was the pre-highlighted answer, a biceps exercise on
+//      a chest day), and "Curl" offers Dumbbell Curl first. Everything else keeps the old order (fewest words, then
+//      alphabetical). "Curl" is still asked: a barbell, dumbbell or cable curl is a real choice.
 
 import type { MatchResult } from "./types";
 
@@ -31,6 +41,47 @@ function tokens(text: string): string[] {
   const expanded = words.flatMap((w) => (ABBREVIATIONS[w] ?? w).split(" "));
   return expanded.map((w) => (w.length > 3 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w));
 }
+
+/** Folded text -> the standard lift it means in practice. Used only when the library has that name. */
+const BARE_DEFAULTS: Readonly<Record<string, string>> = {
+  bench: "Barbell Bench Press",
+  benchpress: "Barbell Bench Press",
+  squat: "Back Squat",
+  deadlift: "Conventional Deadlift",
+  row: "Barbell Row",
+};
+
+/** Ranked first among several candidates, in this order. Names not listed follow, fewest words first. */
+const COMMON_FIRST: readonly string[] = [
+  "Barbell Bench Press",
+  "Dumbbell Bench Press",
+  "Incline Dumbbell Press",
+  "Incline Barbell Bench Press",
+  "Back Squat",
+  "Front Squat",
+  "Conventional Deadlift",
+  "Romanian Deadlift",
+  "Barbell Row",
+  "Dumbbell Row",
+  "Seated Cable Row",
+  "Overhead Press",
+  "Dumbbell Shoulder Press",
+  "Lat Pulldown",
+  "Pull-Up",
+  "Dumbbell Curl",
+  "Barbell Curl",
+  "Hammer Curl",
+  "Cable Curl",
+  "Tricep Pushdown",
+  "Lateral Raise",
+  "Leg Press",
+  "Leg Curl",
+];
+
+const commonRank = (name: string): number => {
+  const at = COMMON_FIRST.indexOf(name);
+  return at === -1 ? Number.MAX_SAFE_INTEGER : at;
+};
 
 function levenshtein(a: string, b: string): number {
   if (a === b) return 0;
@@ -73,10 +124,19 @@ export function matchExercise(query: string, names: readonly string[]): MatchRes
   const exact = entries.find((e) => e.tokens.join("") === qFold);
   if (exact) return { status: "exact", best: exact.name, candidates: [exact.name] };
 
-  // Contained: every query word appears in the name, or the folded text is a substring.
+  // A bare lift that means one thing in practice (Fix 5a): accepted, and shown by its full name in the parsed list.
+  const bare = BARE_DEFAULTS[qFold];
+  if (bare !== undefined && names.includes(bare)) return { status: "unique", best: bare, candidates: [bare] };
+
+  // Contained: every query word appears in the name, or the folded text is a substring. The usual lifts come first.
   const contained = entries
     .filter((e) => q.every((w) => e.tokens.includes(w)) || e.tokens.join("").includes(qFold))
-    .sort((a, b) => a.tokens.length - b.tokens.length || a.name.localeCompare(b.name));
+    .sort(
+      (a, b) =>
+        commonRank(a.name) - commonRank(b.name) ||
+        a.tokens.length - b.tokens.length ||
+        a.name.localeCompare(b.name),
+    );
   if (contained.length === 1) {
     return { status: "unique", best: contained[0]!.name, candidates: [contained[0]!.name] };
   }

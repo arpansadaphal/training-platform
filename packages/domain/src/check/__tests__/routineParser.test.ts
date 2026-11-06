@@ -122,14 +122,18 @@ describe("parseRoutine: single-exercise sections", () => {
 });
 
 describe("parseRoutine: matching, unparsed lines and resolutions", () => {
-  const text = ["Push", "Bench 3x8", "Overhead Press 3x8", "Zottman Spin 3x8", "Barbel Row 3x8", "this is a note", "RDL 3x8"].join("\n");
+  // AUDIT TRAIL (ARCH-065 / Fix 5a). This fixture used a bare "Bench 3x8" as its ambiguous line. A bare Bench, Squat, Row or
+  // Deadlift is now accepted as the standard barbell lift ("unique"), so the ambiguous line is "Curl 3x8" (barbell,
+  // dumbbell or cable is a real choice). What the tests guard is unchanged: which lines need an answer, what an answer
+  // does to the counts, and what is compacted.
+  const text = ["Push", "Curl 3x8", "Overhead Press 3x8", "Zottman Spin 3x8", "Barbel Row 3x8", "this is a note", "RDL 3x8"].join("\n");
 
   it("mixes valid, ambiguous, unmatched and unreadable lines", () => {
     const r = parse(text);
     expect(r.days).toHaveLength(1);
     const byQuery = Object.fromEntries(r.days[0]!.lines.map((l) => [l.query, l.match.status]));
     expect(byQuery).toMatchObject({
-      Bench: "ambiguous",
+      Curl: "ambiguous",
       "Overhead Press": "exact",
       "Zottman Spin": "none",
       "Barbel Row": "suggested",
@@ -141,16 +145,30 @@ describe("parseRoutine: matching, unparsed lines and resolutions", () => {
   it("counts only accepted or answered lines, and compacts them", () => {
     const r = parse(text);
     expect(countResolved(r, {})).toBe(2);
-    expect(unresolvedLines(r, {}).map((l) => l.query)).toEqual(["Bench", "Zottman Spin", "Barbel Row"]);
-    const answers = { 2: "Barbell Bench Press", 5: "Barbell Row" };
+    expect(unresolvedLines(r, {}).map((l) => l.query)).toEqual(["Curl", "Zottman Spin", "Barbel Row"]);
+    const answers = { 2: "Dumbbell Curl", 5: "Barbell Row" };
     expect(countResolved(r, answers)).toBe(4);
     expect(toCompactProgram(r, answers).days[0]!.rows.map((row) => row[0])).toEqual([
-      "Barbell Bench Press",
+      "Dumbbell Curl",
       "Overhead Press",
       "Barbell Row",
       "Romanian Deadlift",
     ]);
     expect(resolvedName(r.days[0]!.lines[2]!, answers)).toBeNull();
+  });
+
+  it("accepts bare Bench, Squat and Row without a question, and shows the full name (ARCH-065 / Fix 5a)", () => {
+    const r = parse("Push\nBench 3x8\nSquat 3x8\nRow 3x8");
+    expect(unresolvedLines(r, {})).toHaveLength(0);
+    expect(countResolved(r, {})).toBe(3);
+    expect(r.days[0]!.lines.map((l) => resolvedName(l, {}))).toEqual(["Barbell Bench Press", "Back Squat", "Barbell Row"]);
+  });
+
+  it("asks only about the line that is a real choice: Incline on a chest day offers the presses first", () => {
+    const r = parse("Chest\nBench 4x8\nIncline 3x8\n\nBack\nRow 4x8\n\nLegs\nSquat 4x8");
+    const open = unresolvedLines(r, {});
+    expect(open.map((l) => l.query)).toEqual(["Incline"]);
+    expect(open[0]!.match.best).toBe("Incline Dumbbell Press");
   });
 
   it("merge-all puts every exercise in one day", () => {
