@@ -262,17 +262,25 @@ function AssessmentBody({
         <section className={styles.section}>
           <h2 className={styles.sectionHeading}>Actions</h2>
           <ul className={styles.actionList}>
-            {a.actions.map((action) => (
-              <li
-                key={action.rootCauseKey}
-                className={styles.actionItem}
-                data-root-cause={action.rootCauseKey}
-              >
-                <p className={styles.actionDescription}>
-                  {namedText.get(action.rootCauseKey) ?? action.description}
-                </p>
-              </li>
-            ))}
+            {a.actions.map((action) => {
+              // ARCH-065 / Fix 2: each action says which finding it fixes ("Hinge · exercise selection: Add ..."),
+              // so a stranger can see the first one answers the headline and the rest answer the attention areas.
+              const finding = a.findings?.find(
+                (f) => f.lead.axisType === action.relatedAxis.axisType && f.lead.scopeKey === action.relatedAxis.scopeKey,
+              );
+              const label = finding ? findingLabel(finding) : axisLabel(action.relatedAxis);
+              return (
+                <li
+                  key={action.rootCauseKey}
+                  className={styles.actionItem}
+                  data-root-cause={action.rootCauseKey}
+                >
+                  <p className={styles.actionDescription}>
+                    <strong>{label}:</strong> {namedText.get(action.rootCauseKey) ?? action.description}
+                  </p>
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}

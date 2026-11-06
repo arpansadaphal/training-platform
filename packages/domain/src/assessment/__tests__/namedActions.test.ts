@@ -302,7 +302,10 @@ describe("nameActions: the whole-program volume action names the largest deficit
   });
 
   it("names two exercises, each with the engine's after-number for the muscle it raises", () => {
-    expect(program.description).toMatch(/^Start with: Add \d sets? of .+ on Day \d → [\w ]+ [\d.]+ sets\/week\./);
+    // AUDIT TRAIL (ARCH-065 / Fix 2): the "Start with:" prefix is gone (it read as an order across actions; the
+    // display now labels each action with the finding it fixes).
+    expect(program.description).toMatch(/^Add \d sets? of .+ on Day \d → [\w ]+ [\d.]+ sets\/week\./);
+    expect(program.description).not.toMatch(/Start with/);
     expect(program.suggestions).toHaveLength(2);
     const [a, b] = program.suggestions!;
     expect(a!.exerciseName).not.toBe(b!.exerciseName);

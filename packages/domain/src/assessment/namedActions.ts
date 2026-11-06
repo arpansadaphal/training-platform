@@ -14,8 +14,10 @@
 //     separate guesses;
 //   - a pattern finding led by the Exercise-selection axis ("no overhead press"): the template stands;
 //   - (ARCH-063 / Session D follow-up) the whole-program volume finding: it replaces the per-muscle Lows with one
-//     program-level action, so the action names the two largest deficits ("Start with: Add 3 sets of ...") and
-//     keeps the specificity the replaced actions had. Still one finding and one action.
+//     program-level action, so the action names the two largest deficits ("Add 3 sets of ...") and keeps the
+//     specificity the replaced actions had. Still one finding and one action. (ARCH-065 / Fix 2: the "Start with:"
+//     prefix is gone: it read as an order across actions, and the display now labels each action with the finding
+//     it fixes. Fix 3b may lead the action with "Run your 3 days twice a week".)
 //
 // Why a post-step and not part of computeAssessment: the Assessment is persisted verbatim in
 // AssessmentSnapshot and is a pure function of the Analysis, which carries no structure. Naming an exercise
@@ -549,7 +551,7 @@ function nameProgramVolumeAction(
   const lead = rotation
     ? `Run your ${rotation.days} days twice a week → ${num(rotation.totalSets)} hard sets a week.` +
       (named.length > 0 ? ` Or, on ${rotation.days} days a week: ${additions}` : "")
-    : `Start with: ${additions}`;
+    : additions;
   return {
     rootCauseKey: action.rootCauseKey,
     description: lead,
