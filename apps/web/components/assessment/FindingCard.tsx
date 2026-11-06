@@ -37,29 +37,31 @@ export function FindingCard({ finding, variant, detail, plain }: Props) {
         <span className={styles.axisBand}>{findingBandLabel(finding)}</span>
       </div>
       {sentence !== null ? <p className={styles.axisSentence}>{sentence}</p> : null}
-      <details className={styles.details}>
-        <summary>Details</summary>
-        <dl className={styles.axisMeta}>
-          {finding.members.map((member) => (
-            <div key={member.muscle}>
-              <dt>{member.muscle}</dt>
-              <dd>{num(member.sets)} hard sets / week</dd>
-            </div>
-          ))}
-          {plain ? null : (
-            <>
-              <div>
-                <dt>Severity</dt>
-                <dd>{finding.lead.severity}</dd>
+      {plain && finding.members.length === 0 ? null : (
+        <details className={styles.details}>
+          <summary>Details</summary>
+          <dl className={styles.axisMeta}>
+            {finding.members.map((member) => (
+              <div key={member.muscle}>
+                <dt>{member.muscle}</dt>
+                <dd>{num(member.sets)} hard sets / week</dd>
               </div>
-              <div>
-                <dt>Leverage</dt>
-                <dd>{finding.lead.leverage}</dd>
-              </div>
-            </>
-          )}
-        </dl>
-      </details>
+            ))}
+            {plain ? null : (
+              <>
+                <div>
+                  <dt>Severity</dt>
+                  <dd>{finding.lead.severity}</dd>
+                </div>
+                <div>
+                  <dt>Leverage</dt>
+                  <dd>{finding.lead.leverage}</dd>
+                </div>
+              </>
+            )}
+          </dl>
+        </details>
+      )}
     </div>
   );
 }
