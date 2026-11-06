@@ -152,6 +152,7 @@ export type { ActionTemplateResult } from "./assessment/actionTemplates";
 export { absentPatternGaps, regionOf } from "./assessment/patternGaps";
 export { findingSentence, joinList } from "./copy/findingSentence";
 export { programVolumeDetail } from "./copy/programVolumeDetail";
+export { displayStrengths, EARNED_VOLUME_SETS, type DisplayStrengthOptions } from "./assessment/displayStrengths";
 export { nameActions } from "./assessment/namedActions";
 export type { NamedAction, NamedActionSuggestion, NamedDaySuggestion } from "./assessment/namedActions";
 

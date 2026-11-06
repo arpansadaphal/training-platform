@@ -45,6 +45,7 @@ import { useState } from "react";
 import {
   HYPERTROPHY_CONFIG,
   HIGH_VOLUME_HEADING,
+  displayStrengths,
   highVolumeLines,
   isClassified,
   programVolumeDetail,
@@ -77,6 +78,12 @@ interface Props {
    * at commit) means every action reads as its template sentence.
    */
   namedActions?: readonly NamedAction[];
+  /**
+   * ARCH-065. The public checker (/check): effort is assumed (RPE 8 on every pasted program), so it is never credited
+   * as a strength, and a strength has to be earned (see `displayStrengths`). Display only; every other surface keeps
+   * showing the engine's strengths as they are.
+   */
+  checkMode?: boolean;
 }
 
 function axisKey(axis: AssessedAxis): string {
@@ -95,7 +102,7 @@ function fitLineFor(result: AssessmentResult, fitScore: FitScoreResult): FitLine
   return provisional ? { kind: "PROVISIONAL", band: provisional.band } : null;
 }
 
-export function AssessmentDisplay({ result, fitScore, namedActions }: Props) {
+export function AssessmentDisplay({ result, fitScore, namedActions, checkMode }: Props) {
   // ARCH-046: the banner is a property of the configuration, not of any
   // one assessment. `useProvisionalBanner` reads HYPERTROPHY_CONFIG's
   // `validated` flag and returns true while it is false — which, at MVP,
@@ -133,6 +140,7 @@ export function AssessmentDisplay({ result, fitScore, namedActions }: Props) {
         a={a}
         fit={fitLineFor(result, fitScore)}
         namedActions={namedActions}
+        checkMode={checkMode === true}
         onSeeEvidence={openEvidence}
         evidenceOpen={evidenceOpen}
       />
@@ -148,16 +156,20 @@ function AssessmentBody({
   a,
   fit,
   namedActions,
+  checkMode,
   onSeeEvidence,
   evidenceOpen,
 }: {
   a: Assessment;
   fit: FitLine;
   namedActions: readonly NamedAction[] | undefined;
+  checkMode: boolean;
   onSeeEvidence: () => void;
   evidenceOpen: boolean;
 }) {
   const namedText = new Map((namedActions ?? []).map((n) => [n.rootCauseKey, n.description]));
+  // ARCH-065 / Fix 4: on the public checker only an earned strength is shown, and the count follows what is shown.
+  const strengths = checkMode ? displayStrengths(a.strengths, { effortAssumed: true }) : a.strengths;
   const balance = ratioLines(a.ratios);
   const trendingHigh = highVolumeLines(a.highVolume);
   // ARCH-065 / Fix 3a: the whole-program finding also says which muscles are behind it.
@@ -197,8 +209,8 @@ function AssessmentBody({
           )
         ) : null}
         <p className={styles.overallSummary}>
-          {plural(a.strengths.length, "strength", "strengths")} ·{" "}
-          {plural(things, "thing", "things")} to look at
+          {!checkMode || strengths.length > 0 ? <>{plural(strengths.length, "strength", "strengths")} · </> : null}
+          {checkMode && things === 0 ? "Nothing flagged" : <>{plural(things, "thing", "things")} to look at</>}
           {a.biggestOpportunity ? (
             <>
               . Biggest opportunity:{" "}
@@ -210,11 +222,11 @@ function AssessmentBody({
         </p>
       </section>
 
-      {a.strengths.length > 0 ? (
+      {strengths.length > 0 ? (
         <section className={styles.section}>
           <h2 className={styles.sectionHeading}>Strengths</h2>
           <div className={styles.axisList}>
-            {a.strengths.map((axis) => (
+            {strengths.map((axis) => (
               <AxisCard key={axisKey(axis)} axis={axis} variant="strength" />
             ))}
           </div>
