@@ -206,6 +206,27 @@ test("pick PPL 6-day -> assessment renders", async ({ page }) => {
   await expect(page.getByText("Cross-muscle balance").first()).toBeVisible();
 });
 
+// ARCH-067 / Fix 2. A stranger sees what an assessment looks like before pasting anything.
+test("the landing shows a labelled, non-interactive example of an assessment above the paste box", async ({ page }) => {
+  await page.goto("/check");
+  const example = page.getByRole("region", { name: "Here's what an assessment looks like:" });
+  await expect(example).toBeVisible();
+  await expect(example.getByText("Example", { exact: true })).toBeVisible();
+  await expect(example.getByText("Weekly volume · Chest")).toBeVisible();
+  await expect(example.getByText("Adequate", { exact: true })).toBeVisible();
+  await expect(example.getByText("14 hard sets / week")).toBeVisible();
+  await expect(example.getByText("6 of 6 main movement patterns")).toBeVisible();
+  await expect(example.getByText("You press 12 hard sets a week and pull 10 hard sets a week (1.2 to 1).")).toBeVisible();
+  await expect(example.locator("a, button, input, select, textarea")).toHaveCount(0);
+  // Above the paste box, not below it.
+  const above = await example.boundingBox();
+  const box = await page.getByLabel("Your routine").boundingBox();
+  expect(above!.y + above!.height).toBeLessThanOrEqual(box!.y);
+  // It is an example, so it is not on the other tab and not on a result.
+  await page.getByRole("tab", { name: "Pick a common split" }).click();
+  await expect(page.getByRole("region", { name: "Here's what an assessment looks like:" })).toHaveCount(0);
+});
+
 // ARCH-067. The checker used to read one week as the days pasted, so a 3-day PPL run twice a week was called
 // under-dosed at half its real volume. The lifter now says how many days a week they train.
 const EIGHT_EXERCISE_PPL = [
@@ -506,6 +527,15 @@ test.describe("375px", () => {
     await page.goto("/signup?from=check&n=26");
     await expect(page.getByRole("heading", { name: "Save your 26-exercise program." })).toBeVisible();
     await expectPhoneFit(page, "signup from check");
+  });
+
+  test("the example does not push the paste box off a phone screen", async ({ page }) => {
+    await page.goto("/check");
+    await expect(page.getByRole("region", { name: "Here's what an assessment looks like:" })).toBeVisible();
+    const box = await page.getByLabel("Your routine").boundingBox();
+    // The 812px viewport shows the top of the box and the room to start typing.
+    expect(box!.y).toBeLessThan(812 - 150);
+    await expectPhoneFit(page, "check example");
   });
 });
 

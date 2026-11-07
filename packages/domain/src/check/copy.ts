@@ -14,6 +14,16 @@ export const CHECK_COPY = {
   // ARCH-065 / Fix 6. Says what the visitor gets, then that it is free; "provisional" stays, in plain words.
   intro:
     "Paste your routine to see how many hard sets each muscle gets, what is missing, and what to add first. It is free and needs no account. The read is provisional.",
+  // ARCH-067 / Fix 2. A static example of what an assessment reads like, above the paste box. It mirrors the real card
+  // wording (labels.ts, ratioLines.ts); copy.test.ts holds the numbers to the profile's bands and the real ratio line.
+  previewHeading: "Here's what an assessment looks like:",
+  previewTag: "Example",
+  previewCards: [
+    { label: "Weekly volume · Chest", status: "Adequate", detail: "14 hard sets / week" },
+    { label: "Exercise selection", status: "Balanced", detail: "6 of 6 main movement patterns" },
+  ],
+  previewBalanceHeading: "Cross-muscle balance",
+  previewBalance: "You press 12 hard sets a week and pull 10 hard sets a week (1.2 to 1).",
   tabPaste: "Paste a routine",
   tabPick: "Pick a common split",
   pasteLabel: "Your routine",
@@ -170,6 +180,7 @@ export function allCheckCopy(): string[] {
     else if (Array.isArray(value)) out.push(...value);
   }
   out.push(
+    ...CHECK_COPY.previewCards.flatMap((c) => [c.label, c.status, c.detail]),
     ...Object.values(CHECK_COPY.unparsedReason),
     CHECK_COPY.needMoreExercises(1),
     CHECK_COPY.needMoreExercises(2),

@@ -29,6 +29,7 @@ import {
   type ParsedLine,
   type Resolutions,
 } from "@training/domain";
+import { CheckPreview } from "./CheckPreview";
 import { ExercisePicker } from "@/app/app/programs/[id]/build/ExercisePicker";
 import styles from "./check.module.css";
 
@@ -225,6 +226,7 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
         </section>
       ) : (
         <section role="tabpanel" id={`${tabsId}-paste-panel`} aria-labelledby={`${tabsId}-paste`} className={styles.field}>
+          <CheckPreview />
           <label className={styles.field} htmlFor={`${tabsId}-text`}>
             {CHECK_COPY.pasteLabel}
           </label>
