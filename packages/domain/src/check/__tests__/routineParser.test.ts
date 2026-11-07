@@ -243,7 +243,7 @@ describe("parseRoutine: a ChatGPT-formatted program (ARCH-066)", () => {
   it("recognises all 26 without asking a question", () => {
     expect(unresolvedLines(r, {})).toEqual([]);
     expect(countResolved(r, {})).toBe(26);
-    expect(checkHint({ minExercises: 3, resolved: 26, unresolved: 0, unparsed: 0, confirmed: false })).toMatch(/Confirm/);
+    expect(checkHint({ minExercises: 3, resolved: 26, unresolved: 0, unparsed: 0 })).toBeNull();
   });
 
   it("keeps the rest day out of the program but in the schedule, with the walking line set aside, not dropped", () => {
@@ -372,10 +372,12 @@ describe("parseRoutine: exercise names (ARCH-066)", () => {
   });
 
   it('asks when neither alternative is recognised, offering what each came close to', () => {
-    const r = parse("Zottman Spin or Spider Curl Thing: 3 sets × 8 reps");
+    // (A first version used "Spider Curl Thing"; that is Spider Curl plus a word, which is now accepted: ARCH-066.)
+    const r = parse("Zottman Spin or Barbel Row: 3 sets × 8 reps");
     const line = r.days[0]!.lines[0]!;
     expect(resolvedName(line, {})).toBeNull();
     expect(unresolvedLines(r, {})).toHaveLength(1);
+    expect(line.match.candidates).toContain("Barbell Row");
   });
 
   it("reads an 'or' inside a parenthesis as variants of the name before it", () => {
@@ -549,7 +551,7 @@ describe("parseRoutine: the old formats read as before (ARCH-066)", () => {
 });
 
 describe("checkHint: the line under the disabled button (ARCH-066)", () => {
-  const base = { minExercises: 3, resolved: 0, unresolved: 0, unparsed: 0, confirmed: false };
+  const base = { minExercises: 3, resolved: 0, unresolved: 0, unparsed: 0 };
 
   it("never says 'Add 3 more' when nothing is recognised, even when many lines were pasted", () => {
     expect(checkHint({ ...base, unparsed: 25 })).toBe("0 exercises recognized. 25 lines could not be read: see the lines below.");
@@ -563,17 +565,150 @@ describe("checkHint: the line under the disabled button (ARCH-066)", () => {
   });
 
   it("asks for the open answers first when lines are waiting on one", () => {
-    expect(checkHint({ ...base, unresolved: 4 })).toBe("Answer or remove 4 lines before checking.");
-    expect(checkHint({ ...base, resolved: 5, unresolved: 1 })).toBe("Answer or remove 1 line before checking.");
+    expect(checkHint({ ...base, unresolved: 4 })).toBe("Answer 4 questions to continue.");
+    expect(checkHint({ ...base, resolved: 5, unresolved: 1 })).toBe("Answer 1 question to continue.");
   });
 
-  it("then asks to confirm, then says nothing", () => {
-    expect(checkHint({ ...base, resolved: 5 })).toBe("Confirm the reading above to continue.");
-    expect(checkHint({ ...base, resolved: 5, confirmed: true })).toBeNull();
+  it("has one gate: nothing to say once every question is answered (there is no separate 'Looks right')", () => {
+    expect(checkHint({ ...base, resolved: 5 })).toBeNull();
+    expect(checkHint({ ...base, resolved: 3 })).toBeNull();
   });
 
   it("zero recognised from the founder's paste is not a thing anymore: the same paste now recognises 26", () => {
     const r = parse(CHATGPT_PASTE);
     expect(countResolved(r, {})).toBe(26);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// ARCH-066, second pass: stop asking questions that are not questions. The founder's real paste generated 9, eight of
+// them a library exercise with a word added ("Seated", "Rope", "Lying", "Barbell"...).
+// ---------------------------------------------------------------------------------------------------------------------
+
+// A RECONSTRUCTION again: the founder's literal paste was not saved. It carries all 9 names from the report, in the
+// same 7 / 6 / rest / 7 / 6 shape as CHATGPT_PASTE above.
+const REAL_PASTE = `Day 1: Upper Body A
+• Barbell Bench Press: 4 sets × 6–8 reps (2 mins rest)
+• Lat Pulldown or Pull-Ups: 4 sets × 8–10 reps
+• Seated Dumbbell Shoulder Press: 3 sets × 8–10 reps
+• Seated Cable Row: 3 sets × 10–12 reps
+• Dumbbell Lateral Raises: 3 sets × 12–15 reps
+• Tricep Rope Pushdowns: 3 sets × 10–12 reps
+• Barbell Bicep Curls: 3 sets × 10–12 reps
+
+Day 2: Lower Body A
+• Barbell Back Squat: 4 sets × 6–8 reps (2 mins rest)
+• Romanian Deadlift: 3 sets × 8–10 reps
+• Bulgarian Split Squats: 3 sets × 8–10 reps per leg
+• Lying Leg Curls: 3 sets × 10–12 reps
+• Standing Calf Raise: 4 sets × 12–15 reps
+• Plank or Cable Crunches (Core): 3 sets × 30–45s / 12–15 reps
+
+Day 3: Rest / Active Recovery
+• 20–30 minutes of light walking or mobility/stretching work.
+
+Day 4: Upper Body B
+• Overhead Barbell Press (OHP): 4 sets × 6–8 reps
+• Barbell Row: 4 sets × 6–8 reps
+• Incline Dumbbell Press: 3 sets × 8–10 reps
+• Chest-Supported T-Bar Row: 3 sets × 8–10 reps
+• Face Pull: 3 sets × 12–15 reps
+• Dumbbell Overhead Tricep Extension: 3 sets × 10–12 reps
+• Hammer Curl: 3 sets × 10–12 reps
+
+Day 5: Lower Body B
+• Deadlift (Conventional or Sumo): 3 sets × 5 reps
+• Leg Press: 3 sets × 10–12 reps
+• Hip Thrust: 3 sets × 8–10 reps
+• Seated Leg Curl: 3 sets × 10–12 reps
+• Seated Calf Raise: 4 sets × 12–15 reps
+• Hanging Leg Raise: 3 sets × 12–15 reps
+`;
+
+describe("parseRoutine: qualified names are accepted, not asked about (ARCH-066)", () => {
+  it("reads the real-style paste as 26 exercises, 4 training days, 1 rest day, and asks at most 2 questions (was 9)", () => {
+    const r = parse(REAL_PASTE);
+    expect(r.days.map((d) => d.lines.length)).toEqual([7, 6, 7, 6]);
+    expect(r.restLinesSkipped).toBe(1);
+    expect(r.unparsed).toEqual([]);
+    const open = unresolvedLines(r, {});
+    expect(open.length).toBeLessThanOrEqual(2);
+    // The one real question: Chest-Supported Row and T-Bar Row both fit, and neither contains the other.
+    expect(open.map((l) => l.query)).toEqual(["Chest-Supported T-Bar Row"]);
+    expect(open[0]!.match.candidates).toEqual(["Chest-Supported Row", "T-Bar Row"]);
+    expect(countResolved(r, {})).toBe(25);
+    expect(countResolved(r, { [open[0]!.lineNo]: "T-Bar Row" })).toBe(26);
+    expect(checkHint({ minExercises: 3, resolved: 25, unresolved: 1, unparsed: 0 })).toBe("Answer 1 question to continue.");
+  });
+
+  it("accepts each of the eight qualified names as the plain library exercise", () => {
+    const r = parse(REAL_PASTE);
+    const resolved = Object.fromEntries(r.days.flatMap((d) => d.lines).map((l) => [l.query, resolvedName(l, {})]));
+    expect(resolved).toMatchObject({
+      "Seated Dumbbell Shoulder Press": "Dumbbell Shoulder Press",
+      "Dumbbell Lateral Raises": "Lateral Raise",
+      "Barbell Bicep Curls": "Barbell Curl",
+      "Tricep Rope Pushdowns": "Tricep Pushdown",
+      "Barbell Back Squat": "Back Squat",
+      "Overhead Barbell Press (OHP)": "Overhead Press",
+      "Dumbbell Overhead Tricep Extension": "Overhead Tricep Extension",
+      "Lying Leg Curls": "Leg Curl",
+    });
+  });
+
+  it.each([
+    ["Seated Dumbbell Shoulder Press", "Dumbbell Shoulder Press"],
+    ["Barbell Back Squat", "Back Squat"],
+    ["Dumbbell Lateral Raises", "Lateral Raise"],
+    ["Lying Leg Curls", "Leg Curl"],
+    ["Seated Leg Curl", "Seated Leg Curl"],
+  ])("%s -> %s, with no question", (text, expected) => {
+    const r = parse(`${text} 3x10`);
+    expect(unresolvedLines(r, {})).toEqual([]);
+    expect(resolvedName(r.days[0]!.lines[0]!, {})).toBe(expected);
+  });
+
+  it("Dumbbell Lateral Raises is the plain Lateral Raise, not the Cable one it used to lead with", () => {
+    const line = firstLine("Dumbbell Lateral Raises 3x12");
+    expect(line.match).toEqual({ status: "unique", best: "Lateral Raise", candidates: ["Lateral Raise"] });
+  });
+
+  it("a real library name that another name is a part of keeps its own name: Seated Leg Curl, not Leg Curl", () => {
+    expect(firstLine("Seated Leg Curl 3x10").match).toMatchObject({ status: "exact", best: "Seated Leg Curl" });
+  });
+
+  it("still asks when the text is genuinely ambiguous, and only offers close alternatives", () => {
+    const r = parse("Incline 3x8");
+    const line = r.days[0]!.lines[0]!;
+    expect(line.match.status).toBe("ambiguous");
+    expect(line.match.best).toBe("Incline Dumbbell Press");
+    expect(line.match.candidates.length).toBeLessThanOrEqual(3);
+    expect(unresolvedLines(r, {})).toHaveLength(1);
+  });
+
+  it("'Incline DB Press' is Incline Dumbbell Press once DB is read as Dumbbell: exact, no question", () => {
+    // The report expected a question here; the library has exactly that name, so asking would be the bug.
+    expect(firstLine("Incline DB Press 3x10").match).toMatchObject({ status: "exact", best: "Incline Dumbbell Press" });
+  });
+
+  it("shows qualified lines by the name that was accepted", () => {
+    const r = parse("Lying Leg Curls 3x10");
+    expect(resolvedName(r.days[0]!.lines[0]!, {})).toBe("Leg Curl");
+    expect(r.days[0]!.lines[0]!.query).toBe("Lying Leg Curls");
+  });
+});
+
+describe("parseRoutine: the old ways of asking are unchanged (ARCH-066)", () => {
+  it.each([
+    ["Curl", "ambiguous", "Dumbbell Curl"],
+    ["Incline", "ambiguous", "Incline Dumbbell Press"],
+    ["Barbel Row", "suggested", "Barbell Row"],
+    ["Zottman Spin", "none", null],
+    ["Bench", "unique", "Barbell Bench Press"],
+    ["Squat", "unique", "Back Squat"],
+    ["Overhead Press", "exact", "Overhead Press"],
+    ["RDL", "exact", "Romanian Deadlift"],
+  ])("%s is %s -> %s", (text, status, best) => {
+    expect(firstLine(`${text} 3x8`).match).toMatchObject({ status, best });
   });
 });

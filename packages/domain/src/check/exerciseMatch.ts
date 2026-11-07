@@ -5,6 +5,18 @@
 // name -> close spelling. Only exact and unique matches are accepted without a confirmation; everything else comes
 // back with ranked candidates.
 //
+// ARCH-066 (real pastes). Two more changes, both about the same thing:
+//   3. QUALIFIED NAMES. "Seated Dumbbell Shoulder Press", "Barbell Back Squat", "Lying Leg Curls" and "Dumbbell Lateral
+//      Raises" are a library exercise with a word or two added. When the lifter's words contain every word of exactly one
+//      library name (after plural folding), that name is accepted ("unique"), with no question. Where the library has
+//      both "Leg Curl" and "Seated Leg Curl" and the lifter wrote the longer one, the longest name wins; two names that
+//      neither contains the other ("Chest-Supported Row", "T-Bar Row" for "Chest-Supported T-Bar Row") are asked about.
+//      This covers what stripping a leading equipment word or adjective would, without a list of such words, and it
+//      is why "Dumbbell Lateral Raises" is the plain Lateral Raise and not the Cable one.
+//   4. ALTERNATIVES. A question offers the best guess plus at most two others, and only those whose overlap with what was
+//      typed (Jaccard: shared words over all words) is at least 60% of the best guess's. "Overhead Barbell Press" no longer
+//      offers Barbell Bench Press. The order is not changed by the score, so "Incline" still leads with a press.
+//
 // ARCH-065 / Fix 5a (the /check stranger audit). Two changes, both about not making a lifter answer questions a coach
 // would not ask:
 //   1. BARE_DEFAULTS. "Bench", "Squat", "Row" and "Deadlift" are accepted as the standard barbell lift, with status
@@ -121,9 +133,34 @@ function tokenCloseness(query: readonly string[], name: readonly string[]): numb
   return close.length / query.length;
 }
 
-const MAX_CANDIDATES = 5;
+/** The best guess plus at most two alternatives. */
+const MAX_CANDIDATES = 3;
+/** An alternative must overlap what was typed at least this much, relative to the best guess. */
+const ALTERNATIVE_SHARE = 0.6;
+/** A qualified name may add at most this many words to a library name. */
+const MAX_EXTRA_WORDS = 2;
 const FUZZY_FLOOR = 0.6;
 const SUGGEST_AT = 0.8;
+
+/** Shared words over all words, counting a word within one edit as shared (typos). 0 to 1. */
+function overlap(query: readonly string[], name: readonly string[]): number {
+  const q = new Set(query);
+  const n = new Set(name);
+  const shared = [...q].filter((w) => n.has(w) || (w.length > 3 && [...n].some((x) => x.length > 3 && levenshtein(w, x) <= 1)));
+  const union = q.size + n.size - shared.length;
+  return union === 0 ? 0 : shared.length / union;
+}
+
+/** Keep the best guess, then up to two alternatives that overlap the text at least 60% as well as it does. */
+function closeAlternatives(query: readonly string[], ranked: readonly { name: string; tokens: readonly string[] }[]): string[] {
+  const lead = ranked[0];
+  if (lead === undefined) return [];
+  const floor = overlap(query, lead.tokens) * ALTERNATIVE_SHARE;
+  return ranked
+    .filter((e, i) => i === 0 || overlap(query, e.tokens) >= floor)
+    .slice(0, MAX_CANDIDATES)
+    .map((e) => e.name);
+}
 
 export function matchExercise(query: string, names: readonly string[]): MatchResult {
   const q = tokens(query);
@@ -139,6 +176,26 @@ export function matchExercise(query: string, names: readonly string[]): MatchRes
   const bare = BARE_DEFAULTS[qFold];
   if (bare !== undefined && names.includes(bare)) return { status: "unique", best: bare, candidates: [bare] };
 
+  // Qualified name (ARCH-066): the lifter's words contain every word of a library name, plus one or two more.
+  // The longest such name wins; one name left is accepted, several are asked about.
+  const typed = new Set(q);
+  const supersets = entries.filter(
+    (e) => e.tokens.length > 0 && e.tokens.every((t) => typed.has(t)) && typed.size - new Set(e.tokens).size <= MAX_EXTRA_WORDS,
+  );
+  const longest = supersets.filter(
+    (e) => !supersets.some((o) => o !== e && o.tokens.length > e.tokens.length && e.tokens.every((t) => o.tokens.includes(t))),
+  );
+  if (longest.length === 1) {
+    return { status: "unique", best: longest[0]!.name, candidates: [longest[0]!.name] };
+  }
+  if (longest.length > 1) {
+    const ranked = [...longest].sort(
+      (a, b) => commonRank(a.name) - commonRank(b.name) || b.tokens.length - a.tokens.length || a.name.localeCompare(b.name),
+    );
+    const top = closeAlternatives(q, ranked);
+    return { status: "ambiguous", best: top[0]!, candidates: top };
+  }
+
   // Contained: every query word appears in the name, or the folded text is a substring. The usual lifts come first.
   const contained = entries
     .filter((e) => q.every((w) => e.tokens.includes(w)) || e.tokens.join("").includes(qFold))
@@ -152,7 +209,7 @@ export function matchExercise(query: string, names: readonly string[]): MatchRes
     return { status: "unique", best: contained[0]!.name, candidates: [contained[0]!.name] };
   }
   if (contained.length > 1) {
-    const top = contained.slice(0, MAX_CANDIDATES).map((e) => e.name);
+    const top = closeAlternatives(q, contained);
     return { status: "ambiguous", best: top[0]!, candidates: top };
   }
 
@@ -165,7 +222,11 @@ export function matchExercise(query: string, names: readonly string[]): MatchRes
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
   if (scored.length === 0) return { status: "none", best: null, candidates: [] };
 
-  const top = scored.slice(0, MAX_CANDIDATES).map((s) => s.name);
+  const byName = new Map(entries.map((e) => [e.name, e.tokens]));
+  const top = closeAlternatives(
+    q,
+    scored.map((x) => ({ name: x.name, tokens: byName.get(x.name)! })),
+  );
   const lead = scored[0]!;
   const runnerUp = scored[1];
   const clearWinner = lead.score >= SUGGEST_AT && (runnerUp === undefined || lead.score - runnerUp.score >= 0.1);

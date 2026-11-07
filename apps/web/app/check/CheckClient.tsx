@@ -17,6 +17,7 @@ import {
   countResolved,
   decodeCompactProgram,
   encodeCompactProgram,
+  fold,
   mergeAllDays,
   parseRoutine,
   resolvedName,
@@ -40,6 +41,16 @@ function prescription(line: ParsedLine): string {
   return `${line.sets}×${reps}`;
 }
 
+/**
+ * What the lifter typed, when the matcher had to infer the name ("Lying Leg Curls" -> Leg Curl, "Bench" -> Barbell Bench
+ * Press). Not shown for exact matches (a plural is still that exercise) or for "A or B" lines, which have Notes.
+ */
+function cameFrom(line: ParsedLine, resolutions: Resolutions): string | null {
+  const name = resolvedName(line, resolutions);
+  if (name === null || resolutions[line.lineNo] !== undefined || line.match.status === "exact") return null;
+  return fold(name) !== fold(line.query) ? line.query : null;
+}
+
 function dropRemoved(result: ParseResult, removed: ReadonlySet<number>): ParseResult {
   if (removed.size === 0) return result;
   const days = result.days
@@ -58,7 +69,6 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
   const [text, setText] = useState("");
   const [separate, setSeparate] = useState(false);
   const [mergedAll, setMergedAll] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
   const [resolutions, setResolutions] = useState<Resolutions>({});
   const [removed, setRemoved] = useState<ReadonlySet<number>>(new Set());
   const [dismissed, setDismissed] = useState<ReadonlySet<number>>(new Set());
@@ -78,7 +88,7 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
   const unresolved = unresolvedLines(parsed, resolutions);
   const resolvedCount = countResolved(parsed, resolutions);
   const unparsedShown = parsed.unparsed.filter((u) => !dismissed.has(u.lineNo));
-  const canCheck = confirmed && unresolved.length === 0 && resolvedCount >= MIN_EXERCISES;
+  const canCheck = unresolved.length === 0 && resolvedCount >= MIN_EXERCISES;
   const hasReading = parsed.days.length > 0;
   const schedule = useMemo(() => scheduleEntries(parsed), [parsed]);
   const restCount = schedule.filter((e) => e.kind === "rest").length;
@@ -90,7 +100,6 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
     setText(event.target.value);
     setSeparate(false);
     setMergedAll(false);
-    setConfirmed(false);
     setResolutions({});
     setRemoved(new Set());
     setDismissed(new Set());
@@ -113,7 +122,6 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
   }
 
   function editManually() {
-    setConfirmed(false);
     textareaRef.current?.focus();
   }
 
@@ -122,7 +130,6 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
     resolved: resolvedCount,
     unresolved: unresolved.length,
     unparsed: unparsedShown.length,
-    confirmed,
   });
 
   return (
@@ -208,6 +215,12 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
                         {entry.day.lines.map((line) => (
                           <li key={line.lineNo}>
                             {resolvedName(line, resolutions) ?? line.query} {prescription(line)}
+                            {cameFrom(line, resolutions) !== null ? (
+                              <>
+                                {" "}
+                                <span className={styles.note}>{CHECK_COPY.acceptedFrom(cameFrom(line, resolutions)!)}</span>
+                              </>
+                            ) : null}
                           </li>
                         ))}
                       </ul>
@@ -241,10 +254,7 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
                                     key={name}
                                     type="button"
                                     className={styles.secondary}
-                                    onClick={() => {
-                                      answer(note.lineNo, name);
-                                      setConfirmed(false);
-                                    }}
+                                    onClick={() => answer(note.lineNo, name)}
                                   >
                                     {CHECK_COPY.useCandidate(name)}
                                   </button>
@@ -279,10 +289,7 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
                     <button
                       type="button"
                       className={styles.secondary}
-                      onClick={() => {
-                        setSeparate(!separate);
-                        setConfirmed(false);
-                      }}
+                      onClick={() => setSeparate(!separate)}
                     >
                       {separate ? CHECK_COPY.singletonMerge : CHECK_COPY.singletonSeparate}
                     </button>
@@ -291,24 +298,13 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
               ) : null}
 
               <div className={styles.actions}>
-                <button type="button" className={styles.primary} onClick={() => setConfirmed(true)}>
-                  {CHECK_COPY.looksRight}
-                </button>
-                <button
-                  type="button"
-                  className={styles.secondary}
-                  onClick={() => {
-                    setMergedAll(!mergedAll);
-                    setConfirmed(false);
-                  }}
-                >
+                <button type="button" className={styles.secondary} onClick={() => setMergedAll(!mergedAll)}>
                   {mergedAll ? CHECK_COPY.splitAgain : CHECK_COPY.mergeAll}
                 </button>
                 <button type="button" className={styles.secondary} onClick={editManually}>
                   {CHECK_COPY.editManually}
                 </button>
               </div>
-              {confirmed ? <p className={styles.note}>{CHECK_COPY.confirmedNote}</p> : null}
             </div>
           ) : null}
 

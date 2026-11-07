@@ -26,7 +26,7 @@ async function paste(page: Page, text: string): Promise<void> {
 }
 
 async function checkPastedProgram(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Looks right" }).click();
+  // One gate (ARCH-066): there is no "Looks right"; "Check my program" is enabled once every question is answered.
   await page.getByRole("button", { name: "Check my program" }).click();
   await expect(page).toHaveURL(/\/check\/[A-Za-z0-9_-]+$/);
 }
@@ -37,8 +37,9 @@ test("paste a routine -> confirm the reading -> assessment renders", async ({ pa
   await expect(page.getByRole("heading", { name: "Parsed as 3 days" })).toBeVisible();
   await expect(page.getByText("Day 1 (Push)")).toBeVisible();
   await expect(page.getByText("Day 3 (Legs)")).toBeVisible();
-  // Not confirmed yet, so checking is off.
-  await expect(page.getByRole("button", { name: "Check my program" })).toBeDisabled();
+  // Nothing to answer, so checking is on straight away: there is no separate confirmation click.
+  await expect(page.getByRole("button", { name: "Looks right" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Check my program" })).toBeEnabled();
 
   await checkPastedProgram(page);
   await expect(page.getByRole("heading", { name: "Assessment" })).toBeVisible();
@@ -126,6 +127,61 @@ test("a ChatGPT-formatted 5-day paste reads as 4 training days and a rest day, t
   await expect(page.getByRole("heading", { name: "Assessment" })).toBeVisible();
 });
 
+// ARCH-066, second pass. The founder's real paste asked 9 questions, eight of them a library exercise with a word added.
+// A RECONSTRUCTION (the literal text was not saved) carrying all 9 names; same fixture as routineParser.test.ts.
+const REAL_PASTE = CHATGPT_PASTE.replace("• Dumbbell Shoulder Press:", "• Seated Dumbbell Shoulder Press:")
+  .replace("• Lateral Raise:", "• Dumbbell Lateral Raises:")
+  .replace("• Tricep Pushdown:", "• Tricep Rope Pushdowns:")
+  .replace("• Dumbbell Curl: 3 sets × 10–12 reps", "• Barbell Bicep Curls: 3 sets × 10–12 reps")
+  .replace("• Back Squat:", "• Barbell Back Squat:")
+  .replace("• Leg Curl:", "• Lying Leg Curls:")
+  .replace("• Overhead Press:", "• Overhead Barbell Press (OHP):")
+  .replace("• Chest-Supported Row:", "• Chest-Supported T-Bar Row:")
+  .replace("• Overhead Tricep Extension:", "• Dumbbell Overhead Tricep Extension:");
+
+test("qualified names are accepted without a question; the one real choice is asked, and answering it unlocks the check", async ({ page }) => {
+  await paste(page, REAL_PASTE);
+
+  await expect(page.getByRole("heading", { name: "Parsed 5 days (4 training, 1 rest)" })).toBeVisible();
+  await expect(page.getByText("Total: 26 exercises across 4 training days")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Looks right" })).toHaveCount(0);
+
+  // The accepted names are shown, with what was typed beside them.
+  for (const [accepted, typed] of [
+    ["Dumbbell Shoulder Press 3×8-10", "Seated Dumbbell Shoulder Press"],
+    ["Lateral Raise 3×12-15", "Dumbbell Lateral Raises"],
+    ["Barbell Curl 3×10-12", "Barbell Bicep Curls"],
+    ["Tricep Pushdown 3×10-12", "Tricep Rope Pushdowns"],
+    ["Back Squat 4×6-8", "Barbell Back Squat"],
+    ["Overhead Press 4×6-8", "Overhead Barbell Press (OHP)"],
+    ["Overhead Tricep Extension 3×10-12", "Dumbbell Overhead Tricep Extension"],
+    ["Leg Curl 3×10-12", "Lying Leg Curls"],
+  ] as const) {
+    // .last(): the day's own list item contains the exercise's, so take the innermost.
+    await expect(page.getByRole("listitem").filter({ hasText: accepted }).filter({ hasText: `from "${typed}"` }).last()).toBeVisible();
+  }
+
+  // Exactly one question: Chest-Supported Row or T-Bar Row. No Cable Lateral Raise, no Bench Press.
+  await expect(page.getByRole("heading", { name: "Confirm these exercises" })).toBeVisible();
+  await expect(page.getByText(/Did you mean/)).toHaveCount(1);
+  await expect(page.getByText('Did you mean "Chest-Supported Row"?', { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use T-Bar Row" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Use .*Bench/ })).toHaveCount(0);
+  await expect(page.getByText(/Cable Lateral Raise/)).toHaveCount(0);
+
+  await expect(page.getByRole("button", { name: "Check my program" })).toBeDisabled();
+  await expect(page.getByText("Answer 1 question to continue.")).toBeVisible();
+  await page.getByRole("button", { name: "Use T-Bar Row" }).click();
+  await expect(page.getByRole("button", { name: "Check my program" })).toBeEnabled();
+
+  // Merge all and Edit manually are still there.
+  await expect(page.getByRole("button", { name: "Merge all into one day" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit manually" })).toBeVisible();
+
+  await checkPastedProgram(page);
+  await expect(page.getByRole("heading", { name: "Assessment" })).toBeVisible();
+});
+
 test("nothing recognised says so, instead of 'Add 3 more'", async ({ page }) => {
   await paste(page, "Some notes about my week\nI train when I can");
   await expect(page.getByText("0 exercises recognized.", { exact: false })).toBeVisible();
@@ -161,8 +217,8 @@ test("an unmatched exercise shows the confirmation step and blocks checking unti
   await expect(page.getByText('Line 1: "Curl 3x8". Did you mean "Dumbbell Curl"?')).toBeVisible();
   await expect(page.getByText(/Line 4: "Zottman Spin 3x8". No exercise in the library matches\./)).toBeVisible();
 
-  await page.getByRole("button", { name: "Looks right" }).click();
   await expect(page.getByRole("button", { name: "Check my program" })).toBeDisabled();
+  await expect(page.getByText("Answer 2 questions to continue.")).toBeVisible();
 
   await page.getByRole("button", { name: "Yes" }).click();
   await page.getByRole("button", { name: "Remove line" }).click();

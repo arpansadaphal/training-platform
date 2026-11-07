@@ -24,7 +24,6 @@ export const CHECK_COPY = {
   layoutHint: "Start a new day with a heading such as Push or Day 2, or leave a blank line between days.",
   // ARCH-065 / D5. The checker reads one week as the days listed. A 3-day rotation run twice a week is six days.
   rotationHint: "List every day you train. If you repeat a 3-day rotation twice a week, paste it as 6 days.",
-  confirmFirst: "Confirm the reading above to continue.",
   tooLarge: "That routine is larger than the checker reads: up to 7 days and 15 exercises a day.",
   aboutLink: "How the checker works",
   useCandidate: (name: string) => `Use ${name}`,
@@ -60,12 +59,13 @@ export const CHECK_COPY = {
     `${name}: ${time} is time-based, so it is listed but not included in the analysis`,
   skippedLines: (n: number) =>
     `${n} non-exercise ${plural(n, "line", "lines")} skipped (walking, cardio or notes under a rest day).`,
-  looksRight: "Looks right",
   mergeAll: "Merge all into one day",
   editManually: "Edit manually",
   splitAgain: "Split into days again",
-  confirmedNote: "Reading confirmed.",
-  resolveFirst: (n: number) => `Answer or remove ${n} ${plural(n, "line", "lines")} before checking.`,
+  // The single gate: "Check my program" unlocks when every question is answered. Plain matches are accepted without one.
+  resolveFirst: (n: number) => `Answer ${n} ${plural(n, "question", "questions")} to continue.`,
+  // Shown beside a line the matcher accepted from a longer or looser name ("Lying Leg Curls" -> Leg Curl).
+  acceptedFrom: (typed: string) => `from "${typed}"`,
   restSkipped: (n: number) => `${n} rest ${plural(n, "line", "lines")} skipped.`,
   singletonNote: (n: number) => `Detected ${n} exercises that may be one workout.`,
   singletonMerge: "Merge into one day",
@@ -174,6 +174,7 @@ export function allCheckCopy(): string[] {
     CHECK_COPY.useCandidate("Barbell Row"),
     CHECK_COPY.resolveFirst(1),
     CHECK_COPY.resolveFirst(3),
+    CHECK_COPY.acceptedFrom("Lying Leg Curls"),
     CHECK_COPY.restSkipped(1),
     CHECK_COPY.restSkipped(2),
     CHECK_COPY.singletonNote(3),
