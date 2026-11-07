@@ -273,3 +273,33 @@
   padding-block: 0.8rem;
   box-sizing: border-box;
 }
+
+/* ARCH-067: the days-a-week selector. Right-aligned under the textarea, one tap target at least 44px tall. */
+.daysRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem 0.75rem;
+}
+
+.daysLabel {
+  font-size: 0.9375rem;
+}
+
+.daysSelect {
+  min-height: 44px;
+  min-width: 8.5rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 1rem;
+  background: #fff;
+  color: var(--fg);
+}
+
+.daysHelp {
+  flex-basis: 100%;
+  text-align: right;
+}

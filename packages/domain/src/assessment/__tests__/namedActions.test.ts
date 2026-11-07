@@ -526,3 +526,47 @@ describe("nameActions: run the rotation twice a week (ARCH-065 / Fix 3b)", () =>
     assertCleanCopy([run(PPL_ONCE)!.description]);
   });
 });
+
+// ARCH-067. The lifter said how many days a week they train (/check's days selector). The Analysis reads it
+// (runsPerWeek), so every number an action cites has to be read the same way, and the rotation advice has
+// already been answered.
+describe("nameActions: the lifter's days a week (ARCH-067)", () => {
+  const context = { daysPerWeek: 6 };
+  const withContext = (structure: ProgramStructure) => {
+    const analysis = computeAnalysis(structure, PPL_REF, HYPERTROPHY_CONFIG, { now: () => new Date(0), context });
+    const { assessment } = computeAssessment(analysis, HYPERTROPHY_CONFIG, { goalId: "g" });
+    return { assessment, actions: nameActions(assessment, structure, PPL_REF, HYPERTROPHY_CONFIG, { context }) };
+  };
+
+  it("does not offer to run the days twice once the lifter has said they run them twice", () => {
+    const { actions } = withContext(PPL_ONCE);
+    expect(actions.some((a) => a.rotation !== undefined)).toBe(false);
+    expect(actions.some((a) => /twice a week/.test(a.description))).toBe(false);
+  });
+
+  it("cites after-numbers for the week the lifter runs: 2 listed days on 4 days a week doubles each one", () => {
+    const ctx4 = { daysPerWeek: 4 };
+    const read = (context?: { daysPerWeek: number }) => {
+      const analysis = computeAnalysis(DUMBBELLS_ONLY, REF, PER_MUSCLE_CONFIG, { now: () => new Date(0), ...(context ? { context } : {}) });
+      const { assessment } = computeAssessment(analysis, PER_MUSCLE_CONFIG, { goalId: "g" });
+      return nameActions(assessment, DUMBBELLS_ONLY, REF, PER_MUSCLE_CONFIG, context ? { context } : {}).flatMap(suggestionsOf);
+    };
+    const once = read();
+    const twice = read(ctx4);
+    // Twice the week clears some Lows, so fewer muscles are named; the ones named in both are read twice as large.
+    const shared = twice.flatMap((t) => {
+      const o = once.find((x) => x.exerciseName === t.exerciseName && x.sets === t.sets);
+      return o ? [[t.afterSets, o.afterSets * 2]] : [];
+    });
+    expect(shared.length).toBeGreaterThan(0);
+    for (const [got, want] of shared) expect(got).toBe(want);
+  });
+
+  it("is the same output as before when no context is given", () => {
+    const analysis = computeAnalysis(PPL_ONCE, PPL_REF, HYPERTROPHY_CONFIG, { now: () => new Date(0) });
+    const { assessment } = computeAssessment(analysis, HYPERTROPHY_CONFIG, { goalId: "g" });
+    expect(nameActions(assessment, PPL_ONCE, PPL_REF, HYPERTROPHY_CONFIG, {})).toEqual(
+      nameActions(assessment, PPL_ONCE, PPL_REF, HYPERTROPHY_CONFIG),
+    );
+  });
+});

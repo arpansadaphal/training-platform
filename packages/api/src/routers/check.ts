@@ -26,6 +26,7 @@ import {
   nameActions,
   toProgramStructure,
   withoutRestDays,
+  type AnalysisContext,
   type AssessmentResult,
   type FitScoreResult,
   type NamedAction,
@@ -44,12 +45,14 @@ const SAVED_PROGRAM_NAME = "Checked program";
 const SAVED_DRAFT_LABEL = "From the Program Checker";
 
 const hashInput = z.object({ hash: z.string().min(1).max(CHECK_LIMITS.maxHashLength) });
+/** ARCH-067: days a week the lifter trains, when it differs from the days listed. The hash stays the program alone. */
+const analyzeInput = hashInput.extend({ daysPerWeek: z.number().int().min(1).max(CHECK_LIMITS.maxDays).optional() });
 
 export interface CheckAnalyzeResult {
   assessment: AssessmentResult;
   fitScore: FitScoreResult;
   namedActions: NamedAction[];
-  summary: { days: number; exercises: number };
+  summary: { days: number; exercises: number; daysPerWeek: number };
 }
 
 function assertCheckEnabled(): void {
@@ -79,17 +82,21 @@ export const checkRouter = router({
     return listExercises();
   }),
 
-  analyze: publicProcedure.input(hashInput).query(async ({ input }): Promise<CheckAnalyzeResult> => {
+  analyze: publicProcedure.input(analyzeInput).query(async ({ input }): Promise<CheckAnalyzeResult> => {
     assertCheckEnabled();
     const { program, structure, referenceData } = await resolveHash(input.hash);
     const config = goalProfileRegistry.get(CHECK_GOAL_PROFILE_KEY).loadConfig();
 
-    // Same calls, in the same order, as analysis.previewAnalyze.
+    // Same calls, in the same order, as analysis.previewAnalyze. The context is passed only when the lifter trains
+    // a different number of days than the routine lists; equal (or absent) is the older, context-free read.
     const analysed = withoutRestDays(structure);
-    const analysis = computeAnalysis(analysed, referenceData, config);
+    const listedDays = analysed.workoutDays.length;
+    const context: AnalysisContext | undefined =
+      input.daysPerWeek !== undefined && input.daysPerWeek !== listedDays ? { daysPerWeek: input.daysPerWeek } : undefined;
+    const analysis = computeAnalysis(analysed, referenceData, config, context !== undefined ? { context } : {});
     const assessment = computeAssessment(analysis, config, { goalId: CHECK_GOAL_ID });
     const fitScore = computeFitScore(assessment);
-    const namedActions = nameActions(assessment.assessment, analysed, referenceData, config);
+    const namedActions = nameActions(assessment.assessment, analysed, referenceData, config, context !== undefined ? { context } : {});
 
     return {
       assessment,
@@ -98,6 +105,7 @@ export const checkRouter = router({
       summary: {
         days: program.days.length,
         exercises: program.days.reduce((n, d) => n + d.rows.length, 0),
+        daysPerWeek: context?.daysPerWeek ?? listedDays,
       },
     };
   }),

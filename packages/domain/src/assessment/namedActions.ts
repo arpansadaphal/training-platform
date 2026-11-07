@@ -53,6 +53,7 @@
 // earliest.
 
 import type {
+  AnalysisContext,
   ExerciseReferenceData,
   GoalProfileConfig,
   MovementPattern,
@@ -181,12 +182,18 @@ interface Ctx {
   readonly equipmentCount: ReadonlyMap<string, number>;
   /** The start of the Adequate VOLUME band, for "The Adequate range starts at 6." */
   readonly lowerBound: number | null;
+  /**
+   * What the lifter told the checker (ARCH-067: days a week, when it differs from the days listed). Every
+   * engine run an action makes reads it, so an after-number is in the same terms as the finding it answers.
+   */
+  readonly context: AnalysisContext | undefined;
 }
 
 function buildContext(
   structure: ProgramStructure,
   referenceData: ExerciseReferenceData,
   config: GoalProfileConfig,
+  context?: AnalysisContext,
 ): Ctx | null {
   const days = structure.workoutDays.filter((d) => d.isRestDay !== true);
   if (days.length === 0) return null;
@@ -224,7 +231,12 @@ function buildContext(
     inProgram,
     equipmentCount,
     lowerBound: config.statusBands.VOLUME.find((b) => b.status === "Adequate")?.lowerBound ?? null,
+    context,
   };
+}
+
+function simOptions(ctx: Ctx): { goalId: string; context?: AnalysisContext } {
+  return ctx.context !== undefined ? { goalId: SIM_GOAL_ID, context: ctx.context } : { goalId: SIM_GOAL_ID };
 }
 
 function findMuscle(ctx: Ctx, key: string): MuscleGroupReference | undefined {
@@ -337,7 +349,7 @@ function suggestForMuscle(
   // runs both additions through the one shared mutation function and reads the number off the final Analysis.
   const evaluate = (c: Candidate) => {
     const firstStep = plan[0] as Step;
-    const sim = simulate(ctx.structure, addition(c, firstStep), ctx.config, ctx.referenceData, { goalId: SIM_GOAL_ID });
+    const sim = simulate(ctx.structure, addition(c, firstStep), ctx.config, ctx.referenceData, simOptions(ctx));
     if (sim.kind === "INVALID_MUTATION") return null;
     const before = volumeOf(sim.baseAnalysis, scopeKey);
     let mutated = sim.mutatedAnalysis;
@@ -350,7 +362,7 @@ function suggestForMuscle(
         if (err instanceof MutationError) return null;
         throw err;
       }
-      const both = simulate(withFirst, addition(c, secondStep), ctx.config, ctx.referenceData, { goalId: SIM_GOAL_ID });
+      const both = simulate(withFirst, addition(c, secondStep), ctx.config, ctx.referenceData, simOptions(ctx));
       if (both.kind === "INVALID_MUTATION") return null;
       mutated = both.mutatedAnalysis;
     }
@@ -486,6 +498,8 @@ function nameMemberAction(
  * Session C1 made VOLUME read, and nothing is multiplied here. Null when any condition fails.
  */
 function rotationOption(ctx: Ctx, assessment: Assessment): { days: number; totalSets: number } | null {
+  // ARCH-067: a lifter who already said how many days they train has answered this; the week is analysed as told.
+  if (ctx.context?.daysPerWeek !== undefined) return null;
   const floor = ctx.config.programStructure?.minWeeklySets;
   const days = ctx.days.length;
   if (floor === undefined || days < 2 || days > MAX_ROTATION_DAYS) return null;
@@ -593,9 +607,7 @@ function nameNewDayAction(
     name: dayName,
     prescriptions: chosen.map((c, i) => buildPrescription(c, NEW_DAY_SETS, i)),
   };
-  const sim = simulate(ctx.structure, { op: "ADD_WORKOUT_DAY", day }, ctx.config, ctx.referenceData, {
-    goalId: SIM_GOAL_ID,
-  });
+  const sim = simulate(ctx.structure, { op: "ADD_WORKOUT_DAY", day }, ctx.config, ctx.referenceData, simOptions(ctx));
   if (sim.kind === "INVALID_MUTATION") return fallback;
 
   // Only the muscles the new day actually raises are given an after-number; the rest are said plainly.
@@ -650,14 +662,16 @@ function nameOne(
 /**
  * One NamedAction per `assessment.actions`, in the same order. `structure` must be the structure the
  * Analysis was computed over (rest days stripped or not; rest days are ignored here either way).
+ * `options.context` must be the AnalysisContext that Analysis was computed with (ARCH-067); omit it and nothing changes.
  */
 export function nameActions(
   assessment: Assessment,
   structure: ProgramStructure,
   referenceData: ExerciseReferenceData,
   config: GoalProfileConfig,
+  options: { context?: AnalysisContext } = {},
 ): NamedAction[] {
-  const ctx = buildContext(structure, referenceData, config);
+  const ctx = buildContext(structure, referenceData, config, options.context);
   const proposed = new Set<string>();
   return assessment.actions.map((action) => {
     if (ctx === null) return { rootCauseKey: action.rootCauseKey, description: action.description };

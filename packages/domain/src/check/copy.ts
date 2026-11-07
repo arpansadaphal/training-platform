@@ -22,8 +22,13 @@ export const CHECK_COPY = {
   assumptionsNote:
     "We assume RPE 8 and bodyweight load for pasted programs. The analysis is about your program structure, not your specific weights.",
   layoutHint: "Start a new day with a heading such as Push or Day 2, or leave a blank line between days.",
-  // ARCH-065 / D5. The checker reads one week as the days listed. A 3-day rotation run twice a week is six days.
-  rotationHint: "List every day you train. If you repeat a 3-day rotation twice a week, paste it as 6 days.",
+  // ARCH-067. The days a week the lifter trains is asked below, so a rotation is pasted once and the number says how often.
+  rotationHint: "List one week of days. To run a 3-day rotation twice a week, paste the 3 days and choose 6 below.",
+  // ARCH-067. How many days a week the lifter trains; it defaults to the days parsed from the routine.
+  daysLabel: "How many days a week do you train?",
+  daysHelp: "Default: the days in your routine.",
+  daysAsListed: "As the split lists it",
+  daysOption: (n: number) => `${n} ${plural(n, "day", "days")}`,
   tooLarge: "That routine is larger than the checker reads: up to 7 days and 15 exercises a day.",
   aboutLink: "How the checker works",
   useCandidate: (name: string) => `Use ${name}`,
@@ -97,6 +102,9 @@ export const CHECK_COPY = {
   resultError: "Could not read this program. Check the link and try again.",
   programSummary: (days: number, exercises: number) =>
     `${days} ${plural(days, "day", "days")}, ${exercises} ${plural(exercises, "exercise", "exercises")}`,
+  // ARCH-067. Shown only when the lifter trains a different number of days than the routine lists.
+  daysAssessedAs: (listed: number, perWeek: number) =>
+    `${listed} ${plural(listed, "day", "days")} listed, assessed as ${perWeek} ${plural(perWeek, "day", "days")} a week`,
   backToInput: "Check another program",
 
   // ARCH-065 / Fix 7 and D2. What a free account does, in three lines a stranger can check against the app.
@@ -182,6 +190,10 @@ export function allCheckCopy(): string[] {
     CHECK_COPY.noMatch(4, "Zottman 3x8"),
     CHECK_COPY.programSummary(1, 1),
     CHECK_COPY.programSummary(3, 15),
+    CHECK_COPY.daysOption(1),
+    CHECK_COPY.daysOption(6),
+    CHECK_COPY.daysAssessedAs(3, 6),
+    CHECK_COPY.daysAssessedAs(1, 2),
   );
   return out;
 }

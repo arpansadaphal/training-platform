@@ -55,7 +55,7 @@ describe("check router", () => {
 
   it("reads PPL 6-day exactly as the Builder's previewAnalyze reads the same structure", async () => {
     const checked = await anonymous().check.analyze({ hash: pplHash });
-    expect(checked.summary).toEqual({ days: 6, exercises: 30 });
+    expect(checked.summary).toEqual({ days: 6, exercises: 30, daysPerWeek: 6 });
 
     const ids = new Map((await listExercises()).map((e) => [e.name, e.id]));
     const built = toProgramStructure(ppl.program, ids);
@@ -80,6 +80,43 @@ describe("check router", () => {
     expect(strip(checked.assessment)).toEqual(strip(builder.assessment));
     expect(checked.fitScore).toEqual(builder.fitScore);
     expect(checked.namedActions).toEqual(builder.namedActions);
+  });
+
+  describe("daysPerWeek (ARCH-067)", () => {
+    // The first three days of the preset, alone and listed twice: the same training week either way.
+    const three = ppl.program.days.slice(0, 3);
+    const threeHash = encodeCompactProgram({ days: three });
+    const sixHash = encodeCompactProgram({ days: [...three, ...three] });
+    const weekly = (r: Awaited<ReturnType<ReturnType<typeof anonymous>["check"]["analyze"]>>) =>
+      r.assessment.assessment.allAssessedAxes
+        .filter((a) => a.axisType === "VOLUME" || a.axisType === "FREQUENCY" || (a.axisType === "PROGRAM_STRUCTURE" && a.scopeKey === "total-volume"))
+        .map((a) => [a.axisType, a.scopeKey, a.metricValue]);
+
+    it("reads a 3-day routine run on 6 days as the same week as the 6 days listed", async () => {
+      const told = await anonymous().check.analyze({ hash: threeHash, daysPerWeek: 6 });
+      const listed = await anonymous().check.analyze({ hash: sixHash });
+      expect(told.summary).toEqual({ days: 3, exercises: 15, daysPerWeek: 6 });
+      expect(weekly(told)).toEqual(weekly(listed));
+    });
+
+    it("is the older read when the days equal the days listed, or are not given", async () => {
+      const plain = await anonymous().check.analyze({ hash: threeHash });
+      const equal = await anonymous().check.analyze({ hash: threeHash, daysPerWeek: 3 });
+      expect(plain.summary.daysPerWeek).toBe(3);
+      // computedAt is the engine's one wall-clock read; everything else must match.
+      const pinned = (r: typeof plain) => JSON.parse(JSON.stringify(r, (k, v) => (k === "computedAt" ? undefined : v)));
+      expect(pinned(equal)).toEqual(pinned(plain));
+    });
+
+    it("does not offer to run the days twice once the lifter has said how many days they train", async () => {
+      const told = await anonymous().check.analyze({ hash: threeHash, daysPerWeek: 6 });
+      expect(JSON.stringify(told.namedActions)).not.toMatch(/twice a week/);
+    });
+
+    it("rejects days outside 1-7", async () => {
+      await expect(anonymous().check.analyze({ hash: threeHash, daysPerWeek: 8 })).rejects.toBeDefined();
+      await expect(anonymous().check.analyze({ hash: threeHash, daysPerWeek: 0 })).rejects.toBeDefined();
+    });
   });
 
   it("save needs a signed-in user and creates one program with one populated draft", async () => {

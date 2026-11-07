@@ -12,6 +12,7 @@ import { useId, useMemo, useRef, useState, type ChangeEvent } from "react";
 import type { ExerciseRecord } from "@training/db";
 import {
   CHECK_COPY,
+  CHECK_LIMITS,
   CHECK_PRESETS,
   checkHint,
   countResolved,
@@ -32,6 +33,7 @@ import { ExercisePicker } from "@/app/app/programs/[id]/build/ExercisePicker";
 import styles from "./check.module.css";
 
 const MIN_EXERCISES = 3;
+const DAY_CHOICES = Array.from({ length: CHECK_LIMITS.maxDays }, (_, i) => i + 1);
 
 type Tab = "paste" | "pick";
 
@@ -49,6 +51,46 @@ function cameFrom(line: ParsedLine, resolutions: Resolutions): string | null {
   const name = resolvedName(line, resolutions);
   if (name === null || resolutions[line.lineNo] !== undefined || line.match.status === "exact") return null;
   return fold(name) !== fold(line.query) ? line.query : null;
+}
+
+/** ARCH-067: how many days a week the lifter trains. `asListed` adds the "as the routine lists it" choice (split tab). */
+function DaysSelect({
+  id,
+  value,
+  onChange,
+  asListed,
+}: {
+  id: string;
+  value: number | null;
+  onChange: (days: number | null) => void;
+  asListed?: boolean;
+}) {
+  return (
+    <div className={styles.daysRow}>
+      <label htmlFor={id} className={styles.daysLabel}>
+        {CHECK_COPY.daysLabel}
+      </label>
+      <select
+        id={id}
+        className={styles.daysSelect}
+        value={value === null ? "" : String(value)}
+        onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+      >
+        {asListed ? <option value="">{CHECK_COPY.daysAsListed}</option> : null}
+        {DAY_CHOICES.map((n) => (
+          <option key={n} value={n}>
+            {CHECK_COPY.daysOption(n)}
+          </option>
+        ))}
+      </select>
+      {asListed ? null : <span className={`${styles.note} ${styles.daysHelp}`}>{CHECK_COPY.daysHelp}</span>}
+    </div>
+  );
+}
+
+/** `?d=N` only when the lifter's days differ from the days listed, so a plain link stays the program alone. */
+function daysQuery(days: number | null, listed: number): string {
+  return days !== null && days !== listed ? `?d=${days}` : "";
 }
 
 function dropRemoved(result: ParseResult, removed: ReadonlySet<number>): ParseResult {
@@ -74,6 +116,9 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
   const [dismissed, setDismissed] = useState<ReadonlySet<number>>(new Set());
   const [choosing, setChoosing] = useState<number | null>(null);
   const [tooLarge, setTooLarge] = useState(false);
+  // ARCH-067. Paste tab: null follows the parsed days. Split tab: null means "as the split lists it".
+  const [daysOverride, setDaysOverride] = useState<number | null>(null);
+  const [pickDays, setPickDays] = useState<number | null>(null);
 
   const merged = useMemo(() => parseRoutine(text, names), [text, names]);
   const base = useMemo(
@@ -105,6 +150,7 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
     setDismissed(new Set());
     setChoosing(null);
     setTooLarge(false);
+    setDaysOverride(null);
   }
 
   function answer(lineNo: number, name: string) {
@@ -118,7 +164,7 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
       setTooLarge(true);
       return;
     }
-    router.push(`/check/${hash}`);
+    router.push(`/check/${hash}${daysQuery(daysOverride, parsed.days.length)}`);
   }
 
   function editManually() {
@@ -165,13 +211,17 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
           <ul className={styles.cards}>
             {CHECK_PRESETS.map((preset) => (
               <li key={preset.slug}>
-                <Link href={`/check/${encodeCompactProgram(preset.program)}`} className={styles.card}>
+                <Link
+                  href={`/check/${encodeCompactProgram(preset.program)}${daysQuery(pickDays, preset.program.days.length)}`}
+                  className={styles.card}
+                >
                   <span className={styles.cardTitle}>{preset.title}</span>
                   <span className={styles.note}>{preset.blurb}</span>
                 </Link>
               </li>
             ))}
           </ul>
+          <DaysSelect id={`${tabsId}-pick-days`} value={pickDays} onChange={setPickDays} asListed />
         </section>
       ) : (
         <section role="tabpanel" id={`${tabsId}-paste-panel`} aria-labelledby={`${tabsId}-paste`} className={styles.field}>
@@ -380,6 +430,14 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
                 </div>
               ))}
             </div>
+          ) : null}
+
+          {hasReading ? (
+            <DaysSelect
+              id={`${tabsId}-days`}
+              value={Math.min(daysOverride ?? parsed.days.length, CHECK_LIMITS.maxDays)}
+              onChange={setDaysOverride}
+            />
           ) : null}
 
           <div className={styles.actions}>

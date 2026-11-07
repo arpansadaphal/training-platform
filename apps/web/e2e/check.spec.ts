@@ -206,6 +206,75 @@ test("pick PPL 6-day -> assessment renders", async ({ page }) => {
   await expect(page.getByText("Cross-muscle balance").first()).toBeVisible();
 });
 
+// ARCH-067. The checker used to read one week as the days pasted, so a 3-day PPL run twice a week was called
+// under-dosed at half its real volume. The lifter now says how many days a week they train.
+const EIGHT_EXERCISE_PPL = [
+  THREE_DAY_PASTE.replace("Romanian Deadlift 3x8-10", "Romanian Deadlift 3x8-10\nLeg Curl 3x10-12").replace(
+    "Pull-Up 3x6-10",
+    "Pull-Up 3x6-10\nDumbbell Curl 3x10-12",
+  ),
+].join("\n");
+
+test.describe("days a week (ARCH-067)", () => {
+  test("defaults to the days parsed; a 3-day PPL (24 sets) is under-dosed, and run on 6 days it is not", async ({ page }) => {
+    await paste(page, EIGHT_EXERCISE_PPL);
+    const days = page.getByLabel("How many days a week do you train?");
+    await expect(days).toHaveValue("3");
+
+    // As pasted: the link carries no days, and the 24-set week is under the floor.
+    await checkPastedProgram(page);
+    await expect(page).not.toHaveURL(/\?d=/);
+    await expect(page.getByText(/Under-dosed/).first()).toBeVisible();
+    await expect(page.getByText(/24 hard sets/).first()).toBeVisible();
+    await expect(page.getByText(/Run your 3 days twice a week/).first()).toBeVisible();
+
+    // Same program, trained on 6 days: the engine reads the 3 days twice (48 hard sets).
+    await paste(page, EIGHT_EXERCISE_PPL);
+    await days.selectOption("6");
+    await page.getByRole("button", { name: "Check my program" }).click();
+    await expect(page).toHaveURL(/\/check\/[A-Za-z0-9_-]+\?d=6$/);
+    await expect(page.getByText("3 days listed, assessed as 6 days a week")).toBeVisible();
+    await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+    await expect(page.getByText(/Under-dosed/)).toHaveCount(0);
+    await expect(page.getByText(/Run your 3 days twice a week/)).toHaveCount(0);
+  });
+
+  test("the choice resets when a different routine is pasted", async ({ page }) => {
+    await paste(page, EIGHT_EXERCISE_PPL);
+    const days = page.getByLabel("How many days a week do you train?");
+    await days.selectOption("6");
+    await page.getByLabel("Your routine").fill(THREE_DAY_PASTE.replace(/\n\nLegs[^]*$/, ""));
+    await expect(page.getByRole("heading", { name: "Parsed as 2 days" })).toBeVisible();
+    await expect(days).toHaveValue("2");
+  });
+
+  test("a split can be run on a different number of days: the link carries it, and a plain click does not", async ({ page }) => {
+    await page.goto("/check");
+    await page.getByRole("tab", { name: "Pick a common split" }).click();
+    const days = page.getByLabel("How many days a week do you train?");
+    await expect(days).toHaveValue("");
+    await days.selectOption("6");
+    await page.getByRole("link", { name: /3-day full body/ }).click();
+    await expect(page).toHaveURL(/\/check\/[A-Za-z0-9_-]+\?d=6$/);
+    await expect(page.getByText("3 days listed, assessed as 6 days a week")).toBeVisible();
+
+    await page.goto("/check");
+    await page.getByRole("tab", { name: "Pick a common split" }).click();
+    await page.getByRole("link", { name: /3-day full body/ }).click();
+    await expect(page).toHaveURL(/\/check\/[A-Za-z0-9_-]+$/);
+    await expect(page.getByText(/listed, assessed as/)).toHaveCount(0);
+  });
+
+  test("a stray ?d= is ignored", async ({ page }) => {
+    await paste(page, EIGHT_EXERCISE_PPL);
+    await checkPastedProgram(page);
+    const url = page.url();
+    await page.goto(`${url}?d=99`);
+    await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+    await expect(page.getByText(/listed, assessed as/)).toHaveCount(0);
+  });
+});
+
 test("an unmatched exercise shows the confirmation step and blocks checking until answered", async ({ page }) => {
   // AUDIT TRAIL (ARCH-065 / Fix 5a): this used a bare "Bench 3x8" as the line that needs an answer. A bare Bench,
   // Squat, Row or Deadlift is now accepted as the standard barbell lift, so the real choice here is "Curl" (barbell,
