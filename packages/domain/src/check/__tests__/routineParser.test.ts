@@ -316,6 +316,53 @@ describe("parseRoutine: bullets and markers (ARCH-066)", () => {
   });
 });
 
+// ARCH-067 / Fix 5. Programs copied from spreadsheets and PDFs number their lines "1a." and "1b." (superset pairs). The
+// label is not part of the exercise name, so it is not shown and does not turn every line into a question.
+describe("parseRoutine: list labels such as 1a. (ARCH-067)", () => {
+  it("'1a. Barbell Row 3x10 / 1b. Lat Pulldown 3x10 / 2. Barbell Curl 3x10' is 3 exercises and no questions", () => {
+    const r = parse("1a. Barbell Row 3x10\n1b. Lat Pulldown 3x10\n2. Barbell Curl 3x10");
+    expect(r.days).toHaveLength(1);
+    expect(r.days[0]!.lines.map((l) => l.query)).toEqual(["Barbell Row", "Lat Pulldown", "Barbell Curl"]);
+    expect(r.unparsed).toEqual([]);
+    expect(unresolvedLines(r, {})).toEqual([]);
+    expect(countResolved(r, {})).toBe(3);
+  });
+
+  it("the brief's own example: '1a. Barbell Row / 1b. Lat Pulldown / 2. Seated Row' is 3 exercises and no questions", () => {
+    const r = parse("1a. Barbell Row 3x10\n1b. Lat Pulldown 3x10\n2. Seated Row 3x10");
+    expect(r.days[0]!.lines.map((l) => [l.query, resolvedName(l, {})])).toEqual([
+      ["Barbell Row", "Barbell Row"],
+      ["Lat Pulldown", "Lat Pulldown"],
+      ["Seated Row", "Seated Cable Row"],
+    ]);
+    expect(unresolvedLines(r, {})).toEqual([]);
+    expect(countResolved(r, {})).toBe(3);
+  });
+
+  it.each(["1a.", "1b.", "23.", "1.", "1)", "(1)", "(1a)", "a.", "B.", "- 1a.", "1. a.", "**1a.**"])(
+    "reads a line behind %s exactly like the bare line",
+    (label) => {
+      const bare = firstLine("Barbell Row 3x10");
+      const labelled = firstLine(`${label} Barbell Row 3x10`);
+      expect(labelled).toMatchObject({ sets: 3, repLow: 10, repHigh: 10, query: bare.query });
+      expect(labelled.match).toEqual(bare.match);
+    },
+  );
+
+  it("does not eat names or notation that merely look like a label", () => {
+    expect(firstLine("T-Bar Row 3x10").query).toBe("T-Bar Row");
+    // A day heading that carries a number and a dot is still a day heading.
+    const r = parse("Day 1.\nBarbell Row 3x10\nLat Pulldown 3x10\nBarbell Curl 3x10");
+    expect(r.days).toHaveLength(1);
+    expect(r.days[0]!.lines).toHaveLength(3);
+  });
+
+  it("a lettered label does not turn a day heading into an exercise line", () => {
+    const r = parse("A. Push\nBarbell Bench Press 3x8\nOverhead Press 3x8\n\nB. Pull\nBarbell Row 3x8\nPull-Up 3x8");
+    expect(r.days.map((d) => d.lines.length)).toEqual([2, 2]);
+  });
+});
+
 describe("parseRoutine: set and rep notations (ARCH-066)", () => {
   it.each([
     ["4 sets × 6–8 reps", 4, 6, 8],

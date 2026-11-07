@@ -63,9 +63,11 @@ const DAY_KEYWORD =
 // "A" and "B" count as day labels only as the last word ("Upper A"), so prose with an "a" in it is not a header.
 const DAY_LETTER_SUFFIX = /\s[ab]$/i;
 
-// Leading markers, any mix, repeated: "• ", "- ", "*", "–", "—", "◦", "▸", "►", "1. ", "### ". No space required after a bullet.
+// Leading markers, any mix, repeated: "• ", "- ", "*", "–", "—", "◦", "▸", "►", "1. ", "1a. ", "(1) ", "### ". No space required after a bullet.
 const BULLET_RUN = /^[\s•·\-*–—◦▸►‣▪●○]+/;
-const NUMBER_MARKER = /^\d+[.)]\s+/;
+// List labels from spreadsheets, PDFs and chat: "1. ", "1) ", "1a. ", "23. ", "a. ", "B. ", "(1) ", "(1a) ". A label needs
+// its dot or bracket and a space after, so "3x10", "T-Bar Row" and "Day 1." are untouched.
+const NUMBER_MARKER = /^(?:\d+[a-zA-Z]?[.)]|[a-zA-Z]\.|\(\d+[a-zA-Z]?\))\s+/;
 const MARKDOWN_HEADING = /^#{1,6}\s+/;
 
 /** Strip bullets, list numbers, markdown emphasis and heading marks; trim. The line as typed is kept elsewhere. */

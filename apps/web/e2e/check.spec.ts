@@ -206,6 +206,17 @@ test("pick PPL 6-day -> assessment renders", async ({ page }) => {
   await expect(page.getByText("Cross-muscle balance").first()).toBeVisible();
 });
 
+// ARCH-067 / Fix 5. Spreadsheet-style "1a." labels are not part of the exercise names, and are not questions.
+test("'1a.' list labels are stripped: 3 exercises, no questions", async ({ page }) => {
+  await paste(page, "1a. Barbell Row 3x10\n1b. Lat Pulldown 3x10\n2. Seated Row 3x10");
+  await expect(page.getByText("Total: 3 exercises across 1 training day")).toBeVisible();
+  await expect(page.getByText("Barbell Row 3×10")).toBeVisible();
+  // The reading (not the box the lifter typed in) carries no label.
+  await expect(page.locator("ol")).not.toContainText("1a.");
+  await expect(page.getByRole("heading", { name: "Confirm these exercises" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Check my program" })).toBeEnabled();
+});
+
 // ARCH-067 / Fix 2. A stranger sees what an assessment looks like before pasting anything.
 test("the landing shows a labelled, non-interactive example of an assessment above the paste box", async ({ page }) => {
   await page.goto("/check");
