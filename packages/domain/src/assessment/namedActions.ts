@@ -14,8 +14,10 @@
 //     separate guesses;
 //   - a pattern finding led by the Exercise-selection axis ("no overhead press"): the template stands;
 //   - (ARCH-063 / Session D follow-up) the whole-program volume finding: it replaces the per-muscle Lows with one
-//     program-level action, so the action names the two largest deficits ("Start with: Add 3 sets of ...") and
-//     keeps the specificity the replaced actions had. Still one finding and one action.
+//     program-level action, so the action names the two largest deficits ("Add 3 sets of ...") and keeps the
+//     specificity the replaced actions had. Still one finding and one action. (ARCH-065 / Fix 2: the "Start with:"
+//     prefix is gone: it read as an order across actions, and the display now labels each action with the finding
+//     it fixes. Fix 3b may lead the action with "Run your 3 days twice a week".)
 //
 // Why a post-step and not part of computeAssessment: the Assessment is persisted verbatim in
 // AssessmentSnapshot and is a pure function of the Analysis, which carries no structure. Naming an exercise
@@ -40,11 +42,15 @@
 //   5. an exercise an earlier action in the same list already proposed is skipped, so two actions never name
 //      the same exercise with two different after-numbers.
 // Each after-number is that one change alone, measured against the program as it stands.
-// How many sets: enough to reach the start of the Adequate band, clamped to 2-4 (2-6 for a muscle the library
-// only moves at 0.5) so one exercise on one day stays a sensible addition. If that is still short the line
-// says where the band starts.
-// Which day: the training day whose existing exercises are in the same region (upper or lower body) as the
-// proposed one, then the one with the fewest prescribed sets, then the earliest.
+// How many sets: enough to reach the start of the Adequate band (ARCH-065 / Fix 1). Up to 4 sets go on one day. A
+// muscle that needs 5-8 gets the sets split across the two best days ("3 sets on Push and 2 on Pull"), and the
+// after-number is still the engine's, from one run over both additions. A muscle the library only moves at 0.5
+// stays on one day, capped at 6 sets, and the sentence says each set counts half. If the addition is still short
+// the line says where the band starts.
+// Which day (ARCH-065 / Fix 1): the training day that already trains the muscle most (credited sets from the
+// existing exercises), so face pulls go on the pull day and not on the first upper day; with no day training it,
+// the day whose exercises are in the same region (upper or lower body); then the fewest prescribed sets; then the
+// earliest.
 
 import type {
   ExerciseReferenceData,
@@ -52,10 +58,13 @@ import type {
   MovementPattern,
   MuscleGroupReference,
 } from "../analysis/types";
+import { computeAnalysis } from "../analysis/computeAnalysis";
 import { hardSetCredit } from "../analysis/hardSetCredit";
 import { joinList } from "../copy/findingSentence";
+import { applyMutation } from "../mutation/apply-mutation";
 import { simulate } from "../mutation/simulate";
-import type { MutationSpec } from "../mutation/types";
+import { withoutRestDays } from "../structure/restDay";
+import { MutationError, type MutationSpec } from "../mutation/types";
 import type { ExercisePrescriptionStructure, ProgramStructure, WorkoutDayStructure } from "../types";
 import type { ActionSuggestion, AssessedAxis, Assessment, AssessmentFinding } from "./types";
 
@@ -66,6 +75,8 @@ const MAX_SETS_HALF_FACTOR = 6;
 const NEW_DAY_SETS = 3;
 /** How many muscles the whole-program volume action names: the largest deficits first. */
 const PROGRAM_VOLUME_NAMED = 2;
+/** A rotation of this many listed days or fewer can sensibly be run twice a week (3 x 2 = 6 days). */
+const MAX_ROTATION_DAYS = 3;
 const SIM_GOAL_ID = "named-actions";
 
 /** Usual first picks per muscle, best first. Names are library exercise names. Tier 3/4: a convention, not a measurement. */
@@ -89,7 +100,12 @@ export interface NamedActionSuggestion {
   readonly muscle: string;
   readonly exerciseName: string;
   readonly workoutDayName: string;
+  /** Sets on `workoutDayName`. When `alsoOn` is present the addition is split and this is the larger share. */
   readonly sets: number;
+  /** A second day that takes the rest of a split addition ("3 sets on Push and 2 on Pull"). */
+  readonly alsoOn?: { readonly workoutDayName: string; readonly sets: number };
+  /** True when the exercise moves this muscle at half credit (a row for upper back), which the sentence says. */
+  readonly halfCredit: boolean;
   readonly beforeSets: number;
   readonly afterSets: number;
   /** A second exercise that would also work, with its own engine-computed after-number. */
@@ -113,6 +129,8 @@ export interface NamedAction {
   readonly suggestions?: readonly NamedActionSuggestion[];
   /** Present only when `description` proposes a new day for a region with no training. */
   readonly newDay?: NamedDaySuggestion;
+  /** Present only when `description` offers to run the listed days twice a week, with the engine's weekly total. */
+  readonly rotation?: { readonly days: number; readonly totalSets: number };
 }
 
 const num = (n: number): string => String(Math.round(n * 10) / 10);
@@ -134,10 +152,11 @@ function buildPrescription(
   c: Candidate,
   sets: number,
   orderIndex: number,
+  tag = "",
 ): ExercisePrescriptionStructure {
   const isolation = c.pattern === "ISOLATION";
   return {
-    id: `named-action-${c.exerciseId}`,
+    id: `named-action-${c.exerciseId}${tag === "" ? "" : `-${tag}`}`,
     orderIndex,
     exerciseId: c.exerciseId,
     targetSets: sets,
@@ -156,6 +175,8 @@ interface Ctx {
   readonly exerciseById: ReadonlyMap<string, ExerciseReferenceData["exercises"][number]>;
   /** Exercises whose main mover (factor >= 1) is a lower-body group. */
   readonly lowerByExercise: ReadonlyMap<string, boolean>;
+  /** exerciseId -> muscleGroupId -> involvement factor, for "which day already trains this muscle". */
+  readonly factorOf: ReadonlyMap<string, ReadonlyMap<string, number>>;
   readonly inProgram: ReadonlySet<string>;
   readonly equipmentCount: ReadonlyMap<string, number>;
   /** The start of the Adequate VOLUME band, for "The Adequate range starts at 6." */
@@ -174,7 +195,11 @@ function buildContext(
   // An exercise is lower-body when a main mover of it (factor >= 1) is a lower-body group. Unscoped groups
   // (front delts) have no name here and so never count as lower body.
   const lowerByExercise = new Map<string, boolean>();
+  const factorOf = new Map<string, Map<string, number>>();
   for (const inv of referenceData.involvements) {
+    const row = factorOf.get(inv.exerciseId) ?? new Map<string, number>();
+    row.set(inv.muscleGroupId, inv.involvementFactor);
+    factorOf.set(inv.exerciseId, row);
     if (inv.involvementFactor >= 1 && LOWER_BODY.has(nameByMuscleId.get(inv.muscleGroupId) ?? "")) {
       lowerByExercise.set(inv.exerciseId, true);
     }
@@ -195,6 +220,7 @@ function buildContext(
     days,
     exerciseById,
     lowerByExercise,
+    factorOf,
     inProgram,
     equipmentCount,
     lowerBound: config.statusBands.VOLUME.find((b) => b.status === "Adequate")?.lowerBound ?? null,
@@ -243,6 +269,33 @@ function candidatesFor(
   return list.length === 0 ? null : { factor: bestFactor, list };
 }
 
+type Day = Ctx["days"][number];
+
+/**
+ * Days in the order an addition for `muscle` should go (ARCH-065 / Fix 1): the day that already trains the muscle
+ * most, so a face pull lands on the pull day; with no day training it, the day with the most exercises in the same
+ * region (upper or lower body) as the proposed one; then the shortest session; then the earliest.
+ */
+function rankedDays(ctx: Ctx, muscle: MuscleGroupReference, first: Candidate): Day[] {
+  const totalSets = (d: Day) => d.prescriptions.reduce((t, p) => t + p.targetSets, 0);
+  const trained = (d: Day) =>
+    d.prescriptions.reduce((t, p) => t + p.targetSets * (ctx.factorOf.get(p.exerciseId)?.get(muscle.id) ?? 0), 0);
+  const sameRegion = (d: Day) =>
+    d.prescriptions.filter((p) => (ctx.lowerByExercise.get(p.exerciseId) === true) === first.lower).length;
+  return [...ctx.days].sort(
+    (a, b) =>
+      trained(b) - trained(a) ||
+      sameRegion(b) - sameRegion(a) ||
+      totalSets(a) - totalSets(b) ||
+      ctx.days.indexOf(a) - ctx.days.indexOf(b),
+  );
+}
+
+interface Step {
+  readonly day: Day;
+  readonly sets: number;
+}
+
 /** One named addition for one muscle that is at `current` sets, or null when nothing fits the equipment. */
 function suggestForMuscle(
   ctx: Ctx,
@@ -254,58 +307,103 @@ function suggestForMuscle(
   const found = candidatesFor(ctx, muscle, taken);
   if (!found) return null;
   const candidates = found.list;
-
-  // The day: same body region as the proposed exercise first, then the shortest session, then the earliest.
   const first = candidates[0] as Candidate;
-  const totalSets = (d: (typeof ctx.days)[number]) => d.prescriptions.reduce((t, p) => t + p.targetSets, 0);
-  const sameRegion = (d: (typeof ctx.days)[number]) =>
-    d.prescriptions.filter((p) => (ctx.lowerByExercise.get(p.exerciseId) === true) === first.lower).length;
-  const day = ctx.days.reduce((best, d) => {
-    const dr = sameRegion(d);
-    const br = sameRegion(best);
-    if (dr !== br) return dr > br ? d : best;
-    return totalSets(d) < totalSets(best) ? d : best;
+  const days = rankedDays(ctx, muscle, first);
+
+  // How many sets: enough to reach the start of the Adequate band. Up to MAX_SETS on one day; a muscle that needs
+  // more is split over the two best days (up to 2 x MAX_SETS in all). A half-credit muscle stays on one day, capped.
+  const perSet = hardSetCredit(buildPrescription(first, 1, 0)) * first.factor;
+  const deficit = ctx.lowerBound === null ? MIN_SETS : Math.max(0, ctx.lowerBound - current);
+  const needed = Math.max(MIN_SETS, perSet > 0 ? Math.ceil(deficit / perSet) : MIN_SETS);
+  const plan: Step[] =
+    first.factor >= 1 && needed > MAX_SETS && days.length >= 2
+      ? (() => {
+          const total = Math.min(needed, 2 * MAX_SETS);
+          const larger = Math.ceil(total / 2);
+          return [
+            { day: days[0] as Day, sets: larger },
+            { day: days[1] as Day, sets: total - larger },
+          ];
+        })()
+      : [{ day: days[0] as Day, sets: Math.min(first.factor < 1 ? MAX_SETS_HALF_FACTOR : MAX_SETS, needed) }];
+
+  const addition = (c: Candidate, step: Step): MutationSpec => ({
+    op: "ADD_EXERCISE_PRESCRIPTION",
+    workoutDayId: step.day.id,
+    prescription: buildPrescription(c, step.sets, step.day.prescriptions.length, step.day.id),
   });
 
-  // Run one candidate through the engine; null when it cannot be computed or does not raise the muscle.
-  const evaluate = (c: Candidate, sets: number) => {
-    const mutation: MutationSpec = {
-      op: "ADD_EXERCISE_PRESCRIPTION",
-      workoutDayId: day.id,
-      prescription: buildPrescription(c, sets, day.prescriptions.length),
-    };
-    const sim = simulate(ctx.structure, mutation, ctx.config, ctx.referenceData, { goalId: SIM_GOAL_ID });
+  // Run one candidate through the engine; null when it cannot be computed or does not raise the muscle. A split
+  // runs both additions through the one shared mutation function and reads the number off the final Analysis.
+  const evaluate = (c: Candidate) => {
+    const firstStep = plan[0] as Step;
+    const sim = simulate(ctx.structure, addition(c, firstStep), ctx.config, ctx.referenceData, { goalId: SIM_GOAL_ID });
     if (sim.kind === "INVALID_MUTATION") return null;
     const before = volumeOf(sim.baseAnalysis, scopeKey);
-    const after = volumeOf(sim.mutatedAnalysis, scopeKey);
+    let mutated = sim.mutatedAnalysis;
+    const secondStep = plan[1];
+    if (secondStep !== undefined) {
+      let withFirst: ProgramStructure;
+      try {
+        withFirst = applyMutation(ctx.structure, addition(c, firstStep));
+      } catch (err) {
+        if (err instanceof MutationError) return null;
+        throw err;
+      }
+      const both = simulate(withFirst, addition(c, secondStep), ctx.config, ctx.referenceData, { goalId: SIM_GOAL_ID });
+      if (both.kind === "INVALID_MUTATION") return null;
+      mutated = both.mutatedAnalysis;
+    }
+    const after = volumeOf(mutated, scopeKey);
     if (before === null || after === null || !(after > before)) return null;
     return { before, after };
   };
 
-  const perSet = hardSetCredit(buildPrescription(first, 1, 0)) * first.factor;
-  const deficit = ctx.lowerBound === null ? MIN_SETS : Math.max(0, ctx.lowerBound - current);
-  const maxSets = first.factor < 1 ? MAX_SETS_HALF_FACTOR : MAX_SETS;
-  const sets = Math.min(maxSets, Math.max(MIN_SETS, perSet > 0 ? Math.ceil(deficit / perSet) : MIN_SETS));
-
-  const main = evaluate(first, sets);
+  const main = evaluate(first);
   if (main === null) return null;
+  // A muscle the library only moves at half credit can need more sets than one day should carry. If the capped
+  // addition still does not reach the start of the range, naming it would tell the lifter to do the sets and end
+  // below the line the sentence cites; say it plainly instead (the caller falls back to "Add weekly volume for X").
+  if (first.factor < 1 && ctx.lowerBound !== null && main.after < ctx.lowerBound) return null;
   const second = candidates[1];
-  const alt = second ? evaluate(second, sets) : null;
+  const alt = second ? evaluate(second) : null;
+  const secondStep = plan[1];
 
   return {
     muscle: muscle.name,
     exerciseName: first.name,
-    workoutDayName: day.name,
-    sets,
+    workoutDayName: (plan[0] as Step).day.name,
+    sets: (plan[0] as Step).sets,
+    ...(secondStep ? { alsoOn: { workoutDayName: secondStep.day.name, sets: secondStep.sets } } : {}),
+    halfCredit: first.factor < 1,
     beforeSets: main.before,
     afterSets: main.after,
     alternative: second && alt ? { exerciseName: second.name, afterSets: alt.after } : null,
   };
 }
 
+const setsWord = (n: number): string => `${n} ${n === 1 ? "set" : "sets"}`;
+
+/** "3 sets of Lateral Raise on Push and 2 on Pull", or "3 sets of Leg Curl on Day 2". */
+function additionClause(s: NamedActionSuggestion): string {
+  // Two days can share a name ("Full Body" twice): the second is then "the other Full Body day".
+  const second = s.alsoOn
+    ? s.alsoOn.workoutDayName === s.workoutDayName
+      ? `the other ${s.workoutDayName} day`
+      : s.alsoOn.workoutDayName
+    : "";
+  return (
+    `${setsWord(s.sets)} of ${s.exerciseName} on ${s.workoutDayName}` +
+    (s.alsoOn ? ` and ${s.alsoOn.sets} on ${second}` : "")
+  );
+}
+
+const halfCreditNote = (s: NamedActionSuggestion): string =>
+  s.halfCredit ? ` Each set counts as half for ${s.muscle}.` : "";
+
 /** "Add 3 sets of Leg Curl on Day 2 → 7.5 sets/week. The Adequate range starts at 6. Or Seated Leg Curl → 7.5." */
 function sentenceOf(s: NamedActionSuggestion, lowerBound: number | null, withAlternative: boolean): string {
-  let text = `Add ${s.sets} ${s.sets === 1 ? "set" : "sets"} of ${s.exerciseName} on ${s.workoutDayName} → ${num(s.afterSets)} sets/week.`;
+  let text = `Add ${additionClause(s)} → ${num(s.afterSets)} sets/week.${halfCreditNote(s)}`;
   if (lowerBound !== null && s.afterSets < lowerBound) text += ` The Adequate range starts at ${num(lowerBound)}.`;
   if (withAlternative && s.alternative) text += ` Or ${s.alternative.exerciseName} → ${num(s.alternative.afterSets)}.`;
   return text;
@@ -313,7 +411,7 @@ function sentenceOf(s: NamedActionSuggestion, lowerBound: number | null, withAlt
 
 /** One addition inside a multi-muscle action: it says which muscle the after-number belongs to. */
 function memberSentence(s: NamedActionSuggestion): string {
-  return `Add ${s.sets} ${s.sets === 1 ? "set" : "sets"} of ${s.exerciseName} on ${s.workoutDayName} → ${s.muscle} ${num(s.afterSets)} sets/week.`;
+  return `Add ${additionClause(s)} → ${s.muscle} ${num(s.afterSets)} sets/week.${halfCreditNote(s)}`;
 }
 
 /** The exercise ids a named action proposed, so a later action in the same list does not name them again. */
@@ -381,6 +479,28 @@ function nameMemberAction(
 }
 
 /**
+ * ARCH-065 / Fix 3b. "Run your 3 days twice a week → 48 hard sets a week." Offered only where it is true to the
+ * program: 2-3 listed days (so doubling is 4-6 days), every muscle already hit at most once a week (a 3-day full-body
+ * program run twice is six full-body days, not a rotation), and the doubled week clears the profile's whole-program
+ * floor. The number is the engine's: the program is analysed again with `daysPerWeek` doubled, the same input
+ * Session C1 made VOLUME read, and nothing is multiplied here. Null when any condition fails.
+ */
+function rotationOption(ctx: Ctx, assessment: Assessment): { days: number; totalSets: number } | null {
+  const floor = ctx.config.programStructure?.minWeeklySets;
+  const days = ctx.days.length;
+  if (floor === undefined || days < 2 || days > MAX_ROTATION_DAYS) return null;
+  const exposed = assessment.allAssessedAxes.filter((a) => a.axisType === "FREQUENCY" && typeof a.metricValue === "number");
+  if (exposed.some((a) => (a.metricValue as number) > 1)) return null;
+  const doubled = computeAnalysis(withoutRestDays(ctx.structure), ctx.referenceData, ctx.config, {
+    now: () => new Date(0),
+    context: { daysPerWeek: days * 2 },
+  });
+  const total = doubled.axisResults.find((a) => a.axisType === "PROGRAM_STRUCTURE" && a.scopeKey === "total-volume");
+  if (!total || typeof total.metricValue !== "number" || total.metricValue < floor) return null;
+  return { days, totalSets: total.metricValue };
+}
+
+/**
  * The whole-program volume finding absorbed every per-muscle Low, so its one action would otherwise say only "add
  * hard sets across the program". Name the two muscles furthest below the start of the Adequate range, through the
  * same `suggestForMuscle` the per-muscle actions use (so every after-number is the engine's). A muscle with no
@@ -422,12 +542,22 @@ function nameProgramVolumeAction(
     named.push(suggestion);
     for (const id of proposedIds({ rootCauseKey: "", description: "", suggestion }, ctx.referenceData)) local.add(id);
   }
-  if (named.length === 0) return fallback;
+  const rotation = rotationOption(ctx, assessment);
+  if (named.length === 0 && rotation === null) return fallback;
   const belowRange = ctx.lowerBound !== null && named.some((s) => s.afterSets < (ctx.lowerBound as number));
-  const description =
-    `Start with: ${named.map(memberSentence).join(" ")}` +
+  const additions =
+    named.map(memberSentence).join(" ") +
     (belowRange ? ` The Adequate range starts at ${num(ctx.lowerBound as number)}.` : "");
-  return { rootCauseKey: action.rootCauseKey, description, suggestions: named };
+  const lead = rotation
+    ? `Run your ${rotation.days} days twice a week → ${num(rotation.totalSets)} hard sets a week.` +
+      (named.length > 0 ? ` Or, on ${rotation.days} days a week: ${additions}` : "")
+    : additions;
+  return {
+    rootCauseKey: action.rootCauseKey,
+    description: lead,
+    ...(named.length > 0 ? { suggestions: named } : {}),
+    ...(rotation ? { rotation } : {}),
+  };
 }
 
 const article = (word: string): string => (/^[aeiou]/i.test(word) ? "an" : "a");

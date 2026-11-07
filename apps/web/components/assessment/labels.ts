@@ -132,7 +132,7 @@ function bounds(axisType: AxisType, band: string): { lo: number | null; hi: numb
 }
 
 /** One plain sentence on what the band means for this axis. Empty when there is nothing useful to say. */
-export function meaningText(axis: Pick<AssessedAxis, "axisType" | "scopeKey" | "status">): string {
+export function meaningText(axis: Pick<AssessedAxis, "axisType" | "scopeKey" | "status" | "metricValue">): string {
   const band = axis.status.band;
   if (band === "N/A") return "Not assessed for this goal.";
   const { lo, hi } = bounds(axis.axisType, band);
@@ -156,10 +156,13 @@ export function meaningText(axis: Pick<AssessedAxis, "axisType" | "scopeKey" | "
       return "";
     case "EXERCISE_SELECTION_BALANCE":
       if (band === "Balanced")
-        return "Covers squat, hinge, and horizontal and vertical push and pull, with at most one missing.";
+        // ARCH-065: "with at most one missing" is the tolerance rule; it reads oddly under "6 of 6 patterns".
+        return axis.metricValue === 1
+          ? "Covers squat, hinge, and horizontal and vertical push and pull."
+          : "Covers squat, hinge, and horizontal and vertical push and pull, with at most one missing.";
       return "Two or more of squat, hinge, and horizontal and vertical push and pull are missing.";
     case "PROGRESSION_SOUNDNESS":
-      if (band === "Sound") return "Effort, rep ranges and %1RM loads pass the engine's checks.";
+      if (band === "Sound") return "Effort, rep ranges and %1RM loads pass the checks.";
       return "At least one check failed. Most often: target effort (RPE or RIR) isn't set on enough exercises.";
     case "RECOVERY_COST":
       if (band === "Low") return "Light estimated fatigue across the week.";

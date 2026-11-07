@@ -107,7 +107,7 @@ describe("nameActions: dumbbells only", () => {
     let checked = 0;
     for (const a of actions) {
       for (const s of suggestionsOf(a)) {
-        const target = structureWithAdded(DUMBBELLS_ONLY, s.workoutDayName, s.exerciseName, s.sets);
+        const target = structureWithAdded(DUMBBELLS_ONLY, s.workoutDayName, s.exerciseName, s.sets, s.alsoOn);
         const analysis = computeAnalysis(target, REF, PER_MUSCLE_CONFIG, { now: () => new Date(0) });
         const vol = analysis.axisResults.find((x) => x.axisType === "VOLUME" && x.scopeKey === s.muscle)!;
         expect(vol.metricValue).toBe(s.afterSets);
@@ -143,16 +143,23 @@ describe("nameActions: placement and fallback", () => {
       ],
     };
     const { actions } = named(structure);
+    // AUDIT TRAIL (ARCH-065 / Fix 1). This used to assert upper back is named with Rear Delt Fly. Upper back is a
+    // half-credit muscle here and the capped addition (6 sets, 3 credited) would end under 6, so it is no longer
+    // named: the line says "Add weekly volume for upper back" instead. The placement rule the test guards is
+    // unchanged and is asserted on rear delts, which the same exercise serves at full credit.
     const upper = actions.find((a) => a.rootCauseKey === "volume:add-region-upper");
-    const back = upper?.suggestions?.find((s) => s.muscle === "upper back");
-    expect(back?.exerciseName).toBe("Rear Delt Fly");
-    expect(back?.workoutDayName).toBe("Upper");
+    const rear = upper?.suggestions?.find((s) => s.muscle === "rear delts");
+    expect(rear?.exerciseName).toBe("Rear Delt Fly");
+    expect(rear?.workoutDayName).toBe("Upper");
     const lower = actions.find((a) => a.rootCauseKey === "volume:add-region-lower");
     const ham = lower?.suggestions?.find((s) => s.muscle === "hamstrings");
     expect(ham?.workoutDayName).toBe("Lower");
   });
 
-  it("does not name the same exercise for a second muscle (Rear Delt Fly went to upper back first)", () => {
+  it("names an exercise once: it goes to the muscle it serves at full credit, and the half-credit muscle is said plainly", () => {
+    // AUDIT TRAIL (ARCH-065 / Fix 1). Before, Rear Delt Fly went to upper back first (priority order) and rear delts
+    // lost it. Upper back is now only named when the capped addition reaches the range, so the fly goes to rear
+    // delts and upper back is told as "Add weekly volume for upper back". One exercise, one muscle, still holds.
     const structure: ProgramStructure = {
       workoutDays: [day("u", "Upper", [rx("Dumbbell Bench Press", 3), rx("Dumbbell Row", 3)])],
     };
@@ -160,9 +167,8 @@ describe("nameActions: placement and fallback", () => {
     const upper = actions.find((a) => a.rootCauseKey === "volume:add-region-upper")!;
     const flies = (upper.suggestions ?? []).filter((s) => s.exerciseName === "Rear Delt Fly");
     expect(flies).toHaveLength(1);
-    expect(flies[0]!.muscle).toBe("upper back");
-    // The muscle that lost the exercise is said plainly, not given a second, contradictory number.
-    expect(upper.description).toMatch(/Add weekly volume for rear delts/);
+    expect(flies[0]!.muscle).toBe("rear delts");
+    expect(upper.description).toMatch(/Add weekly volume for upper back/);
   });
 
   it("keeps the template sentence when nothing fits the equipment", () => {
@@ -261,11 +267,21 @@ describe("nameActions: consolidated findings (ARCH-063 / B2)", () => {
   });
 });
 
-function structureWithAdded(base: ProgramStructure, dayName: string, exerciseName: string, sets: number): ProgramStructure {
+function structureWithAdded(
+  base: ProgramStructure,
+  dayName: string,
+  exerciseName: string,
+  sets: number,
+  alsoOn?: { workoutDayName: string; sets: number },
+): ProgramStructure {
   return {
-    workoutDays: base.workoutDays.map((d) =>
-      d.name === dayName ? { ...d, prescriptions: [...d.prescriptions, rx(exerciseName, sets, "added")] } : d,
-    ),
+    workoutDays: base.workoutDays.map((d) => {
+      if (d.name === dayName) return { ...d, prescriptions: [...d.prescriptions, rx(exerciseName, sets, "added")] };
+      if (alsoOn && d.name === alsoOn.workoutDayName) {
+        return { ...d, prescriptions: [...d.prescriptions, rx(exerciseName, alsoOn.sets, "added-too")] };
+      }
+      return d;
+    }),
   };
 }
 
@@ -286,7 +302,10 @@ describe("nameActions: the whole-program volume action names the largest deficit
   });
 
   it("names two exercises, each with the engine's after-number for the muscle it raises", () => {
-    expect(program.description).toMatch(/^Start with: Add \d sets? of .+ on Day \d → [\w ]+ [\d.]+ sets\/week\./);
+    // AUDIT TRAIL (ARCH-065 / Fix 2): the "Start with:" prefix is gone (it read as an order across actions; the
+    // display now labels each action with the finding it fixes).
+    expect(program.description).toMatch(/^Add \d sets? of .+ on Day \d → [\w ]+ [\d.]+ sets\/week\./);
+    expect(program.description).not.toMatch(/Start with/);
     expect(program.suggestions).toHaveLength(2);
     const [a, b] = program.suggestions!;
     expect(a!.exerciseName).not.toBe(b!.exerciseName);
@@ -321,5 +340,189 @@ describe("nameActions: the whole-program volume action names the largest deficit
     const out = nameActions(asm, DUMBBELLS_ONLY, empty, HYPERTROPHY_CONFIG).find((x) => x.rootCauseKey === "programStructure:add-volume");
     expect(out?.suggestions).toBeUndefined();
     expect(out?.description).toBe("Add hard sets across the program, starting with the muscles furthest below the 6–20 range.");
+  });
+});
+
+// ARCH-065 / Fix 1 (the /check stranger audit). An action must reach the number it cites: "Add 4 sets of Cable
+// Lateral Raise → side delts 5.5 sets/week. The Adequate range starts at 6." contradicted itself because one addition
+// was capped at 4 sets. A muscle that needs 5-8 sets is now split over the two best days, and the day is the one that
+// already trains the muscle (a face pull goes on the pull day, not on the first upper-body day). The after-number is
+// still the engine's: these tests re-run the engine independently over the structure with the additions applied.
+const PPL_EX: Array<[string, string, string, Record<string, number>]> = [
+  ["Barbell Bench Press", "HORIZONTAL_PUSH", "barbell", { chest: 1, triceps: 0.5 }],
+  ["Overhead Press", "VERTICAL_PUSH", "barbell", { "side delts": 0.5, triceps: 0.5 }],
+  ["Tricep Pushdown", "ISOLATION", "cable", { triceps: 1 }],
+  ["Barbell Row", "HORIZONTAL_PULL", "barbell", { lats: 1, "upper back": 0.5, biceps: 0.5, "rear delts": 0.5 }],
+  ["Pull-Up", "VERTICAL_PULL", "bodyweight", { lats: 1, biceps: 0.5 }],
+  ["Barbell Curl", "ISOLATION", "barbell", { biceps: 1 }],
+  ["Back Squat", "SQUAT", "barbell", { quads: 1, glutes: 0.5 }],
+  ["Romanian Deadlift", "HINGE", "barbell", { hamstrings: 1, glutes: 0.5 }],
+  ["Cable Lateral Raise", "ISOLATION", "cable", { "side delts": 1 }],
+  ["Face Pull", "ISOLATION", "cable", { "rear delts": 1, "upper back": 0.5 }],
+];
+const PPL_REF: ExerciseReferenceData = {
+  exercises: PPL_EX.map(([name, movementPattern, equipment]) => ({ id: name, name, movementPattern: movementPattern as never, equipment })),
+  muscleGroups: MUSCLES.map((m) => ({ id: m, name: m })),
+  involvements: PPL_EX.flatMap(([name, , , inv]) => Object.entries(inv).map(([m, f]) => ({ exerciseId: name, muscleGroupId: m, involvementFactor: f }))),
+};
+const PPL_ONCE: ProgramStructure = {
+  workoutDays: [
+    day("push", "Push", [rx("Barbell Bench Press", 3), rx("Overhead Press", 3), rx("Tricep Pushdown", 3)]),
+    day("pull", "Pull", [rx("Barbell Row", 3), rx("Pull-Up", 3), rx("Barbell Curl", 3)]),
+    day("legs", "Legs", [rx("Back Squat", 3), rx("Romanian Deadlift", 3)]),
+  ],
+};
+
+describe("nameActions: an addition reaches the Adequate range it cites (ARCH-065 / Fix 1)", () => {
+  const analysis = computeAnalysis(PPL_ONCE, PPL_REF, PER_MUSCLE_CONFIG, { now: () => new Date(0) });
+  const { assessment } = computeAssessment(analysis, PER_MUSCLE_CONFIG, { goalId: "g" });
+  const actions = nameActions(assessment, PPL_ONCE, PPL_REF, PER_MUSCLE_CONFIG);
+  const upper = actions.find((a) => a.rootCauseKey === "volume:add-region-upper")!;
+  const side = upper.suggestions?.find((s) => s.muscle === "side delts");
+
+  it("splits a 5-set need over the two best days instead of stopping at 4 sets short of the range", () => {
+    expect(side?.exerciseName).toBe("Cable Lateral Raise");
+    expect(side?.sets).toBe(3);
+    expect(side?.alsoOn?.sets).toBe(2);
+    expect(side!.sets + side!.alsoOn!.sets).toBe(5);
+    expect(side!.afterSets).toBeGreaterThanOrEqual(6);
+    expect(upper.description).toMatch(/Add 3 sets of Cable Lateral Raise on Push and 2 on Pull → side delts 6\.5 sets\/week\./);
+  });
+
+  it("puts the larger share on the day that already trains the muscle (overhead press is on Push)", () => {
+    expect(side?.workoutDayName).toBe("Push");
+    expect(side?.alsoOn?.workoutDayName).toBe("Pull");
+  });
+
+  it("the split after-number equals an independent engine run over the structure with both additions", () => {
+    const target = structureWithAdded(PPL_ONCE, side!.workoutDayName, side!.exerciseName, side!.sets, side!.alsoOn);
+    const a = computeAnalysis(target, PPL_REF, PER_MUSCLE_CONFIG, { now: () => new Date(0) });
+    const vol = a.axisResults.find((x) => x.axisType === "VOLUME" && x.scopeKey === "side delts")!;
+    expect(vol.metricValue).toBe(side!.afterSets);
+  });
+
+  it("never cites an Adequate start the addition already reaches", () => {
+    // Every full-credit suggestion that ends at or above 6 must not be followed by the contradiction line.
+    const reached = (upper.suggestions ?? []).filter((s) => !s.halfCredit && s.afterSets >= 6);
+    expect(reached.length).toBeGreaterThan(0);
+    const lowerBoundSentences = upper.description.match(/The Adequate range starts at 6\./g) ?? [];
+    const short = (upper.suggestions ?? []).filter((s) => s.afterSets < 6);
+    expect(lowerBoundSentences.length).toBe(short.length > 0 ? 1 : 0);
+  });
+
+  it("does not name a half-credit addition that cannot reach the range (it would end below the line it cites)", () => {
+    // Rows count half toward upper back: 6 sets of Face Pull would take it from 1.5 to 4.5, short of 6.
+    expect(upper.suggestions?.find((s) => s.muscle === "upper back")).toBeUndefined();
+    expect(upper.description).toMatch(/Add weekly volume for upper back/);
+  });
+
+  it("copy passes the forbidden-copy lint", () => {
+    assertCleanCopy(actions.map((a) => a.description));
+  });
+});
+
+describe("nameActions: half credit and shared day names (ARCH-065 / Fix 1)", () => {
+  // 6 sets of rows on Pull credit upper back 3; 6 more sets of Face Pull at half credit reach exactly 6.
+  const HEAVY_ROWS: ProgramStructure = {
+    workoutDays: [
+      day("push", "Push", [rx("Barbell Bench Press", 3), rx("Overhead Press", 3), rx("Tricep Pushdown", 3)]),
+      day("pull", "Pull", [rx("Barbell Row", 6), rx("Pull-Up", 3), rx("Barbell Curl", 3)]),
+      day("legs", "Legs", [rx("Back Squat", 3), rx("Romanian Deadlift", 3)]),
+    ],
+  };
+  const analysis = computeAnalysis(HEAVY_ROWS, PPL_REF, PER_MUSCLE_CONFIG, { now: () => new Date(0) });
+  const { assessment } = computeAssessment(analysis, PER_MUSCLE_CONFIG, { goalId: "g" });
+  const upper = nameActions(assessment, HEAVY_ROWS, PPL_REF, PER_MUSCLE_CONFIG).find(
+    (a) => a.rootCauseKey === "volume:add-region-upper",
+  )!;
+
+  it("names a half-credit addition that does reach the range, and says each set counts half", () => {
+    const back = upper.suggestions?.find((s) => s.muscle === "upper back");
+    expect(back?.halfCredit).toBe(true);
+    expect(back?.afterSets).toBeGreaterThanOrEqual(6);
+    expect(back?.alsoOn).toBeUndefined();
+    expect(upper.description).toMatch(/Each set counts as half for upper back\./);
+  });
+
+  it("puts a face pull on the pull day, where rows already train the muscle", () => {
+    const back = upper.suggestions?.find((s) => s.muscle === "upper back");
+    expect(back?.exerciseName).toBe("Face Pull");
+    expect(back?.workoutDayName).toBe("Pull");
+  });
+
+  it("a split over two days with the same name says 'the other Full Body day'", () => {
+    const twin: ProgramStructure = {
+      workoutDays: [
+        day("a", "Full Body", [rx("Barbell Bench Press", 3), rx("Barbell Row", 3), rx("Back Squat", 3), rx("Tricep Pushdown", 3)]),
+        day("b", "Full Body", [rx("Barbell Bench Press", 3), rx("Barbell Row", 3), rx("Back Squat", 3), rx("Tricep Pushdown", 3)]),
+      ],
+    };
+    const a = computeAnalysis(twin, PPL_REF, PER_MUSCLE_CONFIG, { now: () => new Date(0) });
+    const { assessment: asm } = computeAssessment(a, PER_MUSCLE_CONFIG, { goalId: "g" });
+    const text = nameActions(asm, twin, PPL_REF, PER_MUSCLE_CONFIG).map((x) => x.description).join(" ");
+    expect(text).toMatch(/ on Full Body and \d on the other Full Body day /);
+    expect(text).not.toMatch(/on Full Body and \d on Full Body/);
+  });
+});
+
+// ARCH-065 / Fix 3b. The whole-program volume action leads with the cheapest fix a lifter can make when the program is
+// a once-a-week rotation of 3 days or fewer: run it twice. The total is the engine's (daysPerWeek doubled), never
+// multiplied here, and the advice is withheld wherever it would be wrong.
+describe("nameActions: run the rotation twice a week (ARCH-065 / Fix 3b)", () => {
+  const run = (structure: ProgramStructure) => {
+    const analysis = computeAnalysis(structure, PPL_REF, HYPERTROPHY_CONFIG, { now: () => new Date(0) });
+    const { assessment } = computeAssessment(analysis, HYPERTROPHY_CONFIG, { goalId: "g" });
+    return nameActions(assessment, structure, PPL_REF, HYPERTROPHY_CONFIG).find(
+      (a) => a.rootCauseKey === "programStructure:add-volume",
+    );
+  };
+
+  it("a 3-day once-a-week rotation under the floor leads with 'Run your 3 days twice a week → 48 hard sets a week.'", () => {
+    const action = run(PPL_ONCE);
+    expect(action?.rotation).toEqual({ days: 3, totalSets: 48 });
+    expect(action?.description).toMatch(/^Run your 3 days twice a week → 48 hard sets a week\. Or, on 3 days a week: Add /);
+  });
+
+  it("the 48 is the engine's own number for the same program run twice a week", () => {
+    const analysis = computeAnalysis(PPL_ONCE, PPL_REF, HYPERTROPHY_CONFIG, {
+      now: () => new Date(0),
+      context: { daysPerWeek: 6 },
+    });
+    const total = analysis.axisResults.find((a) => a.axisType === "PROGRAM_STRUCTURE" && a.scopeKey === "total-volume");
+    expect(total?.metricValue).toBe(48);
+    expect(run(PPL_ONCE)?.rotation?.totalSets).toBe(total?.metricValue);
+  });
+
+  it("still names the additions for a lifter who keeps 3 days", () => {
+    expect(run(PPL_ONCE)?.suggestions?.length).toBeGreaterThan(0);
+  });
+
+  it("is withheld when running it twice would still be under the floor", () => {
+    const small: ProgramStructure = {
+      workoutDays: [
+        day("a", "Push", [rx("Barbell Bench Press", 3), rx("Tricep Pushdown", 2)]),
+        day("b", "Pull", [rx("Barbell Row", 3), rx("Barbell Curl", 2)]),
+        day("c", "Legs", [rx("Back Squat", 3), rx("Romanian Deadlift", 2)]),
+      ],
+    };
+    const action = run(small);
+    expect(action?.rotation).toBeUndefined();
+    expect(action?.description).not.toMatch(/twice a week/);
+  });
+
+  it("is withheld when muscles are already trained more than once (a 3-day full-body program is not a rotation)", () => {
+    const fullBody = (id: string) => day(id, "Full body", [rx("Barbell Bench Press", 3), rx("Barbell Row", 3), rx("Back Squat", 3)]);
+    const action = run({ workoutDays: [fullBody("a"), fullBody("b"), fullBody("c")] });
+    expect(action?.rotation).toBeUndefined();
+  });
+
+  it("is withheld for more than 3 listed days", () => {
+    const d = (id: string, name: string) => day(id, name, [rx("Barbell Bench Press", 1), rx("Barbell Row", 1)]);
+    const action = run({ workoutDays: [d("a", "A"), d("b", "B"), d("c", "C"), d("d", "D")] });
+    expect(action?.rotation).toBeUndefined();
+  });
+
+  it("the copy passes the forbidden-copy lint", () => {
+    assertCleanCopy([run(PPL_ONCE)!.description]);
   });
 });

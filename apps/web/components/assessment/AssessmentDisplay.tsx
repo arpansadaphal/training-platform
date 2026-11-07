@@ -43,14 +43,18 @@
 
 import { useState } from "react";
 import {
+  HYPERTROPHY_CONFIG,
   HIGH_VOLUME_HEADING,
+  displayStrengths,
   highVolumeLines,
   isClassified,
+  programVolumeDetail,
   provisionalFitBand,
   ratioLines,
   RATIO_TIER_NOTE,
   type AssessedAxis,
   type Assessment,
+  type AssessmentFinding,
   type AssessmentResult,
   type FitScoreBand,
   type FitScoreResult,
@@ -74,6 +78,12 @@ interface Props {
    * at commit) means every action reads as its template sentence.
    */
   namedActions?: readonly NamedAction[];
+  /**
+   * ARCH-065. The public checker (/check): effort is assumed (RPE 8 on every pasted program), so it is never credited
+   * as a strength, and a strength has to be earned (see `displayStrengths`). Display only; every other surface keeps
+   * showing the engine's strengths as they are.
+   */
+  checkMode?: boolean;
 }
 
 function axisKey(axis: AssessedAxis): string {
@@ -92,7 +102,7 @@ function fitLineFor(result: AssessmentResult, fitScore: FitScoreResult): FitLine
   return provisional ? { kind: "PROVISIONAL", band: provisional.band } : null;
 }
 
-export function AssessmentDisplay({ result, fitScore, namedActions }: Props) {
+export function AssessmentDisplay({ result, fitScore, namedActions, checkMode }: Props) {
   // ARCH-046: the banner is a property of the configuration, not of any
   // one assessment. `useProvisionalBanner` reads HYPERTROPHY_CONFIG's
   // `validated` flag and returns true while it is false — which, at MVP,
@@ -130,6 +140,7 @@ export function AssessmentDisplay({ result, fitScore, namedActions }: Props) {
         a={a}
         fit={fitLineFor(result, fitScore)}
         namedActions={namedActions}
+        checkMode={checkMode === true}
         onSeeEvidence={openEvidence}
         evidenceOpen={evidenceOpen}
       />
@@ -145,18 +156,28 @@ function AssessmentBody({
   a,
   fit,
   namedActions,
+  checkMode,
   onSeeEvidence,
   evidenceOpen,
 }: {
   a: Assessment;
   fit: FitLine;
   namedActions: readonly NamedAction[] | undefined;
+  checkMode: boolean;
   onSeeEvidence: () => void;
   evidenceOpen: boolean;
 }) {
   const namedText = new Map((namedActions ?? []).map((n) => [n.rootCauseKey, n.description]));
+  // ARCH-065 / Fix 4: on the public checker only an earned strength is shown, and the count follows what is shown.
+  const strengths = checkMode ? displayStrengths(a.strengths, { effortAssumed: true }) : a.strengths;
   const balance = ratioLines(a.ratios);
   const trendingHigh = highVolumeLines(a.highVolume);
+  // ARCH-065 / Fix 3a: the whole-program finding also says which muscles are behind it.
+  const programDetail = programVolumeDetail(a, HYPERTROPHY_CONFIG);
+  const detailFor = (finding: AssessmentFinding): string | null =>
+    finding.kind === "AXIS" && finding.lead.axisType === "PROGRAM_STRUCTURE" && finding.lead.scopeKey === "total-volume"
+      ? programDetail
+      : null;
   // ARCH-063 / B2: findings (engine 0.5.0) say each problem once. A snapshot saved before that has none, and
   // renders as it always did, axis by axis.
   const headline = a.biggestOpportunity ? (a.findings?.[0] ?? null) : null;
@@ -188,8 +209,8 @@ function AssessmentBody({
           )
         ) : null}
         <p className={styles.overallSummary}>
-          {plural(a.strengths.length, "strength", "strengths")} ·{" "}
-          {plural(things, "thing", "things")} to look at
+          {!checkMode || strengths.length > 0 ? <>{plural(strengths.length, "strength", "strengths")} · </> : null}
+          {checkMode && things === 0 ? "Nothing flagged" : <>{plural(things, "thing", "things")} to look at</>}
           {a.biggestOpportunity ? (
             <>
               . Biggest opportunity:{" "}
@@ -201,12 +222,12 @@ function AssessmentBody({
         </p>
       </section>
 
-      {a.strengths.length > 0 ? (
+      {strengths.length > 0 ? (
         <section className={styles.section}>
           <h2 className={styles.sectionHeading}>Strengths</h2>
           <div className={styles.axisList}>
-            {a.strengths.map((axis) => (
-              <AxisCard key={axisKey(axis)} axis={axis} variant="strength" />
+            {strengths.map((axis) => (
+              <AxisCard key={axisKey(axis)} axis={axis} variant="strength" plain={checkMode} />
             ))}
           </div>
         </section>
@@ -218,10 +239,10 @@ function AssessmentBody({
           <div className={styles.axisList}>
             {attention
               ? attention.map((finding) => (
-                  <FindingCard key={finding.key} finding={finding} variant="attention" />
+                  <FindingCard key={finding.key} finding={finding} variant="attention" detail={detailFor(finding)} plain={checkMode} />
                 ))
               : a.attentionAreas.map((axis) => (
-                  <AxisCard key={axisKey(axis)} axis={axis} variant="attention" />
+                  <AxisCard key={axisKey(axis)} axis={axis} variant="attention" plain={checkMode} />
                 ))}
           </div>
         </section>
@@ -242,9 +263,9 @@ function AssessmentBody({
         <section className={styles.section}>
           <h2 className={styles.sectionHeading}>Biggest Opportunity</h2>
           {headline ? (
-            <FindingCard finding={headline} variant="opportunity" />
+            <FindingCard finding={headline} variant="opportunity" detail={detailFor(headline)} plain={checkMode} />
           ) : (
-            <AxisCard axis={a.biggestOpportunity} variant="opportunity" />
+            <AxisCard axis={a.biggestOpportunity} variant="opportunity" plain={checkMode} />
           )}
         </section>
       ) : null}
@@ -253,17 +274,25 @@ function AssessmentBody({
         <section className={styles.section}>
           <h2 className={styles.sectionHeading}>Actions</h2>
           <ul className={styles.actionList}>
-            {a.actions.map((action) => (
-              <li
-                key={action.rootCauseKey}
-                className={styles.actionItem}
-                data-root-cause={action.rootCauseKey}
-              >
-                <p className={styles.actionDescription}>
-                  {namedText.get(action.rootCauseKey) ?? action.description}
-                </p>
-              </li>
-            ))}
+            {a.actions.map((action) => {
+              // ARCH-065 / Fix 2: each action says which finding it fixes ("Hinge · exercise selection: Add ..."),
+              // so a stranger can see the first one answers the headline and the rest answer the attention areas.
+              const finding = a.findings?.find(
+                (f) => f.lead.axisType === action.relatedAxis.axisType && f.lead.scopeKey === action.relatedAxis.scopeKey,
+              );
+              const label = finding ? findingLabel(finding) : axisLabel(action.relatedAxis);
+              return (
+                <li
+                  key={action.rootCauseKey}
+                  className={styles.actionItem}
+                  data-root-cause={action.rootCauseKey}
+                >
+                  <p className={styles.actionDescription}>
+                    <strong>{label}:</strong> {namedText.get(action.rootCauseKey) ?? action.description}
+                  </p>
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}

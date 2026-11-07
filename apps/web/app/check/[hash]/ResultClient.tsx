@@ -80,6 +80,7 @@ function Result({ hash, canImport }: Props) {
               result={query.data.assessment}
               fitScore={query.data.fitScore}
               namedActions={query.data.namedActions}
+              checkMode
             />
           </div>
           {canImport ? null : <CtaPanel hash={hash} />}

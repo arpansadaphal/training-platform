@@ -13,15 +13,19 @@ import styles from "./assessment.module.css";
 interface Props {
   finding: AssessmentFinding;
   variant: AxisCardVariant;
+  /** ARCH-065 / Fix 3a: the sentence naming the muscles behind a whole-program finding. */
+  detail?: string | null;
+  /** ARCH-065 / Fix 6: the public checker keeps each muscle's sets under Details and drops the engine's Severity and Leverage. */
+  plain?: boolean;
 }
 
 function num(value: number): string {
   return String(Math.round(value * 10) / 10);
 }
 
-export function FindingCard({ finding, variant }: Props) {
+export function FindingCard({ finding, variant, detail, plain }: Props) {
   const sentence = findingSentence(finding, HYPERTROPHY_CONFIG);
-  if (finding.kind === "AXIS") return <AxisCard axis={finding.lead} variant={variant} sentence={sentence} />;
+  if (finding.kind === "AXIS") return <AxisCard axis={finding.lead} variant={variant} sentence={sentence} detail={detail} plain={plain} />;
 
   return (
     <div
@@ -33,25 +37,31 @@ export function FindingCard({ finding, variant }: Props) {
         <span className={styles.axisBand}>{findingBandLabel(finding)}</span>
       </div>
       {sentence !== null ? <p className={styles.axisSentence}>{sentence}</p> : null}
-      <details className={styles.details}>
-        <summary>Details</summary>
-        <dl className={styles.axisMeta}>
-          {finding.members.map((member) => (
-            <div key={member.muscle}>
-              <dt>{member.muscle}</dt>
-              <dd>{num(member.sets)} hard sets / week</dd>
-            </div>
-          ))}
-          <div>
-            <dt>Severity</dt>
-            <dd>{finding.lead.severity}</dd>
-          </div>
-          <div>
-            <dt>Leverage</dt>
-            <dd>{finding.lead.leverage}</dd>
-          </div>
-        </dl>
-      </details>
+      {plain && finding.members.length === 0 ? null : (
+        <details className={styles.details}>
+          <summary>Details</summary>
+          <dl className={styles.axisMeta}>
+            {finding.members.map((member) => (
+              <div key={member.muscle}>
+                <dt>{member.muscle}</dt>
+                <dd>{num(member.sets)} hard sets / week</dd>
+              </div>
+            ))}
+            {plain ? null : (
+              <>
+                <div>
+                  <dt>Severity</dt>
+                  <dd>{finding.lead.severity}</dd>
+                </div>
+                <div>
+                  <dt>Leverage</dt>
+                  <dd>{finding.lead.leverage}</dd>
+                </div>
+              </>
+            )}
+          </dl>
+        </details>
+      )}
     </div>
   );
 }

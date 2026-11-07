@@ -167,7 +167,8 @@ async function openReviewAndRecompute(page: Page): Promise<void> {
     }),
   ).toBeVisible();
   // ARCH-054 copy: evidence-graded, never "validated" in the positive.
-  await expect(page.getByText(/evidence-graded, not human-validated/i)).toBeVisible();
+  // ARCH-065 / D3: the banner says the same fact in lifter language ("no expert has signed them off yet").
+  await expect(page.getByText(/no expert has signed them off yet/i)).toBeVisible();
 
   await expect(page.getByRole("heading", { name: /assessment at commit time/i })).toBeVisible();
 

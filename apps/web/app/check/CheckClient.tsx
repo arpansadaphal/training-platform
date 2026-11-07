@@ -176,6 +176,7 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
           />
           <p className={styles.note}>{CHECK_COPY.assumptionsNote}</p>
           <p className={styles.note}>{CHECK_COPY.layoutHint}</p>
+          <p className={styles.note}>{CHECK_COPY.rotationHint}</p>
 
           {hasReading ? (
             <div className={styles.panel} aria-live="polite">

@@ -22,6 +22,12 @@ export function CtaPanel({ hash }: { hash: string }) {
       <h2 id="check-cta" className={styles.ctaHeading}>
         {CHECK_COPY.ctaHeading}
       </h2>
+      <p className={styles.note}>{CHECK_COPY.ctaLead}</p>
+      <ul className={styles.ctaList}>
+        {CHECK_COPY.ctaBenefits.map((benefit) => (
+          <li key={benefit}>{benefit}</li>
+        ))}
+      </ul>
       <div className={styles.actions}>
         <button type="button" className={styles.primary} onClick={createAccount}>
           {CHECK_COPY.ctaPrimary}
