@@ -36,7 +36,20 @@ export const CHECK_COPY = {
   checkProgram: "Check my program",
   needMoreExercises: (n: number) =>
     `Add ${n} more recognized ${plural(n, "exercise", "exercises")} to check a program.`,
-  signupNote: "Sign up (it's free) to save the program you just checked as your first program.",
+  // ARCH-067 / Fix 3. The sign-up page says what the account is before it asks for an email. A visitor who did not
+  // come from the checker has no program to save, so that heading is the generic one.
+  signupHeadingSave: "Save your program.",
+  signupHeadingSaveCount: (exercises: number) => `Save your ${exercises}-exercise program.`,
+  signupHeadingGeneric: "Create your account.",
+  signupLead:
+    "Track your training in one place. See what's working and what's not. Free to use, no credit card, export anytime.",
+  signupBullets: [
+    "Get a target weight and reps for every lift, every session",
+    "See your progress — charts, personal records, first-vs-now",
+    "Adjust your program as you go, without starting over",
+  ],
+  signupHaveAccount: "Already have an account?",
+  signupSignIn: "Sign in →",
   backToChecker: "Back to the checker",
   pickIntro: "Each split loads straight into the assessment.",
 
@@ -116,6 +129,7 @@ export const CHECK_COPY = {
     "Keep a journal of every session and a progress view, and download your data as a CSV any time.",
   ],
   ctaPrimary: "Create account and save this program",
+  ctaFreeNote: "Free — save your program and check it again after edits.",
   ctaSecondary: "Just here to check? No account needed.",
   createAccount: "Create account",
   importSave: "Save this program",
@@ -190,6 +204,8 @@ export function allCheckCopy(): string[] {
     CHECK_COPY.noMatch(4, "Zottman 3x8"),
     CHECK_COPY.programSummary(1, 1),
     CHECK_COPY.programSummary(3, 15),
+    CHECK_COPY.signupHeadingSaveCount(26),
+    CHECK_COPY.signupHeadingSaveCount(1),
     CHECK_COPY.daysOption(1),
     CHECK_COPY.daysOption(6),
     CHECK_COPY.daysAssessedAs(3, 6),

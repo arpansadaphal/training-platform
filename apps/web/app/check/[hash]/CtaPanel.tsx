@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CHECK_COPY } from "@training/domain";
+import { CHECK_COPY, decodeCompactProgram } from "@training/domain";
 import { storePendingCheck } from "@/src/lib/pendingCheck";
 import styles from "../check.module.css";
 
@@ -14,7 +14,11 @@ export function CtaPanel({ hash }: { hash: string }) {
   const router = useRouter();
 
   function createAccount() {
-    router.push(storePendingCheck(hash) ? "/signup?from=check" : `/signup?from=check&h=${hash}`);
+    // The count only words the sign-up heading ("Save your 26-exercise program."); without one the heading is generic.
+    const program = decodeCompactProgram(hash);
+    const exercises = program === null ? null : program.days.reduce((total, day) => total + day.rows.length, 0);
+    const count = exercises === null ? "" : `&n=${exercises}`;
+    router.push(storePendingCheck(hash) ? `/signup?from=check${count}` : `/signup?from=check&h=${hash}`);
   }
 
   return (
@@ -33,6 +37,7 @@ export function CtaPanel({ hash }: { hash: string }) {
           {CHECK_COPY.ctaPrimary}
         </button>
       </div>
+      <p className={styles.note}>{CHECK_COPY.ctaFreeNote}</p>
       <Link href="/check#input" className={styles.textLink}>
         {CHECK_COPY.ctaSecondary}
       </Link>

@@ -372,9 +372,14 @@ test.describe("sign-up handoff", () => {
     await page.getByRole("tab", { name: "Pick a common split" }).click();
     await page.getByRole("link", { name: /Beginner 2-day/ }).click();
     await page.getByRole("button", { name: "Create account and save this program" }).click();
-    await expect(page).toHaveURL(/\/signup\?from=check$/);
-    // ARCH-065 / D2: "Sign up (it's free) to save the program you just checked as your first program."
-    await expect(page.getByText("to save the program you just checked")).toBeVisible();
+    await expect(page).toHaveURL(/\/signup\?from=check&n=\d+$/);
+    // ARCH-067 / Fix 3: what the account is, before the form. The count is the checked program's own.
+    await expect(page.getByRole("heading", { name: /^Save your \d+-exercise program\.$/ })).toBeVisible();
+    await expect(page.getByText("Free to use, no credit card, export anytime.", { exact: false })).toBeVisible();
+    await expect(page.getByText("Get a target weight and reps for every lift, every session")).toBeVisible();
+    await expect(page.getByText("See your progress — charts, personal records, first-vs-now")).toBeVisible();
+    await expect(page.getByText("Adjust your program as you go, without starting over")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Sign in →" })).toHaveAttribute("href", "/login");
 
     await signUp(page);
     await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
@@ -383,6 +388,31 @@ test.describe("sign-up handoff", () => {
 
     await expect(page).toHaveURL(/\/app\/programs\/[^/]+\/build$/, { timeout: 30_000 });
     await expect(page.getByRole("heading", { name: "Overall" })).toBeVisible({ timeout: 30_000 });
+  });
+
+  test("the sign-up page says what the account is, and words its heading for what the visitor brought", async ({ page }) => {
+    await page.goto("/signup");
+    await expect(page.getByRole("heading", { name: "Create your account." })).toBeVisible();
+    await expect(page.getByText("Track your training in one place.", { exact: false })).toBeVisible();
+    await expect(page.getByRole("listitem").filter({ hasText: "Adjust your program as you go" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Sign in →" })).toBeVisible();
+
+    await page.goto("/signup?from=check&n=26");
+    await expect(page.getByRole("heading", { name: "Save your 26-exercise program." })).toBeVisible();
+    await page.goto("/signup?from=check");
+    await expect(page.getByRole("heading", { name: "Save your program." })).toBeVisible();
+    // A count that is not a plausible number of exercises is ignored, not printed.
+    for (const n of ["0", "9999", "abc", "26<script>"]) {
+      await page.goto(`/signup?from=check&n=${encodeURIComponent(n)}`);
+      await expect(page.getByRole("heading", { name: "Save your program." })).toBeVisible();
+    }
+  });
+
+  test("the result's sign-up button says it is free", async ({ page }) => {
+    await page.goto("/check");
+    await page.getByRole("tab", { name: "Pick a common split" }).click();
+    await page.getByRole("link", { name: /Beginner 2-day/ }).click();
+    await expect(page.getByText("Free — save your program and check it again after edits.")).toBeVisible();
   });
 
   test("Discard forgets the pending program", async ({ page }) => {
@@ -472,6 +502,10 @@ test.describe("375px", () => {
 
     await page.goto("/check/about");
     await expectPhoneFit(page, "check about");
+
+    await page.goto("/signup?from=check&n=26");
+    await expect(page.getByRole("heading", { name: "Save your 26-exercise program." })).toBeVisible();
+    await expectPhoneFit(page, "signup from check");
   });
 });
 
