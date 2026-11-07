@@ -252,11 +252,15 @@ export type {
   MatchStatus,
   ParseOptions,
   ParseResult,
+  LineNote,
   ParsedDay,
   ParsedLine,
+  RestDay,
   Resolutions,
   SingletonMergeNote,
+  SkippedLine,
   UnparsedLine,
+  UnparsedReason,
 } from "./check/types";
 export { fold, matchExercise } from "./check/exerciseMatch";
 export {
@@ -264,9 +268,12 @@ export {
   mergeAllDays,
   parseRoutine,
   resolvedName,
+  scheduleEntries,
   toCompactProgram,
   unresolvedLines,
 } from "./check/routineParser";
+export type { ScheduleEntry } from "./check/routineParser";
+export { checkHint } from "./check/hint";
 export { CHECK_LIMITS, decodeCompactProgram, encodeCompactProgram } from "./check/compactProgram";
 export { CHECK_DEFAULT_RPE, toProgramStructure } from "./check/toStructure";
 export type { StructureResult } from "./check/toStructure";

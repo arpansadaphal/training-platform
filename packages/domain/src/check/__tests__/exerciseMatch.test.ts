@@ -76,3 +76,22 @@ describe("matchExercise", () => {
     expect(m("   ")).toEqual({ status: "none", best: null, candidates: [] });
   });
 });
+
+describe("matchExercise: plurals in real pastes (ARCH-066)", () => {
+  it.each([
+    ["Pull-Ups", "Pull-Up"],
+    ["Pull Ups", "Pull-Up"],
+    ["Chin-Ups", "Chin-Up"],
+    ["Cable Crunches", "Cable Crunch"],
+    ["Bulgarian Split Squats", "Bulgarian Split Squat"],
+    ["Lateral Raises", "Lateral Raise"],
+    ["Face Pulls", "Face Pull"],
+  ])("%s is %s", (query, expected) => {
+    expect(m(query)).toMatchObject({ status: "exact", best: expected });
+  });
+
+  it("every library name still matches itself exactly (the plural rule is applied to both sides)", () => {
+    const misses = LIBRARY_NAMES.filter((name) => m(name).status !== "exact" || m(name).best !== name);
+    expect(misses).toEqual([]);
+  });
+});

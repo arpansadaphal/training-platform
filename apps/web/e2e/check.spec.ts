@@ -58,6 +58,82 @@ test("the Day 1 - Push / Rest paste reads as three days, not five", async ({ pag
   await expect(page.getByText("2 rest lines skipped.")).toBeVisible();
 });
 
+// ARCH-066. A stranger pasted a ChatGPT-formatted 5-day program and all of it was rejected. A RECONSTRUCTION of that
+// paste (the literal text was not saved): bullets, "sets × reps", en-dashes, "or", parentheses, a time-based line and a
+// rest day with a walking line under it. Same fixture as routineParser.test.ts.
+const CHATGPT_PASTE = [
+  "Day 1: Upper Body A",
+  "• Barbell Bench Press: 4 sets × 6–8 reps (2 mins rest)",
+  "• Lat Pulldown or Pull-Ups: 4 sets × 8–10 reps",
+  "• Dumbbell Shoulder Press: 3 sets × 8–10 reps",
+  "• Seated Cable Row: 3 sets × 10–12 reps",
+  "• Lateral Raise: 3 sets × 12–15 reps",
+  "• Tricep Pushdown: 3 sets × 10–12 reps",
+  "• Dumbbell Curl: 3 sets × 10–12 reps",
+  "",
+  "Day 2: Lower Body A",
+  "• Back Squat: 4 sets × 6–8 reps (2 mins rest)",
+  "• Romanian Deadlift: 3 sets × 8–10 reps",
+  "• Bulgarian Split Squats: 3 sets × 8–10 reps per leg",
+  "• Leg Curl: 3 sets × 10–12 reps",
+  "• Standing Calf Raise: 4 sets × 12–15 reps",
+  "• Plank or Cable Crunches (Core): 3 sets × 30–45s / 12–15 reps",
+  "",
+  "Day 3: Rest / Active Recovery",
+  "• 20–30 minutes of light walking or mobility/stretching work.",
+  "",
+  "Day 4: Upper Body B",
+  "• Overhead Press: 4 sets × 6–8 reps",
+  "• Barbell Row: 4 sets × 6–8 reps",
+  "• Incline Dumbbell Press: 3 sets × 8–10 reps",
+  "• Chest-Supported Row: 3 sets × 8–10 reps",
+  "• Face Pull: 3 sets × 12–15 reps",
+  "• Overhead Tricep Extension: 3 sets × 10–12 reps",
+  "• Hammer Curl: 3 sets × 10–12 reps",
+  "",
+  "Day 5: Lower Body B",
+  "• Deadlift (Conventional or Sumo): 3 sets × 5 reps",
+  "• Leg Press: 3 sets × 10–12 reps",
+  "• Hip Thrust: 3 sets × 8–10 reps",
+  "• Seated Leg Curl: 3 sets × 10–12 reps",
+  "• Seated Calf Raise: 4 sets × 12–15 reps",
+  "• Hanging Leg Raise: 3 sets × 12–15 reps",
+].join("\n");
+
+test("a ChatGPT-formatted 5-day paste reads as 4 training days and a rest day, then checks", async ({ page }) => {
+  await paste(page, CHATGPT_PASTE);
+
+  await expect(page.getByRole("heading", { name: "Parsed 5 days (4 training, 1 rest)" })).toBeVisible();
+  await expect(page.getByText("Day 1 (Upper Body A)")).toBeVisible();
+  await expect(page.getByText("Day 3: Rest", { exact: true })).toBeVisible();
+  await expect(page.getByText("Day 4 (Upper Body B)")).toBeVisible();
+  await expect(page.getByText("Total: 26 exercises across 4 training days")).toBeVisible();
+  await expect(page.getByText("1 non-exercise line skipped", { exact: false })).toBeVisible();
+  // Nothing unreadable and nothing to answer: the paste is understood as typed.
+  await expect(page.getByRole("heading", { name: "Could not parse" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Confirm these exercises" })).toHaveCount(0);
+
+  // What it chose where the paste offered a choice, and the time-based line.
+  await expect(page.getByText("Lat Pulldown or Pull-Ups → Lat Pulldown (confirm if you meant Pull-Up)")).toBeVisible();
+  await expect(page.getByText("Deadlift (Conventional or Sumo) → Conventional Deadlift (confirm if you meant Sumo Deadlift)")).toBeVisible();
+  await expect(page.getByText("Plank (time-based) → using 12–15 reps for analysis")).toBeVisible();
+
+  // The lifter can take the other option.
+  await page.getByRole("button", { name: "Use Pull-Up" }).click();
+  await expect(page.getByText("Lat Pulldown or Pull-Ups → Pull-Up (confirm if you meant Lat Pulldown)")).toBeVisible();
+
+  await checkPastedProgram(page);
+  await expect(page.getByRole("heading", { name: "Assessment" })).toBeVisible();
+});
+
+test("nothing recognised says so, instead of 'Add 3 more'", async ({ page }) => {
+  await paste(page, "Some notes about my week\nI train when I can");
+  await expect(page.getByText("0 exercises recognized.", { exact: false })).toBeVisible();
+  await expect(page.getByText("Add 3 more", { exact: false })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Could not parse" })).toBeVisible();
+  await expect(page.getByText("no sets×reps found", { exact: false }).first()).toBeVisible();
+});
+
 test("pick PPL 6-day -> assessment renders", async ({ page }) => {
   await page.goto("/check");
   await page.getByRole("tab", { name: "Pick a common split" }).click();
@@ -256,6 +332,11 @@ test.describe("375px", () => {
     await page.getByLabel("Your routine").fill(`${THREE_DAY_PASTE}\nZottman Spin 3x8\nkeep it easy`);
     await expect(page.getByRole("heading", { name: "Confirm these exercises" })).toBeVisible();
     await expectPhoneFit(page, "check reading");
+
+    // ARCH-066: the longest reading there is (rest day, notes with "Use ..." buttons) on a phone.
+    await page.getByLabel("Your routine").fill(CHATGPT_PASTE);
+    await expect(page.getByRole("heading", { name: "Parsed 5 days (4 training, 1 rest)" })).toBeVisible();
+    await expectPhoneFit(page, "check chatgpt reading");
 
     await page.getByRole("tab", { name: "Pick a common split" }).click();
     await expectPhoneFit(page, "check presets");

@@ -37,8 +37,29 @@ export const CHECK_COPY = {
   pickIntro: "Each split loads straight into the assessment.",
 
   parsedHeading: (days: number) => `Parsed as ${days} ${plural(days, "day", "days")}`,
-  parsedDayLine: (index: number, name: string, nameAuto: boolean) =>
-    nameAuto ? `Day ${index}` : `Day ${index} (${name})`,
+  // Named rest days ("Day 3: Rest") are listed so the days add up to what was pasted; they are not analysed.
+  parsedHeadingWithRest: (training: number, rest: number) =>
+    `Parsed ${training + rest} days (${training} training, ${rest} rest)`,
+  // `label` is the day number the lifter wrote ("Day 4"), kept when a rest day sits before it; else the position.
+  parsedDayLine: (index: number, name: string, nameAuto: boolean, label: string | null = null) => {
+    const day = label ?? `Day ${index}`;
+    return nameAuto ? day : `${day} (${name})`;
+  },
+  restDayLine: (label: string) => `${label}: Rest`,
+  exerciseCount: (n: number) => `${n} ${plural(n, "exercise", "exercises")}`,
+  totalLine: (exercises: number, days: number) =>
+    `Total: ${exercises} ${plural(exercises, "exercise", "exercises")} across ${days} training ${plural(days, "day", "days")}`,
+  notesHeading: "Notes",
+  noteAlternative: (query: string, chosen: string, others: readonly string[], unmatched: readonly string[]) =>
+    others.length > 0
+      ? `${query} → ${chosen} (confirm if you meant ${others.join(" or ")})`
+      : `${query} → ${chosen} (${unmatched.join(" and ")} not in the library)`,
+  noteTimeUsesReps: (name: string, low: number, high: number) =>
+    `${name} (time-based) → using ${low === high ? low : `${low}–${high}`} reps for analysis`,
+  noteTimeOnly: (name: string, time: string) =>
+    `${name}: ${time} is time-based, so it is listed but not included in the analysis`,
+  skippedLines: (n: number) =>
+    `${n} non-exercise ${plural(n, "line", "lines")} skipped (walking, cardio or notes under a rest day).`,
   looksRight: "Looks right",
   mergeAll: "Merge all into one day",
   editManually: "Edit manually",
@@ -57,7 +78,18 @@ export const CHECK_COPY = {
   chooseDifferent: "Choose different",
   removeLine: "Remove line",
   unparsedHeading: "Could not parse",
-  unparsedHelp: "These lines have no sets and reps we can read, such as 3x8-10.",
+  unparsedHelp:
+    "These lines look like exercises but have no sets and reps we can read, such as 3x8-10 or 4 sets × 6–8 reps.",
+  unparsedReason: {
+    NO_SETS_REPS: "no sets×reps found",
+    SETS_REPS_OUT_OF_RANGE: "sets or reps out of range",
+  },
+  // Shown instead of "Add 3 more" when nothing at all was recognised. (Not "check the format": the copy lint bans
+  // words starting "form" as cause attribution, and "format" trips it.)
+  noneRecognized: (unparsed: number) =>
+    unparsed > 0
+      ? `0 exercises recognized. ${unparsed} ${plural(unparsed, "line", "lines")} could not be read: see the lines below.`
+      : "0 exercises recognized. Check how each line gives its sets and reps.",
   deleteLine: "Delete",
 
   resultHeading: "Assessment",
@@ -116,12 +148,29 @@ export function allCheckCopy(): string[] {
     else if (Array.isArray(value)) out.push(...value);
   }
   out.push(
+    ...Object.values(CHECK_COPY.unparsedReason),
     CHECK_COPY.needMoreExercises(1),
     CHECK_COPY.needMoreExercises(2),
+    CHECK_COPY.noneRecognized(0),
+    CHECK_COPY.noneRecognized(1),
+    CHECK_COPY.noneRecognized(25),
     CHECK_COPY.parsedHeading(1),
     CHECK_COPY.parsedHeading(3),
+    CHECK_COPY.parsedHeadingWithRest(4, 1),
     CHECK_COPY.parsedDayLine(1, "Push", false),
     CHECK_COPY.parsedDayLine(2, "Day 2", true),
+    CHECK_COPY.parsedDayLine(3, "Upper Body B", false, "Day 4"),
+    CHECK_COPY.restDayLine("Day 3"),
+    CHECK_COPY.exerciseCount(1),
+    CHECK_COPY.exerciseCount(7),
+    CHECK_COPY.totalLine(26, 4),
+    CHECK_COPY.totalLine(1, 1),
+    CHECK_COPY.noteAlternative("Lat Pulldown or Pull-Ups", "Lat Pulldown", ["Pull-Up"], []),
+    CHECK_COPY.noteAlternative("Dumbbell or Barbell Curl", "Barbell Curl", [], ["Dumbbell"]),
+    CHECK_COPY.noteTimeUsesReps("Plank", 12, 15),
+    CHECK_COPY.noteTimeOnly("Plank", "30–45s"),
+    CHECK_COPY.skippedLines(1),
+    CHECK_COPY.skippedLines(2),
     CHECK_COPY.useCandidate("Barbell Row"),
     CHECK_COPY.resolveFirst(1),
     CHECK_COPY.resolveFirst(3),

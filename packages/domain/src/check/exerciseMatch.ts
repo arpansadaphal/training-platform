@@ -31,6 +31,17 @@ const ABBREVIATIONS: Readonly<Record<string, string>> = {
   dl: "deadlift",
 };
 
+/**
+ * Plural to singular. "squats" -> "squat" (already did this), plus the two cases real pastes hit: "ups" ("Pull-Ups")
+ * and the "-es" plurals "crunches" and "presses". Applied to the library names too, so both sides agree.
+ */
+function singular(w: string): string {
+  if (/(?:ch|sh|x|ss)es$/.test(w)) return w.slice(0, -2);
+  if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss")) return w.slice(0, -1);
+  if (w.length === 3 && /^[a-z]{2}s$/.test(w) && !/(?:us|is)$/.test(w)) return w.slice(0, -1);
+  return w;
+}
+
 /** Lowercase word tokens; apostrophes dropped, abbreviations expanded, plural "s" removed. */
 function tokens(text: string): string[] {
   const words = text
@@ -39,7 +50,7 @@ function tokens(text: string): string[] {
     .split(/[^a-z0-9]+/)
     .filter((w) => w.length > 0);
   const expanded = words.flatMap((w) => (ABBREVIATIONS[w] ?? w).split(" "));
-  return expanded.map((w) => (w.length > 3 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w));
+  return expanded.map(singular);
 }
 
 /** Folded text -> the standard lift it means in practice. Used only when the library has that name. */
