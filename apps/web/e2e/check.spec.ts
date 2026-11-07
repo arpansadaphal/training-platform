@@ -371,7 +371,16 @@ test("'Merge all into one day' collapses the reading", async ({ page }) => {
 test("/check/about renders the limits and links back to /check", async ({ page }) => {
   await page.goto("/check/about");
   await expect(page.getByRole("heading", { name: "About the Program Checker" })).toBeVisible();
-  await expect(page.getByText("21 match the headline the coaches gave.", { exact: false })).toBeVisible();
+  // ARCH-067 / Fix 4: what was tested, in numbers a reader can check; no claim that coaches reviewed the analysis.
+  await expect(page.getByText("Tested against 24 sample programs.", { exact: false })).toBeVisible();
+  await expect(page.getByText("21 match our prediction of what a strength coach would say", { exact: false })).toBeVisible();
+  await expect(page.getByText("3 are documented exceptions awaiting real coach input", { exact: false })).toBeVisible();
+  await expect(page.getByText("Real coach review is ongoing.", { exact: false })).toBeVisible();
+  await expect(page.getByText("The engine's thresholds are provisional", { exact: false })).toBeVisible();
+  const about = await page.locator("main").innerText();
+  expect(about).not.toMatch(/reviewed by 5 coaches|signed them off|not human-validated/i);
+  // No address to write to yet, so no link that pretends there is one.
+  await expect(page.locator("main a[href^='mailto:']")).toHaveCount(0);
   await expect(page.getByText("If any exercise causes pain, stop and consult a professional.")).toBeVisible();
   await page.getByRole("link", { name: "Continue to the checker →" }).click();
   await expect(page).toHaveURL(/\/check$/);

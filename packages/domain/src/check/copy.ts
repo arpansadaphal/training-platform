@@ -154,21 +154,22 @@ export const CHECK_COPY = {
   pendingDiscard: "Discard",
 
   aboutTitle: "About the Program Checker",
-  // ARCH-065 / Fix 6. What it does, in lifter words, before how it was checked. The claim about the coaches is
-  // unchanged: it is the founder's to confirm (Session E handoff, manual action 4), and is not strengthened here.
+  // ARCH-065 / Fix 6. What it does, in lifter words, before how it was checked. ARCH-067 / Fix 4: the claim about
+  // the coaches is replaced by what the repo supports. The 24 expected headlines are mostly predictions written by
+  // the audit author; a real five-coach review covered 6 of the 25 programs (B and the five goal-dependent ones). So
+  // About says "our prediction of what a strength coach would say", not that coaches reviewed the analysis.
   aboutWhat:
     "The Program Checker counts the hard sets each muscle gets in a week, checks which movement patterns your program covers, and compares both with evidence-graded thresholds for muscle growth. The same program always gets the same answer.",
   aboutIntro:
-    "It has been tested against 24 test programs, reviewed by 5 coaches. 21 match the headline the coaches gave. 3 are documented exceptions awaiting either:",
-  aboutExceptions: [
-    "A way to grade how big a shortfall is, instead of treating every shortfall alike",
-    "Scientific input on novice training ranges",
-  ],
+    "Tested against 24 sample programs. 21 match our prediction of what a strength coach would say; 3 are documented exceptions awaiting real coach input.",
+  // No address yet (founder, 2026-11-08): the invitation stands without a link until there is a feedback route.
+  aboutReview:
+    "Real coach review is ongoing. If you've seen a different analysis from a strength coach, we want to hear about it.",
   aboutNotJudgedHeading: "The analysis does not judge:",
   aboutNotJudged: ["Movement quality", "Whether a given lift suits you", "Medical conditions"],
   aboutPain: "If any exercise causes pain, stop and consult a professional.",
-  aboutProvisional:
-    "The thresholds are provisional. The coach check above covers what the checker says on those test programs, not the thresholds themselves, and no expert has signed them off yet. Every assessment carries an evidence tier. See the evidence link on any analysis for what each finding rests on.",
+  // The banner on every assessment already says no expert has signed the thresholds off; About says it once, briefly.
+  aboutProvisional: "The engine's thresholds are provisional — see evidence on any analysis.",
   aboutContinue: "Continue to the checker →",
 } as const;
 

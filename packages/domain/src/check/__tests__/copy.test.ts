@@ -43,6 +43,25 @@ describe("Program Checker copy", () => {
     });
   });
 
+  // ARCH-067 / Fix 4. About states what was tested and no more than the repo supports.
+  describe("the About page claims", () => {
+    const about = [CHECK_COPY.aboutWhat, CHECK_COPY.aboutIntro, CHECK_COPY.aboutReview, CHECK_COPY.aboutProvisional].join(" ");
+
+    it("gives the numbers: 24 sample programs, 21 match, 3 documented exceptions", () => {
+      expect(about).toMatch(/24 sample programs/);
+      expect(about).toMatch(/21 match/);
+      expect(about).toMatch(/3 are documented exceptions/);
+    });
+
+    it("does not say coaches reviewed the analysis, or say 'signed them off' a second time (the banner says it)", () => {
+      expect(about).not.toMatch(/reviewed by|coaches reviewed|signed them off|human-validated/i);
+    });
+
+    it("is a prediction of what a coach would say, not what coaches said", () => {
+      expect(CHECK_COPY.aboutIntro).toMatch(/our prediction of what a strength coach would say/);
+    });
+  });
+
   it("rejects what the lint is meant to catch (guards the guard)", () => {
     expect(() => assertCleanCopy(["This will build muscle"])).toThrow();
     expect(() => assertCleanCopy(["Check your form"])).toThrow();
