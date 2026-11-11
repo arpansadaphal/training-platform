@@ -564,7 +564,7 @@ describe("nameActions: add a day instead of sets on the listed days (ARCH-068)",
     const withDay: ProgramStructure = {
       workoutDays: [
         ...PPL_ONCE.workoutDays,
-        day("added", "Added day", action.newDay!.exercises.map((e, i) => rx(e.exerciseName, e.sets, i))),
+        day("added", "Added day", action.newDay!.exercises.map((e, i) => rx(e.exerciseName, e.sets, `added-${i}`))),
       ],
     };
     expect(totalOf(withDay)).toBe(quoted);
