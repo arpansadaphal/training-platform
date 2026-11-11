@@ -80,6 +80,14 @@ export { computeAnalysis } from "./analysis/computeAnalysis";
 export { computeCrossMuscleRatios } from "./analysis/ratios";
 export { ratioLines, RATIO_TIER_NOTE } from "./copy/ratioLines";
 export {
+  muscleVolumeView,
+  allMuscleVolumeCopy,
+  MUSCLE_VOLUME_COPY,
+  MUSCLE_DISPLAY_ORDER,
+  type MuscleVolumeRow,
+  type MuscleVolumeView,
+} from "./copy/muscleVolumeRows";
+export {
   frequencyObservation,
   allFrequencyObservationCopy,
   FREQUENCY_OBSERVATION_HEADING,

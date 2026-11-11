@@ -532,6 +532,79 @@ test.describe("what /check shows when nothing is flagged (ARCH-069)", () => {
   });
 });
 
+// ARCH-070. Every muscle the engine counted, one line each. Before this a muscle that was fine at 6-9 sets appeared nowhere,
+// and readers asked whether it had been counted.
+test.describe("weekly sets per muscle (ARCH-070)", () => {
+  const MUSCLES = ["Chest", "Lats", "Upper back", "Side delts", "Rear delts", "Biceps", "Triceps", "Quads", "Hamstrings", "Glutes", "Calves"];
+  const BRO_SPLIT = ["Chest", "Bench 4x8", "Incline Dumbbell Press 3x8", "", "Back", "Row 4x8", "", "Legs", "Squat 4x8"].join("\n");
+  const rows = (page: Page) => page.locator("[data-muscle-volume] tbody tr");
+
+  test("a flawed program lists all 11 muscles, the untrained ones at 0, and agrees with its finding cards", async ({ page }) => {
+    await paste(page, BRO_SPLIT);
+    await checkPastedProgram(page);
+    const table = page.locator("[data-muscle-volume]");
+    await expect(table.getByRole("heading", { name: "Weekly sets per muscle" })).toBeVisible();
+    await expect(rows(page)).toHaveCount(11);
+    expect(await rows(page).locator("th").allInnerTexts()).toEqual(MUSCLES);
+    for (const muscle of ["hamstrings", "calves", "side delts"]) {
+      const row = page.locator(`[data-muscle-volume] tr[data-muscle="${muscle}"]`);
+      await expect(row.locator("td").first()).toHaveText("0");
+      await expect(row).toHaveAttribute("data-band", "Low");
+    }
+    // One number per muscle: the whole-program card says triceps 3.5, and so does the table.
+    await expect(page.getByText(/triceps 3\.5/)).toBeVisible();
+    await expect(page.locator('[data-muscle-volume] tr[data-muscle="triceps"] td').first()).toHaveText("3.5");
+    await expect(table.getByText(/of 11 muscles are in the 6–20 range\./)).toBeVisible();
+    // The per-muscle volume cards are not repeated.
+    await expect(page.getByText("Weekly volume · ", { exact: false })).toHaveCount(0);
+    // No balance section on this program, so the footnote does not point at one.
+    await expect(table).not.toContainText("balance lines");
+  });
+
+  test("a program with nothing flagged lists every muscle, including the ones that were never mentioned before", async ({ page }) => {
+    await paste(page, CHATGPT_PASTE);
+    await checkPastedProgram(page);
+    await expect(page.getByText("Nothing flagged")).toBeVisible();
+    await expect(rows(page)).toHaveCount(11);
+    for (const muscle of ["chest", "side delts", "rear delts", "upper back", "calves"]) {
+      const row = page.locator(`[data-muscle-volume] tr[data-muscle="${muscle}"]`);
+      await expect(row).toBeVisible();
+      expect(Number(await row.locator("td").first().innerText())).toBeGreaterThan(0);
+    }
+    // No volume card repeats what the table says; the strengths that remain, and their count, are what is shown.
+    await expect(page.getByText("Weekly volume · ", { exact: false })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Strengths" })).toBeVisible();
+    // What remains under Strengths is the movement-pattern card, not a muscle.
+    const strengths = page.locator("section", { has: page.getByRole("heading", { name: "Strengths" }) });
+    await expect(strengths).toContainText("Exercise selection");
+    await expect(page.getByText(/^1 strength · Nothing flagged/)).toBeVisible();
+  });
+
+  test("the balance lines and the table are explained side by side, not left to contradict", async ({ page }) => {
+    await paste(page, CHATGPT_PASTE);
+    await checkPastedProgram(page);
+    const hamstrings = Number(await page.locator('[data-muscle-volume] tr[data-muscle="hamstrings"] td').first().innerText());
+    await expect(page.locator("[data-cross-muscle-balance]")).toBeVisible();
+    await expect(page.locator("[data-muscle-volume]")).toContainText("The balance lines below count only the sets that train a muscle directly");
+    // The numbers can differ (12 in the table, 9 in the balance line) only because the footnote says why.
+    expect(hamstrings).toBeGreaterThan(0);
+  });
+
+  test("at 375px the table fits, the numbers are readable and it follows the actions", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await paste(page, BRO_SPLIT);
+    await checkPastedProgram(page);
+    const table = page.locator("[data-muscle-volume]");
+    await table.scrollIntoViewIfNeeded();
+    if (process.env.CHECK_SHOTS) await page.screenshot({ path: `${process.env.CHECK_SHOTS}/muscles-375.png`, fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+    const y = async (loc: ReturnType<Page["locator"]>) => (await loc.first().boundingBox())!.y;
+    expect(await y(table)).toBeGreaterThan(await y(page.getByRole("heading", { name: "Actions" })));
+    const size = await rows(page).first().locator("td").first().evaluate((el) => getComputedStyle(el).fontSize);
+    expect(parseFloat(size)).toBeGreaterThanOrEqual(15);
+  });
+});
+
 test("a bad hash is a 404", async ({ page }) => {
   const response = await page.goto("/check/not-a-program");
   expect(response?.status()).toBe(404);
@@ -720,6 +793,8 @@ test("no critical or serious accessibility violations on the three public pages"
   await checkPastedProgram(page);
   await expect(page.getByRole("complementary", { name: "Program observation" })).toBeVisible();
   await scan("/check/[hash] with the program observation");
+  await expect(page.locator("[data-muscle-volume]")).toBeVisible();
+  await scan("/check/[hash] with the weekly sets table");
 
   await page.goto("/check/about");
   await scan("/check/about");

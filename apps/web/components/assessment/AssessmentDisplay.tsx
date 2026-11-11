@@ -60,10 +60,12 @@ import {
   type FitScoreResult,
   type FrequencyObservation,
   type NamedAction,
+  muscleVolumeView,
 } from "@training/domain";
 import { AxisCard } from "./AxisCard";
 import { EvidencePanel } from "./EvidencePanel";
 import { FindingCard } from "./FindingCard";
+import { MuscleVolumeTable } from "./MuscleVolumeTable";
 import { ProvisionalBanner } from "./ProvisionalBanner";
 import { UnvalidatedState } from "./UnvalidatedState";
 import { axisLabel, findingLabel, fitBandLabel } from "./labels";
@@ -179,7 +181,12 @@ function AssessmentBody({
 }) {
   const namedText = new Map((namedActions ?? []).map((n) => [n.rootCauseKey, n.description]));
   // ARCH-065 / Fix 4: on the public checker only an earned strength is shown, and the count follows what is shown.
-  const strengths = checkMode ? displayStrengths(a.strengths, { effortAssumed: true }) : a.strengths;
+  // ARCH-070: on the public checker every muscle is listed with its weekly sets in "Weekly sets per muscle", so the per-muscle
+  // volume strengths are not repeated as cards (six green cards that said the same thing, without the muscles that were
+  // fine at 6-9 sets). The strengths that remain, and the count, are what is shown.
+  const volumeView = checkMode ? muscleVolumeView(a.allAssessedAxes, HYPERTROPHY_CONFIG) : null;
+  const earned = checkMode ? displayStrengths(a.strengths, { effortAssumed: true }) : a.strengths;
+  const strengths = volumeView !== null ? earned.filter((s) => s.axisType !== "VOLUME") : earned;
   const balance = ratioLines(a.ratios);
   const trendingHigh = highVolumeLines(a.highVolume);
   // ARCH-065 / Fix 3a: the whole-program finding also says which muscles are behind it.
@@ -317,6 +324,8 @@ function AssessmentBody({
           </ul>
         </section>
       ) : null}
+      {volumeView !== null ? <MuscleVolumeTable view={volumeView} balanceBelow={showBalance} /> : null}
+
       {showBalance ? (
         <section className={styles.section} data-cross-muscle-balance>
           <h2 className={styles.sectionHeading}>Cross-muscle balance</h2>
