@@ -85,6 +85,7 @@ function Result({ hash, daysPerWeek, canImport }: Props) {
               result={query.data.assessment}
               fitScore={query.data.fitScore}
               namedActions={query.data.namedActions}
+              observation={query.data.observation}
               checkMode
             />
           </div>

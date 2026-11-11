@@ -79,9 +79,16 @@ export type {
 export { computeAnalysis } from "./analysis/computeAnalysis";
 export { computeCrossMuscleRatios } from "./analysis/ratios";
 export { ratioLines, RATIO_TIER_NOTE } from "./copy/ratioLines";
+export {
+  frequencyObservation,
+  allFrequencyObservationCopy,
+  FREQUENCY_OBSERVATION_HEADING,
+  type FrequencyObservation,
+  type FrequencyVariant,
+} from "./copy/frequencyObservation";
 export { highVolumeLines, HIGH_VOLUME_HEADING } from "./copy/highVolumeLines";
 export { computeVolumeAxis } from "./analysis/volume";
-export { computeFrequencyAxis } from "./analysis/frequency";
+export { computeFrequencyAxis, muscleExposures, type MuscleExposure } from "./analysis/frequency";
 export { computeExerciseSelectionBalanceAxis } from "./analysis/exerciseSelectionBalance";
 export { computeProgressionSoundnessAxis } from "./analysis/progressionSoundness";
 export {

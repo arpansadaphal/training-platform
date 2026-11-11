@@ -22,6 +22,7 @@ import {
   computeAssessment,
   computeFitScore,
   decodeCompactProgram,
+  frequencyObservation,
   goalProfileRegistry,
   nameActions,
   toProgramStructure,
@@ -29,6 +30,7 @@ import {
   type AnalysisContext,
   type AssessmentResult,
   type FitScoreResult,
+  type FrequencyObservation,
   type NamedAction,
   type ProgramStructure,
 } from "@training/domain";
@@ -52,6 +54,8 @@ export interface CheckAnalyzeResult {
   assessment: AssessmentResult;
   fitScore: FitScoreResult;
   namedActions: NamedAction[];
+  /** ARCH-068: an unscored note, shown between the Fit line and the Strengths; null when it does not apply. */
+  observation: FrequencyObservation | null;
   summary: { days: number; exercises: number; daysPerWeek: number };
 }
 
@@ -98,10 +102,13 @@ export const checkRouter = router({
     const fitScore = computeFitScore(assessment);
     const namedActions = nameActions(assessment.assessment, analysed, referenceData, config, context !== undefined ? { context } : {});
 
+    const observation = frequencyObservation(analysis, analysed, referenceData, config, context);
+
     return {
       assessment,
       fitScore,
       namedActions,
+      observation,
       summary: {
         days: program.days.length,
         exercises: program.days.reduce((n, d) => n + d.rows.length, 0),

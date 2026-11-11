@@ -119,6 +119,63 @@ describe("check router", () => {
     });
   });
 
+  // ARCH-068. The once-a-week "Program observation": a note beside the assessment, never part of it.
+  describe("the once-a-week observation (ARCH-068)", () => {
+    const row = (name: string, sets = 3): [string, number, number, number] => [name, sets, 8, 10];
+    const observe = async (days: Parameters<typeof encodeCompactProgram>[0]["days"], daysPerWeek?: number) =>
+      (await anonymous().check.analyze({ hash: encodeCompactProgram({ days }), ...(daysPerWeek ? { daysPerWeek } : {}) })).observation;
+
+    // The audit's bro split: no shoulders, no arms, no hamstrings, calves or side delts, each trained muscle once a week.
+    const BRO = [
+      { name: "Chest", rows: [row("Barbell Bench Press", 4), row("Incline Dumbbell Press")] },
+      { name: "Back", rows: [row("Barbell Row", 4)] },
+      { name: "Legs", rows: [row("Back Squat", 4)] },
+    ];
+
+    it("a bro split fires variant B: every muscle it trains is once a week, and the total is under the floor", async () => {
+      const o = await observe(BRO);
+      expect(o?.variant).toBe("UNDER_FLOOR");
+      expect(o?.text).toBe(
+        "Every muscle you train is trained once a week. Your total is 15 sets, under the general floor — the fix is to add a second training day, not to add more sets to your current days.",
+      );
+    });
+
+    it("a once-a-week program with 18 sets of one muscle in one session fires variant A", async () => {
+      const o = await observe([
+        { name: "Chest day", rows: [row("Barbell Bench Press", 6), row("Incline Dumbbell Press", 6), row("Dumbbell Fly", 6)] },
+        { name: "Back day", rows: [row("Barbell Row", 6), row("Lat Pulldown", 6), row("Seated Cable Row", 6)] },
+        { name: "Leg day", rows: [row("Back Squat", 6), row("Leg Press", 6), row("Leg Curl", 6)] },
+      ]);
+      expect(o?.variant).toBe("CAP_EXCEEDED");
+      expect(o?.text).toContain("Your chest gets 18 sets, all in one session");
+    });
+
+    it("a once-a-week program that reaches the floor fires variant C, informational", async () => {
+      const ppl = CHECK_PRESETS.find((p) => p.slug === "ppl-6")!.program.days.slice(0, 3);
+      const o = await observe(ppl);
+      expect(o?.variant).toBe("IN_RANGE");
+      expect(o?.text).toContain("this is informational");
+    });
+
+    it("a 6-day PPL, a balanced upper/lower and the other presets read null", async () => {
+      for (const slug of ["ppl-6", "upper-lower-4", "full-body-3", "beginner-2", "home-dumbbells-3", "bro-split-5"]) {
+        const preset = CHECK_PRESETS.find((p) => p.slug === slug)!;
+        expect(await observe(preset.program.days), slug).toBeNull();
+      }
+    });
+
+    it("a 3-day PPL run on 6 days (each muscle twice) reads null", async () => {
+      const ppl = CHECK_PRESETS.find((p) => p.slug === "ppl-6")!.program.days.slice(0, 3);
+      expect(await observe(ppl, 6)).toBeNull();
+    });
+
+    it("is not part of the assessment: the same program's findings, strengths and Fit never mention it", async () => {
+      const r = await anonymous().check.analyze({ hash: encodeCompactProgram({ days: BRO }) });
+      expect(r.observation).not.toBeNull();
+      expect(JSON.stringify([r.assessment, r.fitScore, r.namedActions])).not.toMatch(/trained once a week/);
+    });
+  });
+
   it("save needs a signed-in user and creates one program with one populated draft", async () => {
     await expect(anonymous().check.save({ hash: pplHash })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
 

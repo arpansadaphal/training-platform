@@ -58,6 +58,7 @@ import {
   type AssessmentResult,
   type FitScoreBand,
   type FitScoreResult,
+  type FrequencyObservation,
   type NamedAction,
 } from "@training/domain";
 import { AxisCard } from "./AxisCard";
@@ -84,6 +85,12 @@ interface Props {
    * showing the engine's strengths as they are.
    */
   checkMode?: boolean;
+  /**
+   * ARCH-068. An unscored note shown between the Fit line and the Strengths ("Every muscle is trained once a week.
+   * ..."). Never part of the assessment: it is not a finding, strength, attention area or input to the Fit band. Only
+   * the public checker passes one.
+   */
+  observation?: FrequencyObservation | null;
 }
 
 function axisKey(axis: AssessedAxis): string {
@@ -102,7 +109,7 @@ function fitLineFor(result: AssessmentResult, fitScore: FitScoreResult): FitLine
   return provisional ? { kind: "PROVISIONAL", band: provisional.band } : null;
 }
 
-export function AssessmentDisplay({ result, fitScore, namedActions, checkMode }: Props) {
+export function AssessmentDisplay({ result, fitScore, namedActions, checkMode, observation }: Props) {
   // ARCH-046: the banner is a property of the configuration, not of any
   // one assessment. `useProvisionalBanner` reads HYPERTROPHY_CONFIG's
   // `validated` flag and returns true while it is false — which, at MVP,
@@ -141,6 +148,7 @@ export function AssessmentDisplay({ result, fitScore, namedActions, checkMode }:
         fit={fitLineFor(result, fitScore)}
         namedActions={namedActions}
         checkMode={checkMode === true}
+        observation={observation ?? null}
         onSeeEvidence={openEvidence}
         evidenceOpen={evidenceOpen}
       />
@@ -157,6 +165,7 @@ function AssessmentBody({
   fit,
   namedActions,
   checkMode,
+  observation,
   onSeeEvidence,
   evidenceOpen,
 }: {
@@ -164,6 +173,7 @@ function AssessmentBody({
   fit: FitLine;
   namedActions: readonly NamedAction[] | undefined;
   checkMode: boolean;
+  observation: FrequencyObservation | null;
   onSeeEvidence: () => void;
   evidenceOpen: boolean;
 }) {
@@ -221,6 +231,13 @@ function AssessmentBody({
           )}
         </p>
       </section>
+
+      {observation !== null ? (
+        <aside className={styles.observation} aria-label={observation.heading} data-program-observation={observation.variant}>
+          <p className={styles.observationLabel}>{observation.heading}</p>
+          <p className={styles.observationBody}>{observation.text}</p>
+        </aside>
+      ) : null}
 
       {strengths.length > 0 ? (
         <section className={styles.section}>

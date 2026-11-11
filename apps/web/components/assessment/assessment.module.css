@@ -312,3 +312,27 @@
   font-size: 1rem;
   line-height: 1.45;
 }
+
+/* ARCH-068: the program observation. A note, not a card: no border or severity colour, a muted italic body. */
+.observation {
+  margin: 0;
+  padding: 0.1rem 0 0.1rem 0.85rem;
+  border-left: 3px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.observationLabel {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.observationBody {
+  margin: 0;
+  font-style: italic;
+  color: var(--muted);
+}

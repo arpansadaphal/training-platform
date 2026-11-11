@@ -206,6 +206,67 @@ test("pick PPL 6-day -> assessment renders", async ({ page }) => {
   await expect(page.getByText("Cross-muscle balance").first()).toBeVisible();
 });
 
+// ARCH-068. When most muscles are trained once a week, a note says so, tied to the program's volume. It is a note, not
+// a finding: the sections below it are the assessment's own.
+test.describe("program observation (ARCH-068)", () => {
+  const BRO_SPLIT = ["Chest", "Bench 4x8", "Incline Dumbbell Press 3x8", "", "Back", "Row 4x8", "", "Legs", "Squat 4x8"].join("\n");
+
+  test("a bro split shows the once-a-week note under the Fit line, before the assessment's sections", async ({ page }) => {
+    await paste(page, BRO_SPLIT);
+    await checkPastedProgram(page);
+    await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+
+    const note = page.getByRole("complementary", { name: "Program observation" });
+    await expect(note).toBeVisible();
+    await expect(note).toHaveAttribute("data-program-observation", "UNDER_FLOOR");
+    await expect(note).toContainText(
+      "Every muscle you train is trained once a week. Your total is 15 sets, under the general floor — the fix is to add a second training day, not to add more sets to your current days.",
+    );
+
+    // Between the Fit line and the first section of the assessment.
+    const y = async (loc: ReturnType<Page["locator"]>) => (await loc.first().boundingBox())!.y;
+    const noteY = await y(note);
+    expect(noteY).toBeGreaterThan(await y(page.getByText(/Provisional fit/)));
+    expect(noteY).toBeLessThan(await y(page.getByRole("heading", { name: /Attention areas|Biggest Opportunity/ })));
+    const strengths = page.getByRole("heading", { name: "Strengths" });
+    if ((await strengths.count()) > 0) expect(noteY).toBeLessThan(await y(strengths));
+  });
+
+  test("it is not a finding: it is not counted among the things to look at, and not in Actions", async ({ page }) => {
+    await paste(page, BRO_SPLIT);
+    await checkPastedProgram(page);
+    const note = page.getByRole("complementary", { name: "Program observation" });
+    await expect(note).toBeVisible();
+    await expect(page.locator("section", { hasText: /^Actions/ }).getByText(/trained once a week/)).toHaveCount(0);
+    await expect(page.locator("[data-program-observation]")).toHaveCount(1);
+  });
+
+  test("a balanced program (the ChatGPT 5-day) and a 3-day PPL run on 6 days show no note", async ({ page }) => {
+    await paste(page, CHATGPT_PASTE);
+    await checkPastedProgram(page);
+    await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+    await expect(page.locator("[data-program-observation]")).toHaveCount(0);
+
+    await paste(page, THREE_DAY_PASTE);
+    await page.getByLabel("How many days a week do you train?").selectOption("6");
+    await page.getByRole("button", { name: "Check my program" }).click();
+    await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+    await expect(page.locator("[data-program-observation]")).toHaveCount(0);
+  });
+
+  test("at 375px the note fits and is readable", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await paste(page, BRO_SPLIT);
+    await checkPastedProgram(page);
+    const note = page.getByRole("complementary", { name: "Program observation" });
+    await expect(note).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+    if (process.env.CHECK_SHOTS) await page.screenshot({ path: `${process.env.CHECK_SHOTS}/observation-375.png` });
+    const size = await note.locator("p").last().evaluate((el) => getComputedStyle(el).fontSize);
+    expect(parseFloat(size)).toBeGreaterThanOrEqual(15);
+  });
+});
+
 // ARCH-067 / Fix 5. Spreadsheet-style "1a." labels are not part of the exercise names, and are not questions.
 test("'1a.' list labels are stripped: 3 exercises, no questions", async ({ page }) => {
   await paste(page, "1a. Barbell Row 3x10\n1b. Lat Pulldown 3x10\n2. Seated Row 3x10");
@@ -575,6 +636,12 @@ test("no critical or serious accessibility violations on the three public pages"
   await page.getByRole("link", { name: /PPL 6-day/ }).click();
   await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
   await scan("/check/[hash]");
+
+  // ARCH-068: a result that carries the once-a-week note (muted italic text on white).
+  await paste(page, ["Chest", "Bench 4x8", "Incline Dumbbell Press 3x8", "", "Back", "Row 4x8", "", "Legs", "Squat 4x8"].join("\n"));
+  await checkPastedProgram(page);
+  await expect(page.getByRole("complementary", { name: "Program observation" })).toBeVisible();
+  await scan("/check/[hash] with the program observation");
 
   await page.goto("/check/about");
   await scan("/check/about");
