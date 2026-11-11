@@ -52,7 +52,7 @@ export const FREQUENCY_COPY = {
   capExceeded: (scope: OnceScope, muscle: string, sets: number): string =>
     `${lead(scope)} Your ${muscle} gets ${num(sets)} sets, all in one session — that's over what a single session can productively use. Splitting each muscle across two sessions lets you keep the volume without one session carrying that much.`,
   underFloor: (scope: OnceScope, total: number): string =>
-    `${lead(scope)} Your total is ${num(total)} sets, under the general floor — the fix is to add a second training day, not to add more sets to your current days.`,
+    `${lead(scope)} Your total is ${num(total)} sets, under the general floor — for volume specifically, the fix is to add a second training day rather than cram more sets into your current days.`,
   inRange: (scope: OnceScope): string =>
     `${lead(scope)} Your volume is in range, so this is informational — most programs work well at two sessions per muscle per week, but one session is not disqualifying if the per-session volume is right.`,
 } as const;

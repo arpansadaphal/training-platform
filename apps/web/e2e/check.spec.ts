@@ -220,7 +220,7 @@ test.describe("program observation (ARCH-068)", () => {
     await expect(note).toBeVisible();
     await expect(note).toHaveAttribute("data-program-observation", "UNDER_FLOOR");
     await expect(note).toContainText(
-      "Every muscle you train is trained once a week. Your total is 15 sets, under the general floor — the fix is to add a second training day, not to add more sets to your current days.",
+      "Every muscle you train is trained once a week. Your total is 15 sets, under the general floor — for volume specifically, the fix is to add a second training day rather than cram more sets into your current days.",
     );
 
     // Between the Fit line and the first section of the assessment.

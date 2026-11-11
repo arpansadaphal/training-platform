@@ -136,7 +136,7 @@ describe("check router", () => {
       const o = await observe(BRO);
       expect(o?.variant).toBe("UNDER_FLOOR");
       expect(o?.text).toBe(
-        "Every muscle you train is trained once a week. Your total is 15 sets, under the general floor — the fix is to add a second training day, not to add more sets to your current days.",
+        "Every muscle you train is trained once a week. Your total is 15 sets, under the general floor — for volume specifically, the fix is to add a second training day rather than cram more sets into your current days.",
       );
     });
 
@@ -171,7 +171,7 @@ describe("check router", () => {
 
     it("the whole-program action agrees with the note: it adds a day, not sets on the days listed", async () => {
       const r = await anonymous().check.analyze({ hash: encodeCompactProgram({ days: BRO }) });
-      expect(r.observation?.text).toContain("add a second training day, not to add more sets to your current days");
+      expect(r.observation?.text).toContain("add a second training day rather than cram more sets into your current days");
       const volume = r.namedActions.find((a) => a.rootCauseKey === "programStructure:add-volume")!;
       expect(volume.description).toMatch(/^Add a training day: 3 sets of /);
       expect(volume.description).toMatch(/The week then has \d+(\.\d+)? hard sets; the general floor is 40\./);

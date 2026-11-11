@@ -44,7 +44,7 @@ describe("frequencyObservation (ARCH-068)", () => {
     const o = observe(ONE_EACH);
     expect(o?.variant).toBe("UNDER_FLOOR");
     expect(o?.text).toContain("Your total is 15 sets, under the general floor");
-    expect(o?.text).toContain("add a second training day, not to add more sets to your current days");
+    expect(o?.text).toContain("add a second training day rather than cram more sets into your current days");
   });
 
   it("variant A (a muscle's whole dose is over the per-session cap) wins over the floor and names the muscle and dose", () => {
