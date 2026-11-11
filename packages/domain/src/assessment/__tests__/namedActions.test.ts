@@ -527,6 +527,61 @@ describe("nameActions: run the rotation twice a week (ARCH-065 / Fix 3b)", () =>
   });
 });
 
+// ARCH-068. The Program observation on /check says a once-a-week program under the floor should add a training day, not
+// sets on the days it has. With `addDay` the whole-program volume action says the same, in the engine's numbers.
+describe("nameActions: add a day instead of sets on the listed days (ARCH-068)", () => {
+  const run = (structure: ProgramStructure, addDay: boolean) => {
+    const analysis = computeAnalysis(structure, PPL_REF, HYPERTROPHY_CONFIG, { now: () => new Date(0) });
+    const { assessment } = computeAssessment(analysis, HYPERTROPHY_CONFIG, { goalId: "g" });
+    return nameActions(assessment, structure, PPL_REF, HYPERTROPHY_CONFIG, addDay ? { addDay } : {}).find(
+      (a) => a.rootCauseKey === "programStructure:add-volume",
+    );
+  };
+  const totalOf = (structure: ProgramStructure) =>
+    computeAnalysis(structure, PPL_REF, HYPERTROPHY_CONFIG, { now: () => new Date(0) }).axisResults.find(
+      (a) => a.axisType === "PROGRAM_STRUCTURE" && a.scopeKey === "total-volume",
+    )?.metricValue;
+
+  it("offers a training day after the rotation, and no sets on the listed days", () => {
+    const action = run(PPL_ONCE, true);
+    expect(action?.description).toMatch(/^Run your 3 days twice a week → 48 hard sets a week\. Or add a training day: /);
+    expect(action?.newDay?.exercises.length).toBeGreaterThan(0);
+    expect(action?.suggestions).toBeUndefined();
+    expect(action?.description).not.toMatch(/Or, on 3 days a week/);
+    expect(action?.rotation).toEqual({ days: 3, totalSets: 48 });
+  });
+
+  it("leads with the day when there is no rotation to offer", () => {
+    const d = (id: string, name: string) => day(id, name, [rx("Barbell Bench Press", 1), rx("Barbell Row", 1)]);
+    const action = run({ workoutDays: [d("a", "A"), d("b", "B"), d("c", "C"), d("d", "D")] }, true);
+    expect(action?.description).toMatch(/^Add a training day: 3 sets of /);
+    expect(action?.rotation).toBeUndefined();
+  });
+
+  it("the week it quotes is the engine's number for the program with that day added", () => {
+    const action = run(PPL_ONCE, true)!;
+    const quoted = Number(/The week then has ([\d.]+) hard sets/.exec(action.description)![1]);
+    const withDay: ProgramStructure = {
+      workoutDays: [
+        ...PPL_ONCE.workoutDays,
+        day("added", "Added day", action.newDay!.exercises.map((e, i) => rx(e.exerciseName, e.sets, i))),
+      ],
+    };
+    expect(totalOf(withDay)).toBe(quoted);
+    expect(action.description).toContain(`the general floor is ${HYPERTROPHY_CONFIG.programStructure!.minWeeklySets}`);
+  });
+
+  it("is the older action when addDay is not set (the Builder and every other surface)", () => {
+    const action = run(PPL_ONCE, false);
+    expect(action?.description).toMatch(/Or, on 3 days a week: Add /);
+    expect(action?.newDay).toBeUndefined();
+  });
+
+  it("the sentence passes the forbidden-copy lint", () => {
+    assertCleanCopy([run(PPL_ONCE, true)!.description]);
+  });
+});
+
 // ARCH-067. The lifter said how many days a week they train (/check's days selector). The Analysis reads it
 // (runsPerWeek), so every number an action cites has to be read the same way, and the rotation advice has
 // already been answered.

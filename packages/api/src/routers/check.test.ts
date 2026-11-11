@@ -169,6 +169,23 @@ describe("check router", () => {
       expect(await observe(ppl, 6)).toBeNull();
     });
 
+    it("the whole-program action agrees with the note: it adds a day, not sets on the days listed", async () => {
+      const r = await anonymous().check.analyze({ hash: encodeCompactProgram({ days: BRO }) });
+      expect(r.observation?.text).toContain("add a second training day, not to add more sets to your current days");
+      const volume = r.namedActions.find((a) => a.rootCauseKey === "programStructure:add-volume")!;
+      expect(volume.description).toMatch(/^Add a training day: 3 sets of /);
+      expect(volume.description).toMatch(/The week then has \d+(\.\d+)? hard sets; the general floor is 40\./);
+      expect(volume.suggestions).toBeUndefined();
+      expect(volume.newDay?.exercises.length).toBeGreaterThan(0);
+    });
+
+    it("a program with no note keeps the older action (sets on the days listed)", async () => {
+      const ppl = CHECK_PRESETS.find((p) => p.slug === "ppl-6")!.program.days.slice(0, 3);
+      const r = await anonymous().check.analyze({ hash: encodeCompactProgram({ days: ppl }) });
+      expect(r.observation?.variant).toBe("IN_RANGE");
+      expect(r.namedActions.some((a) => a.newDay !== undefined && a.rootCauseKey === "programStructure:add-volume")).toBe(false);
+    });
+
     it("is not part of the assessment: the same program's findings, strengths and Fit never mention it", async () => {
       const r = await anonymous().check.analyze({ hash: encodeCompactProgram({ days: BRO }) });
       expect(r.observation).not.toBeNull();

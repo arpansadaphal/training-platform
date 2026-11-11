@@ -232,6 +232,16 @@ test.describe("program observation (ARCH-068)", () => {
     if ((await strengths.count()) > 0) expect(noteY).toBeLessThan(await y(strengths));
   });
 
+  test("the Actions agree with the note: a training day, not sets on the days listed", async ({ page }) => {
+    await paste(page, BRO_SPLIT);
+    await checkPastedProgram(page);
+    await expect(page.getByRole("complementary", { name: "Program observation" })).toContainText("add a second training day");
+    const actions = page.locator("section", { has: page.getByRole("heading", { name: "Actions" }) });
+    await expect(actions).toContainText(/Add a training day: 3 sets of .* The week then has \d+(\.\d+)? hard sets; the general floor is 40\./);
+    // The old whole-program sentences are gone: no "Or, on N days a week", no sets added to Chest/Back/Legs for volume.
+    await expect(actions).not.toContainText("Or, on");
+  });
+
   test("it is not a finding: it is not counted among the things to look at, and not in Actions", async ({ page }) => {
     await paste(page, BRO_SPLIT);
     await checkPastedProgram(page);

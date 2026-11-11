@@ -100,9 +100,13 @@ export const checkRouter = router({
     const analysis = computeAnalysis(analysed, referenceData, config, context !== undefined ? { context } : {});
     const assessment = computeAssessment(analysis, config, { goalId: CHECK_GOAL_ID });
     const fitScore = computeFitScore(assessment);
-    const namedActions = nameActions(assessment.assessment, analysed, referenceData, config, context !== undefined ? { context } : {});
-
+    // ARCH-068: the observation first, because when it says "add a training day" the whole-program action must say the
+    // same, not offer sets on the days listed.
     const observation = frequencyObservation(analysis, analysed, referenceData, config, context);
+    const namedActions = nameActions(assessment.assessment, analysed, referenceData, config, {
+      ...(context !== undefined ? { context } : {}),
+      addDay: observation !== null,
+    });
 
     return {
       assessment,

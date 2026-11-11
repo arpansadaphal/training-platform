@@ -76,6 +76,8 @@ const MAX_SETS_HALF_FACTOR = 6;
 const NEW_DAY_SETS = 3;
 /** How many muscles the whole-program volume action names: the largest deficits first. */
 const PROGRAM_VOLUME_NAMED = 2;
+// ARCH-068: a day added to a once-a-week program names up to this many of the lowest muscles, 3 sets each.
+const ADDED_DAY_MUSCLES = 4;
 /** A rotation of this many listed days or fewer can sensibly be run twice a week (3 x 2 = 6 days). */
 const MAX_ROTATION_DAYS = 3;
 const SIM_GOAL_ID = "named-actions";
@@ -187,6 +189,11 @@ interface Ctx {
    * engine run an action makes reads it, so an after-number is in the same terms as the finding it answers.
    */
   readonly context: AnalysisContext | undefined;
+  /**
+   * ARCH-068: the "Program observation" says a once-a-week program under the floor should add a training day, not sets
+   * on the days it has. When true, the whole-program volume action says the same thing.
+   */
+  readonly addDay: boolean;
 }
 
 function buildContext(
@@ -194,6 +201,7 @@ function buildContext(
   referenceData: ExerciseReferenceData,
   config: GoalProfileConfig,
   context?: AnalysisContext,
+  addDay = false,
 ): Ctx | null {
   const days = structure.workoutDays.filter((d) => d.isRestDay !== true);
   if (days.length === 0) return null;
@@ -232,6 +240,7 @@ function buildContext(
     equipmentCount,
     lowerBound: config.statusBands.VOLUME.find((b) => b.status === "Adequate")?.lowerBound ?? null,
     context,
+    addDay,
   };
 }
 
@@ -515,6 +524,59 @@ function rotationOption(ctx: Ctx, assessment: Assessment): { days: number; total
 }
 
 /**
+ * ARCH-068. A training day for a once-a-week program under the whole-program floor: the lowest muscles, 3 sets each,
+ * run through the shared mutation and the engine (ADD_WORKOUT_DAY, the same path as a region's new day), so every
+ * number in the sentence is the engine's. Null when no muscle has an eligible exercise or the engine cannot place it.
+ */
+function addedDayOption(
+  ctx: Ctx,
+  lows: readonly { muscle: string; sets: number }[],
+  taken: ReadonlySet<string>,
+): { clause: string; day: NamedDaySuggestion; total: number } | null {
+  const local = new Set(taken);
+  const chosen: { candidate: Candidate; muscle: string; before: number }[] = [];
+  for (const low of lows) {
+    if (chosen.length >= ADDED_DAY_MUSCLES) break;
+    const muscle = findMuscle(ctx, low.muscle);
+    const pick = muscle ? candidatesFor(ctx, muscle, local)?.list[0] : undefined;
+    if (!pick) continue;
+    chosen.push({ candidate: pick, muscle: low.muscle, before: low.sets });
+    local.add(pick.exerciseId);
+  }
+  if (chosen.length === 0) return null;
+
+  const dayName = "Added day";
+  const day: WorkoutDayStructure = {
+    id: "named-action-day",
+    orderIndex: ctx.structure.workoutDays.length,
+    name: dayName,
+    prescriptions: chosen.map((c, i) => buildPrescription(c.candidate, NEW_DAY_SETS, i)),
+  };
+  const sim = simulate(ctx.structure, { op: "ADD_WORKOUT_DAY", day }, ctx.config, ctx.referenceData, simOptions(ctx));
+  if (sim.kind === "INVALID_MUTATION") return null;
+  const total = sim.mutatedAnalysis.axisResults.find((a) => a.axisType === "PROGRAM_STRUCTURE" && a.scopeKey === "total-volume");
+  if (!total || typeof total.metricValue !== "number") return null;
+
+  const afterSets = chosen.flatMap((c) => {
+    const after = volumeOf(sim.mutatedAnalysis, c.muscle);
+    return after !== null && after > c.before ? [{ muscle: c.muscle, afterSets: after }] : [];
+  });
+  if (afterSets.length === 0) return null;
+  const exercises = chosen.map((c) => c.candidate.name);
+  const clause =
+    exercises
+      .map((name, i) => (i === 0 ? `${NEW_DAY_SETS} sets of ${name}` : `${NEW_DAY_SETS} of ${name}`))
+      .join(", ")
+      .replace(/, ([^,]*)$/, " and $1") +
+    ` → ${joinList(afterSets.map((a) => `${a.muscle} ${num(a.afterSets)}`))} sets/week.`;
+  return {
+    clause,
+    total: total.metricValue,
+    day: { dayName, exercises: exercises.map((exerciseName) => ({ exerciseName, sets: NEW_DAY_SETS })), afterSets },
+  };
+}
+
+/**
  * The whole-program volume finding absorbed every per-muscle Low, so its one action would otherwise say only "add
  * hard sets across the program". Name the two muscles furthest below the start of the Adequate range, through the
  * same `suggestForMuscle` the per-muscle actions use (so every after-number is the engine's). A muscle with no
@@ -557,6 +619,25 @@ function nameProgramVolumeAction(
     for (const id of proposedIds({ rootCauseKey: "", description: "", suggestion }, ctx.referenceData)) local.add(id);
   }
   const rotation = rotationOption(ctx, assessment);
+
+  // ARCH-068: the Program observation has already told this lifter that the fix is a second training day, not more sets
+  // on the days they have, so this action says the same. Where no day can be built it falls through to the additions.
+  if (ctx.addDay) {
+    const added = addedDayOption(ctx, lows, taken);
+    if (added !== null) {
+      const floor = ctx.config.programStructure?.minWeeklySets;
+      const reach = ` The week then has ${num(added.total)} hard sets${floor !== undefined ? `; the general floor is ${num(floor)}` : ""}.`;
+      const dayText = `Add a training day: ${added.clause}${reach}`;
+      return {
+        rootCauseKey: action.rootCauseKey,
+        description: rotation
+          ? `Run your ${rotation.days} days twice a week → ${num(rotation.totalSets)} hard sets a week. Or ${dayText.charAt(0).toLowerCase()}${dayText.slice(1)}`
+          : dayText,
+        newDay: added.day,
+        ...(rotation ? { rotation } : {}),
+      };
+    }
+  }
   if (named.length === 0 && rotation === null) return fallback;
   const belowRange = ctx.lowerBound !== null && named.some((s) => s.afterSets < (ctx.lowerBound as number));
   const additions =
@@ -663,15 +744,17 @@ function nameOne(
  * One NamedAction per `assessment.actions`, in the same order. `structure` must be the structure the
  * Analysis was computed over (rest days stripped or not; rest days are ignored here either way).
  * `options.context` must be the AnalysisContext that Analysis was computed with (ARCH-067); omit it and nothing changes.
+ * `options.addDay` (ARCH-068) makes the whole-program volume action propose a training day instead of sets on the days
+ * listed; only /check sets it, when its Program observation says the same.
  */
 export function nameActions(
   assessment: Assessment,
   structure: ProgramStructure,
   referenceData: ExerciseReferenceData,
   config: GoalProfileConfig,
-  options: { context?: AnalysisContext } = {},
+  options: { context?: AnalysisContext; addDay?: boolean } = {},
 ): NamedAction[] {
-  const ctx = buildContext(structure, referenceData, config, options.context);
+  const ctx = buildContext(structure, referenceData, config, options.context, options.addDay === true);
   const proposed = new Set<string>();
   return assessment.actions.map((action) => {
     if (ctx === null) return { rootCauseKey: action.rootCauseKey, description: action.description };
