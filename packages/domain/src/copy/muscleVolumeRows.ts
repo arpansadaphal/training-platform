@@ -88,9 +88,6 @@ export const MUSCLE_VOLUME_COPY = {
   columnRange: "Against the range",
   footnote:
     "A set also counts toward the muscles it helps (a bench press counts for triceps at half), the same way the findings count it.",
-  // Said only where the balance lines are on the page: they count the sets that train a muscle directly, so their numbers
-  // can be lower than this table's.
-  balanceFootnote: "The balance lines below count only the sets that train a muscle directly, so their numbers can be lower.",
   rowLabel: (label: string, sets: number, band: string): string => `${label}: ${num(sets)} hard sets a week, ${band}`,
 } as const;
 
@@ -103,7 +100,6 @@ export function allMuscleVolumeCopy(): string[] {
     MUSCLE_VOLUME_COPY.columnSets,
     MUSCLE_VOLUME_COPY.columnRange,
     MUSCLE_VOLUME_COPY.footnote,
-    MUSCLE_VOLUME_COPY.balanceFootnote,
     MUSCLE_VOLUME_COPY.rowLabel("Upper back", 5.5, "Low"),
   ];
 }

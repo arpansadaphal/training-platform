@@ -558,17 +558,36 @@ describe("nameActions: add a day instead of sets on the listed days (ARCH-068)",
     expect(action?.rotation).toBeUndefined();
   });
 
-  it("the week it quotes is the engine's number for the program with that day added", () => {
+  // The sentence is a starting point with a next step, not "27 < 40" as a terminal fact (ARCH-071).
+  it("the weeks it quotes are the engine's numbers: this day added once, and the same day added twice", () => {
     const action = run(PPL_ONCE, true)!;
-    const quoted = Number(/The week then has ([\d.]+) hard sets/.exec(action.description)![1]);
-    const withDay: ProgramStructure = {
-      workoutDays: [
-        ...PPL_ONCE.workoutDays,
-        day("added", "Added day", action.newDay!.exercises.map((e, i) => rx(e.exerciseName, e.sets, `added-${i}`))),
-      ],
-    };
-    expect(totalOf(withDay)).toBe(quoted);
-    expect(action.description).toContain(`the general floor is ${HYPERTROPHY_CONFIG.programStructure!.minWeeklySets}`);
+    const floor = HYPERTROPHY_CONFIG.programStructure!.minWeeklySets;
+    const rows = (suffix: string) => action.newDay!.exercises.map((e, i) => rx(e.exerciseName, e.sets, `added-${suffix}-${i}`));
+    const once: ProgramStructure = { workoutDays: [...PPL_ONCE.workoutDays, day("added", "Added day", rows("1"))] };
+    const twice: ProgramStructure = { workoutDays: [...once.workoutDays, day("added2", "Added day 2", rows("2"))] };
+    const firstQuoted = Number(/That brings the week to ([\d.]+) hard sets/.exec(action.description)![1]);
+    const secondQuoted = Number(/A second day like it brings the week to ([\d.]+)/.exec(action.description)![1]);
+    expect(totalOf(once)).toBe(firstQuoted);
+    expect(totalOf(twice)).toBe(secondQuoted);
+    expect(firstQuoted).toBeLessThan(floor);
+    expect(action.description).toContain(`a start toward the general floor of ${floor}`);
+  });
+
+  it("says what is left: past the floor with the second day, or more sets per muscle when even that falls short", () => {
+    const action = run(PPL_ONCE, true)!;
+    const secondQuoted = Number(/A second day like it brings the week to ([\d.]+)/.exec(action.description)![1]);
+    const floor = HYPERTROPHY_CONFIG.programStructure!.minWeeklySets;
+    expect(action.description).toMatch(secondQuoted >= floor ? /, past the floor\./ : /; more sets per muscle closes the rest\./);
+    const d = (id: string, name: string) => day(id, name, [rx("Barbell Bench Press", 1), rx("Barbell Row", 1)]);
+    const tiny = run({ workoutDays: [d("a", "A"), d("b", "B"), d("c", "C"), d("d", "D")] }, true)!;
+    const tinySecond = Number(/A second day like it brings the week to ([\d.]+)/.exec(tiny.description)![1]);
+    expect(tinySecond).toBeLessThan(floor);
+    expect(tiny.description).toMatch(/; more sets per muscle closes the rest\./);
+  });
+
+  it("never states the shortfall as a dead end: no 'The week then has', no bare 'the general floor is'", () => {
+    const action = run(PPL_ONCE, true)!;
+    expect(action.description).not.toMatch(/The week then has|the general floor is \d/);
   });
 
   it("is the older action when addDay is not set (the Builder and every other surface)", () => {

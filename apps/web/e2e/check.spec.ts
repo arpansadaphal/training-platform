@@ -203,7 +203,9 @@ test("pick PPL 6-day -> assessment renders", async ({ page }) => {
   await expect(page).toHaveURL(/\/check\/[A-Za-z0-9_-]+$/);
   await expect(page.getByText("6 days, 30 exercises")).toBeVisible();
   await expect(page.getByText(/Fit: /).first()).toBeVisible();
-  await expect(page.getByText("Cross-muscle balance").first()).toBeVisible();
+  // ARCH-071: the table is the one count per muscle, so no balance lines on /check.
+  await expect(page.locator("[data-muscle-volume]")).toBeVisible();
+  await expect(page.getByText("Cross-muscle balance")).toHaveCount(0);
 });
 
 // ARCH-068. When most muscles are trained once a week, a note says so, tied to the program's volume. It is a note, not
@@ -232,12 +234,25 @@ test.describe("program observation (ARCH-068)", () => {
     if ((await strengths.count()) > 0) expect(noteY).toBeLessThan(await y(strengths));
   });
 
+  // ARCH-071: the headline is the whole week being under the floor, not whichever muscle ties it.
+  test("the bro split's summary line and Biggest Opportunity say whole-program volume, not hinge", async ({ page }) => {
+    await paste(page, BRO_SPLIT);
+    await checkPastedProgram(page);
+    await expect(page.getByText(/Biggest opportunity: Whole-program volume\./)).toBeVisible();
+    const headline = page.locator("section", { has: page.getByRole("heading", { name: "Biggest Opportunity" }) });
+    await expect(headline).toContainText("Whole-program volume");
+    await expect(headline).not.toContainText("Hinge");
+    // Hinge is still reported, as an attention area.
+    const attention = page.locator("section", { has: page.getByRole("heading", { name: "Attention areas" }) });
+    await expect(attention).toContainText("Hinge");
+  });
+
   test("the Actions agree with the note: a training day, not sets on the days listed", async ({ page }) => {
     await paste(page, BRO_SPLIT);
     await checkPastedProgram(page);
     await expect(page.getByRole("complementary", { name: "Program observation" })).toContainText("add a second training day");
     const actions = page.locator("section", { has: page.getByRole("heading", { name: "Actions" }) });
-    await expect(actions).toContainText(/Add a training day: 3 sets of .* The week then has \d+(\.\d+)? hard sets; the general floor is 40\./);
+    await expect(actions).toContainText(/Add a training day: 3 sets of .* That brings the week to \d+(\.\d+)? hard sets, a start toward the general floor of 40\. A second day like it brings the week to \d+/);
     // The old whole-program sentences are gone: no "Or, on N days a week", no sets added to Chest/Back/Legs for volume.
     await expect(actions).not.toContainText("Or, on");
   });
@@ -464,8 +479,8 @@ test("the landing page links to the checker", async ({ page }) => {
   await expect(page).toHaveURL(/\/check$/);
 });
 
-// ARCH-069. Cross-muscle balance counts direct sets only while the finding cards credit synergists ("arms get none" beside
-// triceps 3.5), so on /check it is shown only when nothing is flagged.
+// ARCH-069 / ARCH-071. Cross-muscle balance counts direct sets only while the finding cards and the table credit synergists
+// ("arms get none" beside triceps 3.5; hamstrings 9 beside 12), so /check does not show it at all: the table is the one count.
 test.describe("what /check shows when nothing is flagged (ARCH-069)", () => {
   const BRO_SPLIT = ["Chest", "Bench 4x8", "Incline Dumbbell Press 3x8", "", "Back", "Row 4x8", "", "Legs", "Squat 4x8"].join("\n");
 
@@ -481,11 +496,11 @@ test.describe("what /check shows when nothing is flagged (ARCH-069)", () => {
     await expect(page.getByRole("button", { name: "Create account and save this program" })).toBeVisible();
   });
 
-  test("a program with nothing flagged shows the balance and what tracking would give", async ({ page }) => {
+  test("a program with nothing flagged shows what tracking would give, and no balance lines", async ({ page }) => {
     await paste(page, CHATGPT_PASTE);
     await checkPastedProgram(page);
     await expect(page.getByText("Nothing flagged")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Cross-muscle balance" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Cross-muscle balance" })).toHaveCount(0);
 
     const block = page.getByRole("region", { name: "Your program looks solid. Here's what tracking would give you:" });
     await expect(block).toBeVisible();
@@ -557,7 +572,6 @@ test.describe("weekly sets per muscle (ARCH-070)", () => {
     await expect(table.getByText(/of 11 muscles are in the 6–20 range\./)).toBeVisible();
     // The per-muscle volume cards are not repeated.
     await expect(page.getByText("Weekly volume · ", { exact: false })).toHaveCount(0);
-    // No balance section on this program, so the footnote does not point at one.
     await expect(table).not.toContainText("balance lines");
   });
 
@@ -580,14 +594,17 @@ test.describe("weekly sets per muscle (ARCH-070)", () => {
     await expect(page.getByText(/^1 strength · Nothing flagged/)).toBeVisible();
   });
 
-  test("the balance lines and the table are explained side by side, not left to contradict", async ({ page }) => {
+  test("one count per muscle: a STRONG program shows no balance sentence that disagrees with the table", async ({ page }) => {
     await paste(page, CHATGPT_PASTE);
     await checkPastedProgram(page);
-    const hamstrings = Number(await page.locator('[data-muscle-volume] tr[data-muscle="hamstrings"] td').first().innerText());
-    await expect(page.locator("[data-cross-muscle-balance]")).toBeVisible();
-    await expect(page.locator("[data-muscle-volume]")).toContainText("The balance lines below count only the sets that train a muscle directly");
-    // The numbers can differ (12 in the table, 9 in the balance line) only because the footnote says why.
-    expect(hamstrings).toBeGreaterThan(0);
+    const hamstrings = (await page.locator('[data-muscle-volume] tr[data-muscle="hamstrings"] td').first().innerText()).trim();
+    expect(Number(hamstrings)).toBeGreaterThan(0);
+    // The old balance sentences ("Your quads get 10 ... your hamstrings get 9", "Your arms get 12 ...") are not on the page.
+    await expect(page.locator("[data-cross-muscle-balance]")).toHaveCount(0);
+    await expect(page.getByText(/Your (quads|arms) get /)).toHaveCount(0);
+    await expect(page.getByText(/You press \d+(\.\d+)? hard sets a week and pull/)).toHaveCount(0);
+    // And no footnote about a second counting method, because there is no second count.
+    await expect(page.locator("[data-muscle-volume]")).not.toContainText("balance lines");
   });
 
   test("at 375px the table fits, the numbers are readable and it follows the actions", async ({ page }) => {

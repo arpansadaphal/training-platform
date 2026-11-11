@@ -532,7 +532,7 @@ function addedDayOption(
   ctx: Ctx,
   lows: readonly { muscle: string; sets: number }[],
   taken: ReadonlySet<string>,
-): { clause: string; day: NamedDaySuggestion; total: number } | null {
+): { clause: string; day: NamedDaySuggestion; total: number; secondTotal: number | null } | null {
   const local = new Set(taken);
   const chosen: { candidate: Candidate; muscle: string; before: number }[] = [];
   for (const low of lows) {
@@ -557,6 +557,26 @@ function addedDayOption(
   const total = sim.mutatedAnalysis.axisResults.find((a) => a.axisType === "PROGRAM_STRUCTURE" && a.scopeKey === "total-volume");
   if (!total || typeof total.metricValue !== "number") return null;
 
+  // The same day twice, through the same mutation and the engine, so the next step has a number too (ARCH-071). Null when
+  // the engine cannot place the second copy: the sentence then stops at the first.
+  let secondTotal: number | null = null;
+  try {
+    const second: WorkoutDayStructure = {
+      ...day,
+      id: "named-action-day-2",
+      orderIndex: ctx.structure.workoutDays.length + 1,
+      prescriptions: day.prescriptions.map((p) => ({ ...p, id: `${p.id}-2` })),
+    };
+    const withFirst = applyMutation(ctx.structure, { op: "ADD_WORKOUT_DAY", day });
+    const both = simulate(withFirst, { op: "ADD_WORKOUT_DAY", day: second }, ctx.config, ctx.referenceData, simOptions(ctx));
+    if (both.kind !== "INVALID_MUTATION") {
+      const t = both.mutatedAnalysis.axisResults.find((a) => a.axisType === "PROGRAM_STRUCTURE" && a.scopeKey === "total-volume");
+      if (t && typeof t.metricValue === "number") secondTotal = t.metricValue;
+    }
+  } catch (err) {
+    if (!(err instanceof MutationError)) throw err;
+  }
+
   const afterSets = chosen.flatMap((c) => {
     const after = volumeOf(sim.mutatedAnalysis, c.muscle);
     return after !== null && after > c.before ? [{ muscle: c.muscle, afterSets: after }] : [];
@@ -572,6 +592,7 @@ function addedDayOption(
   return {
     clause,
     total: total.metricValue,
+    secondTotal,
     day: { dayName, exercises: exercises.map((exerciseName) => ({ exerciseName, sets: NEW_DAY_SETS })), afterSets },
   };
 }
@@ -626,7 +647,19 @@ function nameProgramVolumeAction(
     const added = addedDayOption(ctx, lows, taken);
     if (added !== null) {
       const floor = ctx.config.programStructure?.minWeeklySets;
-      const reach = ` The week then has ${num(added.total)} hard sets${floor !== undefined ? `; the general floor is ${num(floor)}` : ""}.`;
+      // A start, not a verdict: where the day leaves the week, what the next step does, and what is left (ARCH-071).
+      let reach: string;
+      if (floor === undefined) reach = ` That brings the week to ${num(added.total)} hard sets.`;
+      else if (added.total >= floor) reach = ` That brings the week to ${num(added.total)} hard sets, past the general floor of ${num(floor)}.`;
+      else {
+        reach = ` That brings the week to ${num(added.total)} hard sets, a start toward the general floor of ${num(floor)}.`;
+        if (added.secondTotal !== null) {
+          reach +=
+            added.secondTotal >= floor
+              ? ` A second day like it brings the week to ${num(added.secondTotal)}, past the floor.`
+              : ` A second day like it brings the week to ${num(added.secondTotal)}; more sets per muscle closes the rest.`;
+        }
+      }
       const dayText = `Add a training day: ${added.clause}${reach}`;
       return {
         rootCauseKey: action.rootCauseKey,

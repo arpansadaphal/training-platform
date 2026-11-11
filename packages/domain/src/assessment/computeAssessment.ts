@@ -102,6 +102,9 @@ const WEIGHT_RANK: Readonly<Record<Weight, number>> = {
 // at all). Now every not-good axis is ranked by one lexicographic key, so the order is total and deterministic:
 //
 //   1. leverage, highest first                         (unchanged)
+//   1b. a whole-program axis first                     (ARCH-071: attendance and total-volume. When the whole week is
+//                                                       under the floor, that is the biggest opportunity, not whichever
+//                                                       muscle happens to tie it on leverage)
 //   2. axis weight, highest first                      (separates axis TYPES that tie on leverage; the weights
 //                                                       are already ordered by evidence strength)
 //   3. axis type, in the order the Analysis lists them (VOLUME, FREQUENCY, SELECTION, PROGRESSION, RECOVERY,
@@ -117,6 +120,8 @@ const WEIGHT_RANK: Readonly<Record<Weight, number>> = {
 interface RankedAxis {
   readonly axis: AssessedAxis;
   readonly index: number;
+  /** 0 for a whole-program axis (attendance, total-volume), 1 for every other: breaks a leverage tie. ARCH-071. */
+  readonly systemic: number;
   readonly typeOrder: number;
   readonly deficit: number;
   readonly priority: number;
@@ -154,6 +159,7 @@ function priorityOf(axis: AssessedAxis, config: GoalProfileConfig): number {
 function compareRanked(a: RankedAxis, b: RankedAxis): number {
   return (
     LEVERAGE_RANK[b.axis.leverage] - LEVERAGE_RANK[a.axis.leverage] ||
+    a.systemic - b.systemic ||
     WEIGHT_RANK[b.axis.weight] - WEIGHT_RANK[a.axis.weight] ||
     a.typeOrder - b.typeOrder ||
     b.deficit - a.deficit ||
@@ -214,6 +220,10 @@ function classifyAxes(
       ranked.push({
         axis,
         index,
+        systemic:
+          axis.axisType === "PROGRAM_STRUCTURE" && (axis.scopeKey === "attendance" || axis.scopeKey === "total-volume")
+            ? 0
+            : 1,
         typeOrder:
           axis.axisType === "PROGRAM_STRUCTURE" && axis.scopeKey === "attendance"
             ? ATTENDANCE_FIRST

@@ -169,12 +169,25 @@ describe("check router", () => {
       expect(await observe(ppl, 6)).toBeNull();
     });
 
+    // ARCH-071. Hinge (hamstrings 0) and whole-program volume (15 of 40 sets) are both HIGH leverage; the whole-program one wins.
+    it("the bro split's biggest opportunity is whole-program volume, and the hinge finding is still there", async () => {
+      const r = await anonymous().check.analyze({ hash: encodeCompactProgram({ days: BRO }) });
+      const a = r.assessment.assessment;
+      expect(a.biggestOpportunity).toMatchObject({ axisType: "PROGRAM_STRUCTURE", scopeKey: "total-volume" });
+      expect(a.findings?.[0]?.key).toBe("PROGRAM_STRUCTURE:total-volume");
+      expect(a.findings?.map((f) => f.key)).toContain("pattern:hinge");
+      // Same leverage, so this is the tie-break and not a re-grade.
+      const hinge = a.findings!.find((f) => f.key === "pattern:hinge")!;
+      expect(hinge.lead.leverage).toBe(a.findings![0]!.lead.leverage);
+    });
+
     it("the whole-program action agrees with the note: it adds a day, not sets on the days listed", async () => {
       const r = await anonymous().check.analyze({ hash: encodeCompactProgram({ days: BRO }) });
       expect(r.observation?.text).toContain("add a second training day rather than cram more sets into your current days");
       const volume = r.namedActions.find((a) => a.rootCauseKey === "programStructure:add-volume")!;
       expect(volume.description).toMatch(/^Add a training day: 3 sets of /);
-      expect(volume.description).toMatch(/The week then has \d+(\.\d+)? hard sets; the general floor is 40\./);
+      expect(volume.description).toMatch(/That brings the week to \d+(\.\d+)? hard sets, a start toward the general floor of 40\./);
+      expect(volume.description).toMatch(/A second day like it brings the week to \d+(\.\d+)?/);
       expect(volume.suggestions).toBeUndefined();
       expect(volume.newDay?.exercises.length).toBeGreaterThan(0);
     });

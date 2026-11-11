@@ -12,7 +12,7 @@ const BAR_MAX_SETS = 30;
 
 const pct = (sets: number): string => `${Math.max(0, Math.min(1, sets / BAR_MAX_SETS)) * 100}%`;
 
-export function MuscleVolumeTable({ view, balanceBelow }: { view: MuscleVolumeView; balanceBelow: boolean }) {
+export function MuscleVolumeTable({ view }: { view: MuscleVolumeView }) {
   return (
     <section className={styles.section} data-muscle-volume>
       <h2 className={styles.sectionHeading}>{MUSCLE_VOLUME_COPY.heading}</h2>
@@ -50,10 +50,7 @@ export function MuscleVolumeTable({ view, balanceBelow }: { view: MuscleVolumeVi
           ))}
         </tbody>
       </table>
-      <p className={styles.balanceNote}>
-        {MUSCLE_VOLUME_COPY.footnote}
-        {balanceBelow ? ` ${MUSCLE_VOLUME_COPY.balanceFootnote}` : ""}
-      </p>
+      <p className={styles.balanceNote}>{MUSCLE_VOLUME_COPY.footnote}</p>
     </section>
   );
 }

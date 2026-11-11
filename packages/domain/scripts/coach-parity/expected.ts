@@ -182,18 +182,26 @@ export const EXPECTED_HEADLINES: readonly ExpectedHeadline[] = [
     [m("muscle:hamstrings", "low")],
     "The audit: calves leads 'by alphabet' and the quad-to-hamstring ratio is never stated.",
   ),
-  entry(
-    "S5a",
-    "This is a novice strength program. Judged for muscle growth, its one big gap is pulling.",
-    [m("pattern:pull", "missing")],
-    "Stated at pattern grain, so 'lats volume is low' does not satisfy it. The audit: 'wrong headline and wrong framing'.",
+  blockedBy(
+    entry(
+      "S5a",
+      "This is a novice strength program. Judged for muscle growth, its one big gap is pulling.",
+      [m("pattern:pull", "missing")],
+      "Stated at pattern grain, so 'lats volume is low' does not satisfy it. The audit: 'wrong headline and wrong framing'.",
+    ),
+    "ARCH-071",
+    "Since ARCH-071 (founder, 2026-11-11) a whole-program under-dose leads a leverage tie, so this program's headline is whole-program volume and 'no pulling' follows it. The coach line here is audit-authored (not a certified coach) and was not revisited. A product decision, not an engine fault; the entry stays a FAIL (scoring and the matcher are untouched).",
   ),
-  entry(
-    "S5b",
-    "This is a novice strength program. Judged for muscle growth, its one big gap is pulling.",
-    [m("pattern:pull", "missing")],
-    "Same program as S5a with the real week (A, B, A).",
-    derived("S5's line applies to the one-real-week entry too"),
+  blockedBy(
+    entry(
+      "S5b",
+      "This is a novice strength program. Judged for muscle growth, its one big gap is pulling.",
+      [m("pattern:pull", "missing")],
+      "Same program as S5a with the real week (A, B, A).",
+      derived("S5's line applies to the one-real-week entry too"),
+    ),
+    "ARCH-071",
+    "Since ARCH-071 (founder, 2026-11-11) a whole-program under-dose leads a leverage tie, so this program's headline is whole-program volume and 'no pulling' follows it. The coach line here is audit-authored (not a certified coach) and was not revisited. A product decision, not an engine fault; the entry stays a FAIL (scoring and the matcher are untouched).",
   ),
   goalDependent(
     entry(

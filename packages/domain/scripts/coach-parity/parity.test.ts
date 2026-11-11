@@ -167,9 +167,9 @@ describe("expected headlines", () => {
     }
   });
 
-  it("only S1 is blocked by a named dependency (E4), and it stays a FAIL until that lands", () => {
+  it("S1 is blocked by a named dependency (E4) and S5a, S5b by a founder decision (ARCH-071); each stays a FAIL", () => {
     const blocked = EXPECTED_HEADLINES.filter((e) => e.blockedBy !== undefined).map((e) => [e.id, e.blockedBy]);
-    expect(blocked).toEqual([["S1", "E4"]]);
+    expect(blocked).toEqual([["S1", "E4"], ["S5a", "ARCH-071"], ["S5b", "ARCH-071"]]);
     const s1 = EXPECTED_HEADLINES.find((e) => e.id === "S1");
     expect(s1?.rationale).toMatch(/INFORMATIONAL level below MINOR/);
   });
@@ -203,12 +203,16 @@ describe("coach parity ratchet", () => {
   //   under-dose it absorbs). The brief expected 22-23; the rules it specified can move these two (see the handoff):
   //   S1 is E4-blocked, S8's push:pull fires (20:10, at least 2 to 1) but is LOW leverage, so its headline is still the HIGH
   //   lower-body finding, and S7 needs training age. P2 left the scored set (see expected.ts and timeBudget.test.ts).
+  // ARCH-071 (founder, 2026-11-11, engine 0.6.2): a whole-program axis (attendance, total-volume) outranks a per-muscle axis
+  //   of equal leverage in the headline. - S5a, - S5b: their headline is now whole-program volume (12 sets against a floor
+  //   of 40) with "no pulling" next; the audit-authored coach line says pulling. 21/24 to 19/24, a measured cost of the
+  //   decision, not an engine fault. No threshold, band, severity or weight moved.
   const PINNED_PASSING = [
-    "A", "B", "C", "D", "E", "F1", "F2", "G", "J", "P1", "P2-1x", "P3", "PPLx3", "PPLx6", "S2", "S3", "S4", "S5a", "S5b",
+    "A", "B", "C", "D", "E", "F1", "F2", "G", "J", "P1", "P2-1x", "P3", "PPLx3", "PPLx6", "S2", "S3", "S4",
     "S6", "S6b",
   ];
   const PINNED_CONTAINED = ["P2-1x", "S4"];
-  const PINNED_FAILING = ["S1", "S7", "S8"];
+  const PINNED_FAILING = ["S1", "S5a", "S5b", "S7", "S8"];
 
   it("the passing set is exactly the pinned set", () => {
     expect(passing()).toEqual(PINNED_PASSING);

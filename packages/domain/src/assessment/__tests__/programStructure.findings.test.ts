@@ -91,10 +91,14 @@ describe("total-volume keeps structural findings (a missing pattern, an absent r
   // Bench and squat only, 12 sets: nothing pulls.
   const a = assess(program(day("A", rx("Barbell Bench Press", 3), rx("Back Squat", 3)), day("B", rx("Barbell Bench Press", 3), rx("Back Squat", 3))));
 
-  it("still says 'no pulling' beside the under-dose, and ranks it first (VOLUME-led beats program-level on a tie)", () => {
+  // AUDIT NOTE (ARCH-071, founder 2026-11-11, engine 0.6.2). This test used to pin the opposite: "ranks it first (VOLUME-led
+  // beats program-level on a tie)". Both findings are HIGH leverage; a whole-program axis now outranks a per-muscle one of
+  // equal leverage, because a week under the floor is the biggest opportunity whichever muscle ties it. What the test guards
+  // is unchanged: the structural finding SURVIVES beside the under-dose. Only the order moved, and the assertion says so.
+  it("still says 'no pulling' beside the under-dose, with the under-dose ranked first (a whole-program axis wins a leverage tie)", () => {
     expect(keys(a)).toContain("PROGRAM_STRUCTURE:total-volume");
     expect(keys(a)).toContain("pattern:pull");
-    expect(keys(a).indexOf("pattern:pull")).toBeLessThan(keys(a).indexOf("PROGRAM_STRUCTURE:total-volume"));
+    expect(keys(a).indexOf("PROGRAM_STRUCTURE:total-volume")).toBeLessThan(keys(a).indexOf("pattern:pull"));
   });
 });
 
