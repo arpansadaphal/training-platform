@@ -193,6 +193,10 @@ function AssessmentBody({
   const headline = a.biggestOpportunity ? (a.findings?.[0] ?? null) : null;
   const attention = a.findings ? (a.biggestOpportunity ? a.findings.slice(1) : a.findings) : null;
   const things = a.findings ? a.findings.length : a.attentionAreas.length + (a.biggestOpportunity ? 1 : 0);
+  // ARCH-069: on the public checker the balance lines count direct sets only, while the finding cards credit synergists
+  // (arms "none" next to triceps 3.5). It is context for a program with nothing flagged, not a second opinion beside the
+  // findings, so it is shown only when there are none. Every other surface keeps it as it was.
+  const showBalance = balance.length > 0 && !(checkMode && things > 0);
   return (
     <>
       <section className={styles.overall}>
@@ -204,7 +208,7 @@ function AssessmentBody({
             </p>
           ) : (
             <p className={styles.fitScore}>
-              Provisional fit:{" "}
+              {checkMode ? "Fit" : "Provisional fit"}:{" "}
               <span className={styles.fitScoreBand}>{fitBandLabel(fit.band)}</span> — based on
               evidence-graded thresholds.{" "}
               <button
@@ -313,7 +317,7 @@ function AssessmentBody({
           </ul>
         </section>
       ) : null}
-      {balance.length > 0 ? (
+      {showBalance ? (
         <section className={styles.section} data-cross-muscle-balance>
           <h2 className={styles.sectionHeading}>Cross-muscle balance</h2>
           <ul className={styles.balanceList}>

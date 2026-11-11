@@ -44,7 +44,7 @@ test("paste a routine -> confirm the reading -> assessment renders", async ({ pa
   await checkPastedProgram(page);
   await expect(page.getByRole("heading", { name: "Assessment" })).toBeVisible();
   await expect(page.getByText("6 exercises", { exact: false })).toBeVisible();
-  await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+  await expect(page.getByText(/Fit: /).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /See evidence/ }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Create account and save this program" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Create account and save this program" })).toBeVisible();
@@ -202,7 +202,7 @@ test("pick PPL 6-day -> assessment renders", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/check\/[A-Za-z0-9_-]+$/);
   await expect(page.getByText("6 days, 30 exercises")).toBeVisible();
-  await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+  await expect(page.getByText(/Fit: /).first()).toBeVisible();
   await expect(page.getByText("Cross-muscle balance").first()).toBeVisible();
 });
 
@@ -214,7 +214,7 @@ test.describe("program observation (ARCH-068)", () => {
   test("a bro split shows the once-a-week note under the Fit line, before the assessment's sections", async ({ page }) => {
     await paste(page, BRO_SPLIT);
     await checkPastedProgram(page);
-    await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+    await expect(page.getByText(/Fit: /).first()).toBeVisible();
 
     const note = page.getByRole("complementary", { name: "Program observation" });
     await expect(note).toBeVisible();
@@ -226,7 +226,7 @@ test.describe("program observation (ARCH-068)", () => {
     // Between the Fit line and the first section of the assessment.
     const y = async (loc: ReturnType<Page["locator"]>) => (await loc.first().boundingBox())!.y;
     const noteY = await y(note);
-    expect(noteY).toBeGreaterThan(await y(page.getByText(/Provisional fit/)));
+    expect(noteY).toBeGreaterThan(await y(page.getByText(/Fit: /)));
     expect(noteY).toBeLessThan(await y(page.getByRole("heading", { name: /Attention areas|Biggest Opportunity/ })));
     const strengths = page.getByRole("heading", { name: "Strengths" });
     if ((await strengths.count()) > 0) expect(noteY).toBeLessThan(await y(strengths));
@@ -254,13 +254,13 @@ test.describe("program observation (ARCH-068)", () => {
   test("a balanced program (the ChatGPT 5-day) and a 3-day PPL run on 6 days show no note", async ({ page }) => {
     await paste(page, CHATGPT_PASTE);
     await checkPastedProgram(page);
-    await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+    await expect(page.getByText(/Fit: /).first()).toBeVisible();
     await expect(page.locator("[data-program-observation]")).toHaveCount(0);
 
     await paste(page, THREE_DAY_PASTE);
     await page.getByLabel("How many days a week do you train?").selectOption("6");
     await page.getByRole("button", { name: "Check my program" }).click();
-    await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+    await expect(page.getByText(/Fit: /).first()).toBeVisible();
     await expect(page.locator("[data-program-observation]")).toHaveCount(0);
   });
 
@@ -271,7 +271,7 @@ test.describe("program observation (ARCH-068)", () => {
     const note = page.getByRole("complementary", { name: "Program observation" });
     await expect(note).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
-    if (process.env.CHECK_SHOTS) await page.screenshot({ path: `${process.env.CHECK_SHOTS}/observation-375.png` });
+    if (process.env.CHECK_SHOTS) await page.screenshot({ path: `${process.env.CHECK_SHOTS}/observation-375.png`, fullPage: true });
     const size = await note.locator("p").last().evaluate((el) => getComputedStyle(el).fontSize);
     expect(parseFloat(size)).toBeGreaterThanOrEqual(15);
   });
@@ -337,7 +337,7 @@ test.describe("days a week (ARCH-067)", () => {
     await page.getByRole("button", { name: "Check my program" }).click();
     await expect(page).toHaveURL(/\/check\/[A-Za-z0-9_-]+\?d=6$/);
     await expect(page.getByText("3 days listed, assessed as 6 days a week")).toBeVisible();
-    await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+    await expect(page.getByText(/Fit: /).first()).toBeVisible();
     await expect(page.getByText(/Under-dosed/)).toHaveCount(0);
     await expect(page.getByText(/Run your 3 days twice a week/)).toHaveCount(0);
   });
@@ -373,7 +373,7 @@ test.describe("days a week (ARCH-067)", () => {
     await checkPastedProgram(page);
     const url = page.url();
     await page.goto(`${url}?d=99`);
-    await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+    await expect(page.getByText(/Fit: /).first()).toBeVisible();
     await expect(page.getByText(/listed, assessed as/)).toHaveCount(0);
   });
 });
@@ -462,6 +462,74 @@ test("the landing page links to the checker", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "Or check a program you already have →" }).click();
   await expect(page).toHaveURL(/\/check$/);
+});
+
+// ARCH-069. Cross-muscle balance counts direct sets only while the finding cards credit synergists ("arms get none" beside
+// triceps 3.5), so on /check it is shown only when nothing is flagged.
+test.describe("what /check shows when nothing is flagged (ARCH-069)", () => {
+  const BRO_SPLIT = ["Chest", "Bench 4x8", "Incline Dumbbell Press 3x8", "", "Back", "Row 4x8", "", "Legs", "Squat 4x8"].join("\n");
+
+  test("a program with findings shows no cross-muscle balance, and no tracking block", async ({ page }) => {
+    await paste(page, BRO_SPLIT);
+    await checkPastedProgram(page);
+    await expect(page.getByText(/Fit: /).first()).toBeVisible();
+    await expect(page.getByText(/to look at/).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Cross-muscle balance" })).toHaveCount(0);
+    await expect(page.locator("[data-cross-muscle-balance]")).toHaveCount(0);
+    await expect(page.getByText("Your program looks solid", { exact: false })).toHaveCount(0);
+    // The generic sign-up block, unchanged.
+    await expect(page.getByRole("button", { name: "Create account and save this program" })).toBeVisible();
+  });
+
+  test("a program with nothing flagged shows the balance and what tracking would give", async ({ page }) => {
+    await paste(page, CHATGPT_PASTE);
+    await checkPastedProgram(page);
+    await expect(page.getByText("Nothing flagged")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Cross-muscle balance" })).toBeVisible();
+
+    const block = page.getByRole("region", { name: "Your program looks solid. Here's what tracking would give you:" });
+    await expect(block).toBeVisible();
+    await expect(block.getByRole("listitem")).toHaveCount(3);
+    await expect(block).toContainText("From a lift's second session on, a target weight and reps");
+    await expect(block).toContainText("first top set next to your latest");
+    await expect(block).toContainText("After 3 sessions of a lift, a trend");
+    // A promise the app cannot keep is not made: no fixed 4-week review, and no "is it working" verdict.
+    await expect(block).not.toContainText(/4 weeks|four weeks|working|no guessing/i);
+    await expect(block.getByRole("button", { name: "Create account and try it" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Create account and save this program" })).toHaveCount(0);
+  });
+
+  test("the tracking block's button still carries the program to sign-up", async ({ page }) => {
+    await paste(page, CHATGPT_PASTE);
+    await checkPastedProgram(page);
+    await page.getByRole("button", { name: "Create account and try it" }).click();
+    await expect(page).toHaveURL(/\/signup\?from=check&n=\d+$/);
+  });
+
+  test("at 375px the block fits and its button is a full-size target", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await paste(page, CHATGPT_PASTE);
+    await checkPastedProgram(page);
+    const block = page.getByRole("region", { name: /Here's what tracking would give you/ });
+    await block.scrollIntoViewIfNeeded();
+    if (process.env.CHECK_SHOTS) await page.screenshot({ path: `${process.env.CHECK_SHOTS}/tracking-375.png`, fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+    const box = await block.getByRole("button", { name: "Create account and try it" }).boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(43.5);
+  });
+
+  test("'provisional' appears once on the result (the banner) and once on About; nowhere else on /check", async ({ page }) => {
+    const count = async () => ((await page.locator("body").innerText()).match(/provisional/gi) ?? []).length;
+    await page.goto("/check");
+    expect(await count()).toBe(0);
+    await paste(page, THREE_DAY_PASTE);
+    expect(await count()).toBe(0);
+    await checkPastedProgram(page);
+    await expect(page.getByText(/Fit: /).first()).toBeVisible();
+    expect(await count()).toBe(1);
+    await page.goto("/check/about");
+    expect(await count()).toBe(1);
+  });
 });
 
 test("a bad hash is a 404", async ({ page }) => {
@@ -564,7 +632,7 @@ test.describe("sign-up handoff", () => {
     await page.getByRole("link", { name: /Beginner 2-day/ }).click();
     await expect(page).toHaveURL(/\/check\/[A-Za-z0-9_-]+$/);
     await page.goto(`${page.url()}?import=1`);
-    await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+    await expect(page.getByText(/Fit: /).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Save this program", exact: true })).toHaveCount(0);
   });
 });
@@ -609,7 +677,7 @@ test.describe("375px", () => {
     await expectPhoneFit(page, "check presets");
 
     await page.getByRole("link", { name: /PPL 6-day/ }).click();
-    await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+    await expect(page.getByText(/Fit: /).first()).toBeVisible();
     await expectPhoneFit(page, "check result");
 
     await page.goto("/check/about");
@@ -644,7 +712,7 @@ test("no critical or serious accessibility violations on the three public pages"
 
   await page.getByRole("tab", { name: "Pick a common split" }).click();
   await page.getByRole("link", { name: /PPL 6-day/ }).click();
-  await expect(page.getByText(/Provisional fit/).first()).toBeVisible();
+  await expect(page.getByText(/Fit: /).first()).toBeVisible();
   await scan("/check/[hash]");
 
   // ARCH-068: a result that carries the once-a-week note (muted italic text on white).

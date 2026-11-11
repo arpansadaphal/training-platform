@@ -13,7 +13,7 @@ export const CHECK_COPY = {
     "Paste a training routine and see how its structure reads against evidence-graded thresholds for muscle growth.",
   // ARCH-065 / Fix 6. Says what the visitor gets, then that it is free; "provisional" stays, in plain words.
   intro:
-    "Paste your routine to see how many hard sets each muscle gets, what is missing, and what to add first. It is free and needs no account. The read is provisional.",
+    "Paste your routine to see how many hard sets each muscle gets, what is missing, and what to add first. It is free and needs no account.",
   // ARCH-067 / Fix 2. A static example of what an assessment reads like, above the paste box. It mirrors the real card
   // wording (labels.ts, ratioLines.ts); copy.test.ts holds the numbers to the profile's bands and the real ratio line.
   previewHeading: "Here's what an assessment looks like:",
@@ -138,6 +138,18 @@ export const CHECK_COPY = {
     "Get a target for every lift each session, based on what you logged last time.",
     "Keep a journal of every session and a progress view, and download your data as a CSV any time.",
   ],
+  // ARCH-069. When nothing is flagged the result has no problem to fix, so the sign-up block says what tracking does
+  // instead. Each line is checked against the app: targets (ARCH-062: none for a lift with no history, so "from a
+  // lift's second session on"), the progress view and first-vs-now (a baseline after one session, a comparison after
+  // two), and the per-lift trend (progress/verdict.ts: needs 3 sessions, reads the last 4). A "4-week review" is not
+  // here: blocks are not tied to a number of weeks, and Review reports a block, it does not say whether it is working.
+  trackingHeading: "Your program looks solid. Here's what tracking would give you:",
+  trackingBullets: [
+    "From a lift's second session on, a target weight and reps, worked out from your last session",
+    "A progress view that updates after each session, with your first top set next to your latest on every lift you log",
+    "After 3 sessions of a lift, a trend: whether its estimated 1RM is rising, flat or falling over your last 4",
+  ],
+  ctaTrackingPrimary: "Create account and try it",
   ctaPrimary: "Create account and save this program",
   ctaFreeNote: "Free — save your program and check it again after edits.",
   ctaSecondary: "Just here to check? No account needed.",

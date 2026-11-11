@@ -89,7 +89,9 @@ function Result({ hash, daysPerWeek, canImport }: Props) {
               checkMode
             />
           </div>
-          {canImport ? null : <CtaPanel hash={hash} />}
+          {canImport ? null : (
+            <CtaPanel hash={hash} nothingFlagged={query.data.assessment.assessment.findings?.length === 0} />
+          )}
         </>
       ) : null}
     </main>
