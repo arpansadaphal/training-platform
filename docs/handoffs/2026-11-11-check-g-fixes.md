@@ -47,3 +47,30 @@ When `findings.length === 0`, the sign-up block's heading is "Your program looks
 
 ## Not done / open
 Cross-muscle contradiction on programs with nothing flagged; the summary line naming Hinge; the "Provisional" wording in the banner and the evidence panel's tier jargon; D3; D4; the rest of the audit list (what a STRONG program shows beyond strengths, a per-muscle table). A third independent audit has not been run since Session F's (assessment 5, sign-up 4, Maybe); Session G's changes are unmeasured by a stranger.
+
+## Third independent audit (2026-11-11, after Session G; fresh agents, browser only)
+
+Run A: the verbatim prompt with the same reconstructed programs as Session F's Run A (3-day PPL, 24 sets; bro split, 15 sets), so it is the comparable run, but approximate for the same reason (the originals were never saved). Run B: the ChatGPT 5-day plus the same bro split. **Run A and Run B ran at the same time** on one dev server (the founder's instruction); rate limiting fails open locally, so no interference is expected. Each score is one agent's single read, so a point either way is within noise. Scripts and screenshots: scratchpad `audit/run3A`, `audit/run3B` (not committed).
+
+| | Original | Mine (biased) | Prev. independent | Run A, Session F | **Run A, now** | Run B, Session F | **Run B, now** |
+|---|---|---|---|---|---|---|---|
+| First impression | 5 | 6 | 5 | 6 | **7** | 6 | **6** |
+| Parse | 6 / 4 | 7 | 7 | 8 / 6 | **7 / 6** | 8 / 6 | **9 / 7** |
+| Assessment | 5 | 7 | 5 | 5 / 6 | **6 / 5** | 4 / 7 | **5 / 7** |
+| Sign-up | 3 | 6 | 3 | 4 | **4** | 3 | **4** |
+| Would sign up | No | Maybe | No | Maybe | **Maybe** | Maybe | **Maybe** |
+
+**Decision: not launch.** Neither run reaches assessment 7 or sign-up 6. Run A's assessment is flat (PPL 5 to 6, bro split 6 to 5; average 5.5 both times) and sign-up is flat at 4. Run B moved one point on each (STRONG program 4 to 5, sign-up 3 to 4). The tracking block and the once-a-week note did not move the score a reader gives.
+
+### What the readers said (ranked by how many of the four Session F/G reports raise it)
+1. **Biggest opportunity is "Hinge" on the bro split** (all four). Session G investigated and left ranking alone because both findings are HIGH leverage and axis-type order breaks the tie; the audits keep saying the headline is wrong. Both readers found the once-a-week note but called it easy to skim ("grey italic") and below the headline. **This is now a founder call, not a bug:** the engine ranks as configured, and the readers disagree with the configuration.
+2. **A per-muscle table with every muscle and its sets** (all four, unprompted). Run B (twice) and Run A say chest, shoulders, calves, abs or arms never appear on a result ("is it fine or not checked?"). Run A: no triceps or biceps mention for a PPL with pushdowns and curls. Cause not yet verified (likely the "earned strength" 10-set rule and Adequate-only cards hide muscles that are fine but under 10).
+3. **Numbers still contradict on a STRONG program** (Run B, twice): hamstrings 12 in the cards vs 9 in the balance line; arms 12 vs biceps 13 / triceps 13. Predicted in ARCH-069: suppressing balance only when findings exist leaves it where nothing is flagged.
+4. **The added day ends under its own floor** (both): "...the week then has 27 hard sets; the general floor is 40" reads as a dead end. This is Session G's own sentence. For the PPL, the rotation (48) is the real fix and the day option (36) trails it.
+5. **The yellow "no expert has signed them off" banner and About's "awaiting real coach input"** read as unfinished (both). The Tier 4 / "engine-derived" / "calibration" wording in the evidence panel reads as developer notes. About's "21 match our prediction" reads as a self-test.
+6. **The sign-up pitch is generic.** Both asked for it tied to the finding ("fix this and see it update"), not a feature list. Run B: the button label differs between programs ("Create account and try it" vs "...save this program"), which reads as inconsistent. The tracking block for the STRONG program reads as features, not tied to anything found.
+7. **Parse screen:** pre-highlighted "Yes" looks answered; "Bro Split" title listed as "Could not parse"; "Incline Curl" offered. (Unchanged since Session F; the bro title and Yes highlight were deferred then.)
+8. **A good program teaches nothing.** "Looks solid / Nothing flagged" reads as flattery; both want one specific weakest point even on a strong program.
+
+### Where this leaves Session G
+Shipped and read as intended: the once-a-week note (both readers quoted it as the line a coach would say) and the day-based action. Not enough on its own, because of items 1-3: where it sits and what leads, the missing per-muscle view and the contradictory counts. Suggested next work, in order: a per-muscle weekly-sets view (answers 2 and 3 together by showing one number per muscle), a founder call on promoting the note above or into the headline (1), then the banner and evidence-panel wording (5). A fourth audit should follow whatever ships; with one agent per run, expect a point of noise.
