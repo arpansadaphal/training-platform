@@ -16,6 +16,8 @@ import styles from "../check.module.css";
 
 interface Props {
   hash: string;
+  /** ARCH-067: days a week the lifter trains (`?d=`); absent means the days listed. */
+  daysPerWeek?: number;
   /** Signed in and arrived with ?import=1 (the sessionStorage-unavailable fallback). */
   canImport: boolean;
 }
@@ -26,9 +28,9 @@ function isRateLimited(error: { data?: { httpStatus?: number } | null; meta?: un
   return error.data?.httpStatus === 429 || meta?.response?.status === 429;
 }
 
-function Result({ hash, canImport }: Props) {
+function Result({ hash, daysPerWeek, canImport }: Props) {
   const router = useRouter();
-  const query = trpc.check.analyze.useQuery({ hash }, { retry: false, refetchOnWindowFocus: false });
+  const query = trpc.check.analyze.useQuery({ hash, ...(daysPerWeek !== undefined ? { daysPerWeek } : {}) }, { retry: false, refetchOnWindowFocus: false });
   const save = trpc.check.save.useMutation({
     onSuccess: ({ programId }) => router.push(`/app/programs/${programId}/build`),
   });
@@ -75,15 +77,21 @@ function Result({ hash, canImport }: Props) {
       {query.data ? (
         <>
           <p className={styles.lead}>{CHECK_COPY.programSummary(query.data.summary.days, query.data.summary.exercises)}</p>
+          {query.data.summary.daysPerWeek !== query.data.summary.days ? (
+            <p className={styles.note}>{CHECK_COPY.daysAssessedAs(query.data.summary.days, query.data.summary.daysPerWeek)}</p>
+          ) : null}
           <div className={styles.assessment}>
             <AssessmentDisplay
               result={query.data.assessment}
               fitScore={query.data.fitScore}
               namedActions={query.data.namedActions}
+              observation={query.data.observation}
               checkMode
             />
           </div>
-          {canImport ? null : <CtaPanel hash={hash} />}
+          {canImport ? null : (
+            <CtaPanel hash={hash} nothingFlagged={query.data.assessment.assessment.findings?.length === 0} />
+          )}
         </>
       ) : null}
     </main>

@@ -312,3 +312,106 @@
   font-size: 1rem;
   line-height: 1.45;
 }
+
+/* ARCH-068: the program observation. A note, not a card: no border or severity colour, a muted italic body. */
+.observation {
+  margin: 0;
+  padding: 0.1rem 0 0.1rem 0.85rem;
+  border-left: 3px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.observationLabel {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.observationBody {
+  margin: 0;
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* ARCH-070: weekly sets per muscle. A table (real rows and headers), with a decorative bar under the band name. */
+.muscleSummary {
+  margin: 0;
+  color: var(--muted);
+}
+
+.muscleTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.muscleTable th,
+.muscleTable td {
+  padding: 0.4rem 0.5rem 0.4rem 0;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.muscleTable thead th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.muscleName {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.muscleNum {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+  padding-right: 0.9rem !important;
+}
+
+.muscleBand {
+  display: block;
+  font-size: 0.85rem;
+}
+
+/* A track 0 to 30 sets, the Adequate range shaded, the muscle's sets filled. */
+.muscleBar {
+  position: relative;
+  display: block;
+  height: 6px;
+  margin-top: 0.2rem;
+  background: #eee;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.muscleRange {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: #cfe8dc;
+}
+
+.muscleFill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--muted);
+  border-radius: 3px;
+}
+
+.muscleFill[data-band="Adequate"] {
+  background: var(--accent);
+}
+
+.muscleFill[data-band="Low"] {
+  background: #b45309;
+}

@@ -54,5 +54,5 @@ test("the result page shows the limit message instead of an assessment", async (
   }
   await page.goto(`/check/${HASH}`);
   await expect(page.getByText(LIMIT_MESSAGE)).toBeVisible();
-  await expect(page.getByText(/Provisional fit/)).toHaveCount(0);
+  await expect(page.getByText(/Fit: |Provisional fit/)).toHaveCount(0);
 });

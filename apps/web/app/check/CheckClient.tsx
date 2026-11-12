@@ -12,29 +12,86 @@ import { useId, useMemo, useRef, useState, type ChangeEvent } from "react";
 import type { ExerciseRecord } from "@training/db";
 import {
   CHECK_COPY,
+  CHECK_LIMITS,
   CHECK_PRESETS,
+  checkHint,
   countResolved,
   decodeCompactProgram,
   encodeCompactProgram,
+  fold,
   mergeAllDays,
   parseRoutine,
   resolvedName,
+  scheduleEntries,
   toCompactProgram,
   unresolvedLines,
   type ParseResult,
   type ParsedLine,
   type Resolutions,
 } from "@training/domain";
+import { CheckPreview } from "./CheckPreview";
 import { ExercisePicker } from "@/app/app/programs/[id]/build/ExercisePicker";
 import styles from "./check.module.css";
 
 const MIN_EXERCISES = 3;
+const DAY_CHOICES = Array.from({ length: CHECK_LIMITS.maxDays }, (_, i) => i + 1);
 
 type Tab = "paste" | "pick";
 
 function prescription(line: ParsedLine): string {
+  if (line.timeOnly) return `${line.sets}×${line.timeText ?? ""}`;
   const reps = line.repHigh === line.repLow ? `${line.repLow}` : `${line.repLow}-${line.repHigh}`;
   return `${line.sets}×${reps}`;
+}
+
+/**
+ * What the lifter typed, when the matcher had to infer the name ("Lying Leg Curls" -> Leg Curl, "Bench" -> Barbell Bench
+ * Press). Not shown for exact matches (a plural is still that exercise) or for "A or B" lines, which have Notes.
+ */
+function cameFrom(line: ParsedLine, resolutions: Resolutions): string | null {
+  const name = resolvedName(line, resolutions);
+  if (name === null || resolutions[line.lineNo] !== undefined || line.match.status === "exact") return null;
+  return fold(name) !== fold(line.query) ? line.query : null;
+}
+
+/** ARCH-067: how many days a week the lifter trains. `asListed` adds the "as the routine lists it" choice (split tab). */
+function DaysSelect({
+  id,
+  value,
+  onChange,
+  asListed,
+}: {
+  id: string;
+  value: number | null;
+  onChange: (days: number | null) => void;
+  asListed?: boolean;
+}) {
+  return (
+    <div className={styles.daysRow}>
+      <label htmlFor={id} className={styles.daysLabel}>
+        {CHECK_COPY.daysLabel}
+      </label>
+      <select
+        id={id}
+        className={styles.daysSelect}
+        value={value === null ? "" : String(value)}
+        onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+      >
+        {asListed ? <option value="">{CHECK_COPY.daysAsListed}</option> : null}
+        {DAY_CHOICES.map((n) => (
+          <option key={n} value={n}>
+            {CHECK_COPY.daysOption(n)}
+          </option>
+        ))}
+      </select>
+      {asListed ? null : <span className={`${styles.note} ${styles.daysHelp}`}>{CHECK_COPY.daysHelp}</span>}
+    </div>
+  );
+}
+
+/** `?d=N` only when the lifter's days differ from the days listed, so a plain link stays the program alone. */
+function daysQuery(days: number | null, listed: number): string {
+  return days !== null && days !== listed ? `?d=${days}` : "";
 }
 
 function dropRemoved(result: ParseResult, removed: ReadonlySet<number>): ParseResult {
@@ -55,12 +112,14 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
   const [text, setText] = useState("");
   const [separate, setSeparate] = useState(false);
   const [mergedAll, setMergedAll] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
   const [resolutions, setResolutions] = useState<Resolutions>({});
   const [removed, setRemoved] = useState<ReadonlySet<number>>(new Set());
   const [dismissed, setDismissed] = useState<ReadonlySet<number>>(new Set());
   const [choosing, setChoosing] = useState<number | null>(null);
   const [tooLarge, setTooLarge] = useState(false);
+  // ARCH-067. Paste tab: null follows the parsed days. Split tab: null means "as the split lists it".
+  const [daysOverride, setDaysOverride] = useState<number | null>(null);
+  const [pickDays, setPickDays] = useState<number | null>(null);
 
   const merged = useMemo(() => parseRoutine(text, names), [text, names]);
   const base = useMemo(
@@ -75,19 +134,24 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
   const unresolved = unresolvedLines(parsed, resolutions);
   const resolvedCount = countResolved(parsed, resolutions);
   const unparsedShown = parsed.unparsed.filter((u) => !dismissed.has(u.lineNo));
-  const canCheck = confirmed && unresolved.length === 0 && resolvedCount >= MIN_EXERCISES;
+  const canCheck = unresolved.length === 0 && resolvedCount >= MIN_EXERCISES;
   const hasReading = parsed.days.length > 0;
+  const schedule = useMemo(() => scheduleEntries(parsed), [parsed]);
+  const restCount = schedule.filter((e) => e.kind === "rest").length;
+  const exerciseTotal = parsed.days.reduce((n, d) => n + d.lines.length, 0);
+  const linesByNo = useMemo(() => new Map(parsed.days.flatMap((d) => d.lines).map((l) => [l.lineNo, l])), [parsed]);
+  const shownNotes = parsed.lineNotes.filter((n) => linesByNo.has(n.lineNo));
 
   function onTextChange(event: ChangeEvent<HTMLTextAreaElement>) {
     setText(event.target.value);
     setSeparate(false);
     setMergedAll(false);
-    setConfirmed(false);
     setResolutions({});
     setRemoved(new Set());
     setDismissed(new Set());
     setChoosing(null);
     setTooLarge(false);
+    setDaysOverride(null);
   }
 
   function answer(lineNo: number, name: string) {
@@ -101,22 +165,19 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
       setTooLarge(true);
       return;
     }
-    router.push(`/check/${hash}`);
+    router.push(`/check/${hash}${daysQuery(daysOverride, parsed.days.length)}`);
   }
 
   function editManually() {
-    setConfirmed(false);
     textareaRef.current?.focus();
   }
 
-  const hint =
-    resolvedCount < MIN_EXERCISES
-      ? CHECK_COPY.needMoreExercises(MIN_EXERCISES - resolvedCount)
-      : unresolved.length > 0
-        ? CHECK_COPY.resolveFirst(unresolved.length)
-        : !confirmed
-          ? CHECK_COPY.confirmFirst
-          : null;
+  const hint = checkHint({
+    minExercises: MIN_EXERCISES,
+    resolved: resolvedCount,
+    unresolved: unresolved.length,
+    unparsed: unparsedShown.length,
+  });
 
   return (
     <main id="input" className={styles.page}>
@@ -151,16 +212,21 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
           <ul className={styles.cards}>
             {CHECK_PRESETS.map((preset) => (
               <li key={preset.slug}>
-                <Link href={`/check/${encodeCompactProgram(preset.program)}`} className={styles.card}>
+                <Link
+                  href={`/check/${encodeCompactProgram(preset.program)}${daysQuery(pickDays, preset.program.days.length)}`}
+                  className={styles.card}
+                >
                   <span className={styles.cardTitle}>{preset.title}</span>
                   <span className={styles.note}>{preset.blurb}</span>
                 </Link>
               </li>
             ))}
           </ul>
+          <DaysSelect id={`${tabsId}-pick-days`} value={pickDays} onChange={setPickDays} asListed />
         </section>
       ) : (
         <section role="tabpanel" id={`${tabsId}-paste-panel`} aria-labelledby={`${tabsId}-paste`} className={styles.field}>
+          <CheckPreview />
           <label className={styles.field} htmlFor={`${tabsId}-text`}>
             {CHECK_COPY.pasteLabel}
           </label>
@@ -180,23 +246,92 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
 
           {hasReading ? (
             <div className={styles.panel} aria-live="polite">
-              <h2 className={styles.panelHeading}>{CHECK_COPY.parsedHeading(parsed.days.length)}</h2>
+              <h2 className={styles.panelHeading}>
+                {restCount > 0
+                  ? CHECK_COPY.parsedHeadingWithRest(parsed.days.length, restCount)
+                  : CHECK_COPY.parsedHeading(parsed.days.length)}
+              </h2>
               <ol className={styles.dayList}>
-                {parsed.days.map((day, i) => (
-                  <li key={`${day.name}-${i}`}>
-                    <span className={styles.dayName}>{CHECK_COPY.parsedDayLine(i + 1, day.name, day.nameAuto)}</span>
-                    <ul className={styles.exerciseList}>
-                      {day.lines.map((line) => (
-                        <li key={line.lineNo}>
-                          {resolvedName(line, resolutions) ?? line.query} {prescription(line)}
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
+                {schedule.map((entry, i) =>
+                  entry.kind === "rest" ? (
+                    <li key={`rest-${i}`}>
+                      <span className={styles.dayName}>{CHECK_COPY.restDayLine(entry.label)}</span>
+                    </li>
+                  ) : (
+                    <li key={`${entry.day.name}-${i}`}>
+                      <span className={styles.dayName}>
+                        {CHECK_COPY.parsedDayLine(entry.index + 1, entry.day.name, entry.day.nameAuto, entry.day.label ?? null)}
+                      </span>{" "}
+                      <span className={styles.note}>{CHECK_COPY.exerciseCount(entry.day.lines.length)}</span>
+                      <ul className={styles.exerciseList}>
+                        {entry.day.lines.map((line) => (
+                          <li key={line.lineNo}>
+                            {resolvedName(line, resolutions) ?? line.query} {prescription(line)}
+                            {cameFrom(line, resolutions) !== null ? (
+                              <>
+                                {" "}
+                                <span className={styles.note}>{CHECK_COPY.acceptedFrom(cameFrom(line, resolutions)!)}</span>
+                              </>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ),
+                )}
               </ol>
+              <p className={styles.note}>{CHECK_COPY.totalLine(exerciseTotal, parsed.days.length)}</p>
+              {shownNotes.length > 0 ? (
+                <>
+                  <h3 className={styles.panelHeading}>{CHECK_COPY.notesHeading}</h3>
+                  <ul className={styles.exerciseList}>
+                    {shownNotes.map((note, i) => {
+                      const line = linesByNo.get(note.lineNo)!;
+                      const current = resolvedName(line, resolutions) ?? line.query;
+                      if (note.kind === "ALTERNATIVE") {
+                        const options = [note.chosen, ...note.others];
+                        const rest = options.filter((o) => o !== current);
+                        return (
+                          <li key={`note-${i}`}>
+                            {CHECK_COPY.noteAlternative(
+                              note.query,
+                              current,
+                              rest,
+                              note.others.length > 0 ? [] : note.unmatched,
+                            )}
+                            {rest.length > 0 ? (
+                              <span className={styles.actions}>
+                                {rest.map((name) => (
+                                  <button
+                                    key={name}
+                                    type="button"
+                                    className={styles.secondary}
+                                    onClick={() => answer(note.lineNo, name)}
+                                  >
+                                    {CHECK_COPY.useCandidate(name)}
+                                  </button>
+                                ))}
+                              </span>
+                            ) : null}
+                          </li>
+                        );
+                      }
+                      return (
+                        <li key={`note-${i}`}>
+                          {note.kind === "TIME_USES_REPS"
+                            ? CHECK_COPY.noteTimeUsesReps(current, note.repLow, note.repHigh)
+                            : CHECK_COPY.noteTimeOnly(current, note.timeText)}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              ) : null}
               {parsed.restLinesSkipped > 0 ? (
                 <p className={styles.note}>{CHECK_COPY.restSkipped(parsed.restLinesSkipped)}</p>
+              ) : null}
+              {parsed.skipped.length > 0 ? (
+                <p className={styles.note}>{CHECK_COPY.skippedLines(parsed.skipped.length)}</p>
               ) : null}
 
               {merged.notes.length > 0 && !mergedAll ? (
@@ -206,10 +341,7 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
                     <button
                       type="button"
                       className={styles.secondary}
-                      onClick={() => {
-                        setSeparate(!separate);
-                        setConfirmed(false);
-                      }}
+                      onClick={() => setSeparate(!separate)}
                     >
                       {separate ? CHECK_COPY.singletonMerge : CHECK_COPY.singletonSeparate}
                     </button>
@@ -218,24 +350,13 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
               ) : null}
 
               <div className={styles.actions}>
-                <button type="button" className={styles.primary} onClick={() => setConfirmed(true)}>
-                  {CHECK_COPY.looksRight}
-                </button>
-                <button
-                  type="button"
-                  className={styles.secondary}
-                  onClick={() => {
-                    setMergedAll(!mergedAll);
-                    setConfirmed(false);
-                  }}
-                >
+                <button type="button" className={styles.secondary} onClick={() => setMergedAll(!mergedAll)}>
                   {mergedAll ? CHECK_COPY.splitAgain : CHECK_COPY.mergeAll}
                 </button>
                 <button type="button" className={styles.secondary} onClick={editManually}>
                   {CHECK_COPY.editManually}
                 </button>
               </div>
-              {confirmed ? <p className={styles.note}>{CHECK_COPY.confirmedNote}</p> : null}
             </div>
           ) : null}
 
@@ -297,6 +418,7 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
                 <div key={line.lineNo} className={styles.lineCard}>
                   <p className={styles.lineText}>
                     Line {line.lineNo}: {line.raw}
+                    {line.reason !== undefined ? ` (${CHECK_COPY.unparsedReason[line.reason]})` : ""}
                   </p>
                   <div className={styles.actions}>
                     <button
@@ -310,6 +432,14 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
                 </div>
               ))}
             </div>
+          ) : null}
+
+          {hasReading ? (
+            <DaysSelect
+              id={`${tabsId}-days`}
+              value={Math.min(daysOverride ?? parsed.days.length, CHECK_LIMITS.maxDays)}
+              onChange={setDaysOverride}
+            />
           ) : null}
 
           <div className={styles.actions}>

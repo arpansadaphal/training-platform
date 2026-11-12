@@ -1,0 +1,30 @@
+/* Sign-up page copy (ARCH-067 / Fix 3). The form itself keeps the global form styles. */
+
+.lead {
+  margin: 0 0 0.75rem;
+}
+
+.bullets {
+  margin: 0 0 1.5rem;
+  padding-left: 1.25rem;
+  color: var(--muted);
+  font-size: 0.9375rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.signIn {
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* The global input is 42px high, under the 44px touch target /check holds itself to; scoped here so the rest of
+   the app's deferred phone pass (A3c) is untouched. 16px stops iOS zooming on focus. */
+.form input,
+.form button {
+  min-height: 44px;
+  font-size: 1rem;
+}

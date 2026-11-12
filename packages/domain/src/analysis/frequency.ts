@@ -44,17 +44,30 @@ export function requiredExposures(weeklySets: number, perSessionSetCap: number):
   return Math.max(1, Math.ceil(weeklySets / perSessionSetCap - EPS));
 }
 
-export function computeFrequencyAxis(
+/** One muscle's week as the FREQUENCY axis reads it. `exposures` and `weeklySets` already include `runs`. */
+export interface MuscleExposure {
+  readonly muscleId: string;
+  readonly muscle: string;
+  /** Fractional hard sets in the week (the same credit as VOLUME). */
+  readonly weeklySets: number;
+  /** Sessions in the week with at least `minExposureSets` fractional sets, scaled by whole runs. */
+  readonly exposures: number;
+  /** The most fractional sets the muscle gets in one listed session (the per-session cap is read against this). */
+  readonly maxSessionSets: number;
+}
+
+/**
+ * Per muscle: the weekly dose, the exposures and the heaviest session. This is the one place the FREQUENCY axis counts
+ * them, shared with display copy that has to say the same thing in words (copy/frequencyObservation.ts), so the two
+ * cannot disagree.
+ */
+export function muscleExposures(
   structure: ProgramStructure,
   referenceData: ExerciseReferenceData,
   config: GoalProfileConfig,
   runs: number = 1,
-): AnalysisAxisResult[] {
-  const bands = config.statusBands.FREQUENCY;
+): MuscleExposure[] {
   const dist = config.frequencyDistribution ?? DEFAULT_FREQUENCY_DISTRIBUTION;
-  if (!(dist.perSessionSetCap > 0)) {
-    throw new Error("frequencyDistribution.perSessionSetCap must be greater than 0");
-  }
   const credit = resolveHardSetCreditConfig(config);
 
   // exerciseId -> muscleGroupId -> involvementFactor
@@ -68,11 +81,12 @@ export function computeFrequencyAxis(
     byMuscle.set(inv.muscleGroupId, inv.involvementFactor);
   }
 
-  const results: AnalysisAxisResult[] = [];
+  const results: MuscleExposure[] = [];
 
   for (const muscleGroup of referenceData.muscleGroups) {
     let listedSets = 0;
     let listedExposures = 0;
+    let maxSessionSets = 0;
 
     for (const day of structure.workoutDays) {
       let daySets = 0;
@@ -82,19 +96,39 @@ export function computeFrequencyAxis(
         daySets += creditedSets(prescription, credit) * factor;
       }
       listedSets += daySets;
+      maxSessionSets = Math.max(maxSessionSets, daySets);
       if (daySets > 0 && daySets >= dist.minExposureSets - EPS) listedExposures += 1;
     }
-    const weeklySets = listedSets * runs;
-    const exposures = Math.floor(listedExposures * runs + EPS);
-
-    const metricValue = exposures / requiredExposures(weeklySets, dist.perSessionSetCap);
     results.push({
-      axisType: "FREQUENCY",
-      scopeKey: muscleGroup.name,
-      metricValue,
-      status: resolveBand(metricValue, bands),
+      muscleId: muscleGroup.id,
+      muscle: muscleGroup.name,
+      weeklySets: listedSets * runs,
+      exposures: Math.floor(listedExposures * runs + EPS),
+      maxSessionSets,
     });
   }
-
   return results;
+}
+
+export function computeFrequencyAxis(
+  structure: ProgramStructure,
+  referenceData: ExerciseReferenceData,
+  config: GoalProfileConfig,
+  runs: number = 1,
+): AnalysisAxisResult[] {
+  const bands = config.statusBands.FREQUENCY;
+  const dist = config.frequencyDistribution ?? DEFAULT_FREQUENCY_DISTRIBUTION;
+  if (!(dist.perSessionSetCap > 0)) {
+    throw new Error("frequencyDistribution.perSessionSetCap must be greater than 0");
+  }
+
+  return muscleExposures(structure, referenceData, config, runs).map(({ muscle, weeklySets, exposures }) => {
+    const metricValue = exposures / requiredExposures(weeklySets, dist.perSessionSetCap);
+    return {
+      axisType: "FREQUENCY" as const,
+      scopeKey: muscle,
+      metricValue,
+      status: resolveBand(metricValue, bands),
+    };
+  });
 }

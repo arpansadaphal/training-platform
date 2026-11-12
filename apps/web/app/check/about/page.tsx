@@ -25,11 +25,7 @@ export default function CheckAboutPage() {
         <div className={styles.prose}>
           <p>{CHECK_COPY.aboutWhat}</p>
           <p>{CHECK_COPY.aboutIntro}</p>
-          <ul>
-            {CHECK_COPY.aboutExceptions.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
+          <p>{CHECK_COPY.aboutReview}</p>
           <p>{CHECK_COPY.aboutNotJudgedHeading}</p>
           <ul>
             {CHECK_COPY.aboutNotJudged.map((line) => (

@@ -58,11 +58,14 @@ import {
   type AssessmentResult,
   type FitScoreBand,
   type FitScoreResult,
+  type FrequencyObservation,
   type NamedAction,
+  muscleVolumeView,
 } from "@training/domain";
 import { AxisCard } from "./AxisCard";
 import { EvidencePanel } from "./EvidencePanel";
 import { FindingCard } from "./FindingCard";
+import { MuscleVolumeTable } from "./MuscleVolumeTable";
 import { ProvisionalBanner } from "./ProvisionalBanner";
 import { UnvalidatedState } from "./UnvalidatedState";
 import { axisLabel, findingLabel, fitBandLabel } from "./labels";
@@ -84,6 +87,12 @@ interface Props {
    * showing the engine's strengths as they are.
    */
   checkMode?: boolean;
+  /**
+   * ARCH-068. An unscored note shown between the Fit line and the Strengths ("Every muscle is trained once a week.
+   * ..."). Never part of the assessment: it is not a finding, strength, attention area or input to the Fit band. Only
+   * the public checker passes one.
+   */
+  observation?: FrequencyObservation | null;
 }
 
 function axisKey(axis: AssessedAxis): string {
@@ -102,7 +111,7 @@ function fitLineFor(result: AssessmentResult, fitScore: FitScoreResult): FitLine
   return provisional ? { kind: "PROVISIONAL", band: provisional.band } : null;
 }
 
-export function AssessmentDisplay({ result, fitScore, namedActions, checkMode }: Props) {
+export function AssessmentDisplay({ result, fitScore, namedActions, checkMode, observation }: Props) {
   // ARCH-046: the banner is a property of the configuration, not of any
   // one assessment. `useProvisionalBanner` reads HYPERTROPHY_CONFIG's
   // `validated` flag and returns true while it is false — which, at MVP,
@@ -141,6 +150,7 @@ export function AssessmentDisplay({ result, fitScore, namedActions, checkMode }:
         fit={fitLineFor(result, fitScore)}
         namedActions={namedActions}
         checkMode={checkMode === true}
+        observation={observation ?? null}
         onSeeEvidence={openEvidence}
         evidenceOpen={evidenceOpen}
       />
@@ -157,6 +167,7 @@ function AssessmentBody({
   fit,
   namedActions,
   checkMode,
+  observation,
   onSeeEvidence,
   evidenceOpen,
 }: {
@@ -164,12 +175,18 @@ function AssessmentBody({
   fit: FitLine;
   namedActions: readonly NamedAction[] | undefined;
   checkMode: boolean;
+  observation: FrequencyObservation | null;
   onSeeEvidence: () => void;
   evidenceOpen: boolean;
 }) {
   const namedText = new Map((namedActions ?? []).map((n) => [n.rootCauseKey, n.description]));
   // ARCH-065 / Fix 4: on the public checker only an earned strength is shown, and the count follows what is shown.
-  const strengths = checkMode ? displayStrengths(a.strengths, { effortAssumed: true }) : a.strengths;
+  // ARCH-070: on the public checker every muscle is listed with its weekly sets in "Weekly sets per muscle", so the per-muscle
+  // volume strengths are not repeated as cards (six green cards that said the same thing, without the muscles that were
+  // fine at 6-9 sets). The strengths that remain, and the count, are what is shown.
+  const volumeView = checkMode ? muscleVolumeView(a.allAssessedAxes, HYPERTROPHY_CONFIG) : null;
+  const earned = checkMode ? displayStrengths(a.strengths, { effortAssumed: true }) : a.strengths;
+  const strengths = volumeView !== null ? earned.filter((s) => s.axisType !== "VOLUME") : earned;
   const balance = ratioLines(a.ratios);
   const trendingHigh = highVolumeLines(a.highVolume);
   // ARCH-065 / Fix 3a: the whole-program finding also says which muscles are behind it.
@@ -183,6 +200,11 @@ function AssessmentBody({
   const headline = a.biggestOpportunity ? (a.findings?.[0] ?? null) : null;
   const attention = a.findings ? (a.biggestOpportunity ? a.findings.slice(1) : a.findings) : null;
   const things = a.findings ? a.findings.length : a.attentionAreas.length + (a.biggestOpportunity ? 1 : 0);
+  // ARCH-069 / ARCH-071: on the public checker the balance lines count direct sets only, while the finding cards and the
+  // table credit synergists (hamstrings 9 beside 12, arms 12 beside biceps 13). The table is the one count of "how much of
+  // each muscle", so with it present the balance lines are not shown at all. Without a table (no VOLUME axes), the older
+  // rule holds: shown only when nothing is flagged. Every other surface keeps them as they were.
+  const showBalance = balance.length > 0 && !(checkMode && (volumeView !== null || things > 0));
   return (
     <>
       <section className={styles.overall}>
@@ -194,7 +216,7 @@ function AssessmentBody({
             </p>
           ) : (
             <p className={styles.fitScore}>
-              Provisional fit:{" "}
+              {checkMode ? "Fit" : "Provisional fit"}:{" "}
               <span className={styles.fitScoreBand}>{fitBandLabel(fit.band)}</span> — based on
               evidence-graded thresholds.{" "}
               <button
@@ -221,6 +243,13 @@ function AssessmentBody({
           )}
         </p>
       </section>
+
+      {observation !== null ? (
+        <aside className={styles.observation} aria-label={observation.heading} data-program-observation={observation.variant}>
+          <p className={styles.observationLabel}>{observation.heading}</p>
+          <p className={styles.observationBody}>{observation.text}</p>
+        </aside>
+      ) : null}
 
       {strengths.length > 0 ? (
         <section className={styles.section}>
@@ -296,7 +325,9 @@ function AssessmentBody({
           </ul>
         </section>
       ) : null}
-      {balance.length > 0 ? (
+      {volumeView !== null ? <MuscleVolumeTable view={volumeView} /> : null}
+
+      {showBalance ? (
         <section className={styles.section} data-cross-muscle-balance>
           <h2 className={styles.sectionHeading}>Cross-muscle balance</h2>
           <ul className={styles.balanceList}>

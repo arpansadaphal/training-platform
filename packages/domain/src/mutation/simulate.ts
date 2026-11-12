@@ -27,6 +27,7 @@
 
 import { computeAnalysis } from "../analysis/computeAnalysis";
 import type {
+  AnalysisContext,
   ExerciseReferenceData,
   GoalProfileConfig,
 } from "../analysis/types";
@@ -59,6 +60,11 @@ import {
 export interface SimulateOptions {
   goalId: string;
   now?: () => Date;
+  /**
+   * Optional lifter context (ARCH-067: /check passes `daysPerWeek`), given to BOTH analyses so the base and the
+   * mutated week are read the same way. Omitted: identical to before.
+   */
+  context?: AnalysisContext;
 }
 
 /**
@@ -116,6 +122,7 @@ export function simulate(
   // full-stack invariant test both want.
   const baseAnalysis = computeAnalysis(withoutRestDays(baseStructure), referenceData, config, {
     now,
+    ...(options.context !== undefined ? { context: options.context } : {}),
   });
   const baseAssessment = computeAssessment(baseAnalysis, config, { goalId });
 
@@ -123,7 +130,7 @@ export function simulate(
     withoutRestDays(mutatedStructure),
     referenceData,
     config,
-    { now },
+    { now, ...(options.context !== undefined ? { context: options.context } : {}) },
   );
   const mutatedAssessment = computeAssessment(mutatedAnalysis, config, {
     goalId,

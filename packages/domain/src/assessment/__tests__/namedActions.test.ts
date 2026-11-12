@@ -526,3 +526,121 @@ describe("nameActions: run the rotation twice a week (ARCH-065 / Fix 3b)", () =>
     assertCleanCopy([run(PPL_ONCE)!.description]);
   });
 });
+
+// ARCH-068. The Program observation on /check says a once-a-week program under the floor should add a training day, not
+// sets on the days it has. With `addDay` the whole-program volume action says the same, in the engine's numbers.
+describe("nameActions: add a day instead of sets on the listed days (ARCH-068)", () => {
+  const run = (structure: ProgramStructure, addDay: boolean) => {
+    const analysis = computeAnalysis(structure, PPL_REF, HYPERTROPHY_CONFIG, { now: () => new Date(0) });
+    const { assessment } = computeAssessment(analysis, HYPERTROPHY_CONFIG, { goalId: "g" });
+    return nameActions(assessment, structure, PPL_REF, HYPERTROPHY_CONFIG, addDay ? { addDay } : {}).find(
+      (a) => a.rootCauseKey === "programStructure:add-volume",
+    );
+  };
+  const totalOf = (structure: ProgramStructure) =>
+    computeAnalysis(structure, PPL_REF, HYPERTROPHY_CONFIG, { now: () => new Date(0) }).axisResults.find(
+      (a) => a.axisType === "PROGRAM_STRUCTURE" && a.scopeKey === "total-volume",
+    )?.metricValue;
+
+  it("offers a training day after the rotation, and no sets on the listed days", () => {
+    const action = run(PPL_ONCE, true);
+    expect(action?.description).toMatch(/^Run your 3 days twice a week → 48 hard sets a week\. Or add a training day: /);
+    expect(action?.newDay?.exercises.length).toBeGreaterThan(0);
+    expect(action?.suggestions).toBeUndefined();
+    expect(action?.description).not.toMatch(/Or, on 3 days a week/);
+    expect(action?.rotation).toEqual({ days: 3, totalSets: 48 });
+  });
+
+  it("leads with the day when there is no rotation to offer", () => {
+    const d = (id: string, name: string) => day(id, name, [rx("Barbell Bench Press", 1), rx("Barbell Row", 1)]);
+    const action = run({ workoutDays: [d("a", "A"), d("b", "B"), d("c", "C"), d("d", "D")] }, true);
+    expect(action?.description).toMatch(/^Add a training day: 3 sets of /);
+    expect(action?.rotation).toBeUndefined();
+  });
+
+  // The sentence is a starting point with a next step, not "27 < 40" as a terminal fact (ARCH-071).
+  it("the weeks it quotes are the engine's numbers: this day added once, and the same day added twice", () => {
+    const action = run(PPL_ONCE, true)!;
+    const floor = HYPERTROPHY_CONFIG.programStructure!.minWeeklySets;
+    const rows = (suffix: string) => action.newDay!.exercises.map((e, i) => rx(e.exerciseName, e.sets, `added-${suffix}-${i}`));
+    const once: ProgramStructure = { workoutDays: [...PPL_ONCE.workoutDays, day("added", "Added day", rows("1"))] };
+    const twice: ProgramStructure = { workoutDays: [...once.workoutDays, day("added2", "Added day 2", rows("2"))] };
+    const firstQuoted = Number(/That brings the week to ([\d.]+) hard sets/.exec(action.description)![1]);
+    const secondQuoted = Number(/A second day like it brings the week to ([\d.]+)/.exec(action.description)![1]);
+    expect(totalOf(once)).toBe(firstQuoted);
+    expect(totalOf(twice)).toBe(secondQuoted);
+    expect(firstQuoted).toBeLessThan(floor);
+    expect(action.description).toContain(`a start toward the general floor of ${floor}`);
+  });
+
+  it("says what is left: past the floor with the second day, or more sets per muscle when even that falls short", () => {
+    const action = run(PPL_ONCE, true)!;
+    const secondQuoted = Number(/A second day like it brings the week to ([\d.]+)/.exec(action.description)![1]);
+    const floor = HYPERTROPHY_CONFIG.programStructure!.minWeeklySets;
+    expect(action.description).toMatch(secondQuoted >= floor ? /, past the floor\./ : /; more sets per muscle closes the rest\./);
+    const d = (id: string, name: string) => day(id, name, [rx("Barbell Bench Press", 1), rx("Barbell Row", 1)]);
+    const tiny = run({ workoutDays: [d("a", "A"), d("b", "B"), d("c", "C"), d("d", "D")] }, true)!;
+    const tinySecond = Number(/A second day like it brings the week to ([\d.]+)/.exec(tiny.description)![1]);
+    expect(tinySecond).toBeLessThan(floor);
+    expect(tiny.description).toMatch(/; more sets per muscle closes the rest\./);
+  });
+
+  it("never states the shortfall as a dead end: no 'The week then has', no bare 'the general floor is'", () => {
+    const action = run(PPL_ONCE, true)!;
+    expect(action.description).not.toMatch(/The week then has|the general floor is \d/);
+  });
+
+  it("is the older action when addDay is not set (the Builder and every other surface)", () => {
+    const action = run(PPL_ONCE, false);
+    expect(action?.description).toMatch(/Or, on 3 days a week: Add /);
+    expect(action?.newDay).toBeUndefined();
+  });
+
+  it("the sentence passes the forbidden-copy lint", () => {
+    assertCleanCopy([run(PPL_ONCE, true)!.description]);
+  });
+});
+
+// ARCH-067. The lifter said how many days a week they train (/check's days selector). The Analysis reads it
+// (runsPerWeek), so every number an action cites has to be read the same way, and the rotation advice has
+// already been answered.
+describe("nameActions: the lifter's days a week (ARCH-067)", () => {
+  const context = { daysPerWeek: 6 };
+  const withContext = (structure: ProgramStructure) => {
+    const analysis = computeAnalysis(structure, PPL_REF, HYPERTROPHY_CONFIG, { now: () => new Date(0), context });
+    const { assessment } = computeAssessment(analysis, HYPERTROPHY_CONFIG, { goalId: "g" });
+    return { assessment, actions: nameActions(assessment, structure, PPL_REF, HYPERTROPHY_CONFIG, { context }) };
+  };
+
+  it("does not offer to run the days twice once the lifter has said they run them twice", () => {
+    const { actions } = withContext(PPL_ONCE);
+    expect(actions.some((a) => a.rotation !== undefined)).toBe(false);
+    expect(actions.some((a) => /twice a week/.test(a.description))).toBe(false);
+  });
+
+  it("cites after-numbers for the week the lifter runs: 2 listed days on 4 days a week doubles each one", () => {
+    const ctx4 = { daysPerWeek: 4 };
+    const read = (context?: { daysPerWeek: number }) => {
+      const analysis = computeAnalysis(DUMBBELLS_ONLY, REF, PER_MUSCLE_CONFIG, { now: () => new Date(0), ...(context ? { context } : {}) });
+      const { assessment } = computeAssessment(analysis, PER_MUSCLE_CONFIG, { goalId: "g" });
+      return nameActions(assessment, DUMBBELLS_ONLY, REF, PER_MUSCLE_CONFIG, context ? { context } : {}).flatMap(suggestionsOf);
+    };
+    const once = read();
+    const twice = read(ctx4);
+    // Twice the week clears some Lows, so fewer muscles are named; the ones named in both are read twice as large.
+    const shared = twice.flatMap((t) => {
+      const o = once.find((x) => x.exerciseName === t.exerciseName && x.sets === t.sets);
+      return o ? [[t.afterSets, o.afterSets * 2]] : [];
+    });
+    expect(shared.length).toBeGreaterThan(0);
+    for (const [got, want] of shared) expect(got).toBe(want);
+  });
+
+  it("is the same output as before when no context is given", () => {
+    const analysis = computeAnalysis(PPL_ONCE, PPL_REF, HYPERTROPHY_CONFIG, { now: () => new Date(0) });
+    const { assessment } = computeAssessment(analysis, HYPERTROPHY_CONFIG, { goalId: "g" });
+    expect(nameActions(assessment, PPL_ONCE, PPL_REF, HYPERTROPHY_CONFIG, {})).toEqual(
+      nameActions(assessment, PPL_ONCE, PPL_REF, HYPERTROPHY_CONFIG),
+    );
+  });
+});

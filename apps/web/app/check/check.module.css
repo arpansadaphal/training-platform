@@ -273,3 +273,106 @@
   padding-block: 0.8rem;
   box-sizing: border-box;
 }
+
+/* ARCH-067: the days-a-week selector. Right-aligned under the textarea, one tap target at least 44px tall. */
+.daysRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem 0.75rem;
+}
+
+.daysLabel {
+  font-size: 0.9375rem;
+}
+
+.daysSelect {
+  min-height: 44px;
+  min-width: 8.5rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 1rem;
+  background: #fff;
+  color: var(--fg);
+}
+
+.daysHelp {
+  flex-basis: 100%;
+  text-align: right;
+}
+
+/* ARCH-067 / Fix 2: the example assessment above the paste box. "Faded" is the muted background and dashed border;
+   the card text stays at full contrast (CSS opacity would dim it too, and fail the contrast check). */
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: #f6f6f6;
+}
+
+.previewTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.previewHeading {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.previewTag {
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.previewCards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+.previewCard {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 0 0.5rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--fg);
+}
+
+.previewLabel {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.previewStatus {
+  font-weight: 600;
+}
+
+.previewDetail {
+  grid-column: 1 / -1;
+  font-size: 0.9375rem;
+}
+
+@media (min-width: 640px) {
+  .previewCards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

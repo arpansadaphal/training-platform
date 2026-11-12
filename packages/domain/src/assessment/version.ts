@@ -27,5 +27,9 @@
 //          (was more than 2 and more than 10), so exactly 2.0 with exactly 10 pulling sets (S8) now fires. Changes the
 //          Assessment for a program that sits on either boundary and nothing else; no calibration program does, so
 //          calibration-before.txt is unchanged. (The named whole-program volume action is a post-step and is not stored.)
+//   0.6.2  ARCH-071: a whole-program axis (attendance, total-volume) outranks a per-muscle axis of EQUAL leverage in the
+//          headline order, ahead of weight (a new `systemic` key in compareRanked). Changes the headline, findings order,
+//          actions order and overallSummary for a program where one of those fires and a per-muscle finding ties it on
+//          leverage (the bro split: hinge and total-volume are both HIGH). No band, severity, weight or threshold moved.
 // packages/api/src/services/commit.test.ts compares a snapshot's engineVersion with this constant, not a literal.
-export const ASSESSMENT_ENGINE_VERSION = "0.6.1" as const;
+export const ASSESSMENT_ENGINE_VERSION = "0.6.2" as const;

@@ -79,9 +79,24 @@ export type {
 export { computeAnalysis } from "./analysis/computeAnalysis";
 export { computeCrossMuscleRatios } from "./analysis/ratios";
 export { ratioLines, RATIO_TIER_NOTE } from "./copy/ratioLines";
+export {
+  muscleVolumeView,
+  allMuscleVolumeCopy,
+  MUSCLE_VOLUME_COPY,
+  MUSCLE_DISPLAY_ORDER,
+  type MuscleVolumeRow,
+  type MuscleVolumeView,
+} from "./copy/muscleVolumeRows";
+export {
+  frequencyObservation,
+  allFrequencyObservationCopy,
+  FREQUENCY_OBSERVATION_HEADING,
+  type FrequencyObservation,
+  type FrequencyVariant,
+} from "./copy/frequencyObservation";
 export { highVolumeLines, HIGH_VOLUME_HEADING } from "./copy/highVolumeLines";
 export { computeVolumeAxis } from "./analysis/volume";
-export { computeFrequencyAxis } from "./analysis/frequency";
+export { computeFrequencyAxis, muscleExposures, type MuscleExposure } from "./analysis/frequency";
 export { computeExerciseSelectionBalanceAxis } from "./analysis/exerciseSelectionBalance";
 export { computeProgressionSoundnessAxis } from "./analysis/progressionSoundness";
 export {
@@ -252,11 +267,15 @@ export type {
   MatchStatus,
   ParseOptions,
   ParseResult,
+  LineNote,
   ParsedDay,
   ParsedLine,
+  RestDay,
   Resolutions,
   SingletonMergeNote,
+  SkippedLine,
   UnparsedLine,
+  UnparsedReason,
 } from "./check/types";
 export { fold, matchExercise } from "./check/exerciseMatch";
 export {
@@ -264,9 +283,12 @@ export {
   mergeAllDays,
   parseRoutine,
   resolvedName,
+  scheduleEntries,
   toCompactProgram,
   unresolvedLines,
 } from "./check/routineParser";
+export type { ScheduleEntry } from "./check/routineParser";
+export { checkHint } from "./check/hint";
 export { CHECK_LIMITS, decodeCompactProgram, encodeCompactProgram } from "./check/compactProgram";
 export { CHECK_DEFAULT_RPE, toProgramStructure } from "./check/toStructure";
 export type { StructureResult } from "./check/toStructure";

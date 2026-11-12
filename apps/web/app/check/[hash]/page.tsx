@@ -7,7 +7,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { isCheckPublic } from "@training/config";
-import { CHECK_COPY, decodeCompactProgram } from "@training/domain";
+import { CHECK_COPY, CHECK_LIMITS, decodeCompactProgram } from "@training/domain";
 import { auth } from "@/src/server/auth";
 import { CheckNav } from "../CheckNav";
 import { ResultClient } from "./ResultClient";
@@ -22,19 +22,26 @@ export const metadata: Metadata = {
 
 interface Props {
   params: Promise<{ hash: string }>;
-  searchParams: Promise<{ import?: string }>;
+  searchParams: Promise<{ import?: string; d?: string }>;
+}
+
+/** ARCH-067: days a week from `?d=`, only a whole number 1-7; anything else is ignored (the plain read). */
+function readDays(value: string | undefined): number | undefined {
+  if (value === undefined || !/^\d$/.test(value)) return undefined;
+  const n = Number(value);
+  return n >= 1 && n <= CHECK_LIMITS.maxDays ? n : undefined;
 }
 
 export default async function CheckResultPage({ params, searchParams }: Props) {
   if (!isCheckPublic()) notFound();
   const { hash } = await params;
   if (decodeCompactProgram(hash) === null) notFound();
-  const { import: importFlag } = await searchParams;
+  const { import: importFlag, d } = await searchParams;
   const session = await auth();
   return (
     <>
       <CheckNav />
-      <ResultClient hash={hash} canImport={importFlag === "1" && Boolean(session?.user?.id)} />
+      <ResultClient hash={hash} daysPerWeek={readDays(d)} canImport={importFlag === "1" && Boolean(session?.user?.id)} />
     </>
   );
 }
