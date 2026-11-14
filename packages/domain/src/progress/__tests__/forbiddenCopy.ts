@@ -9,7 +9,7 @@ export const FORBIDDEN_COPY_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }
   { name: "outcome guarantee (ensure)", re: /\bensure/i },
   { name: "outcome percentage claim", re: /\d+\s*%\s*(more|less|faster|bigger|stronger)/i },
   { name: "optimality claim", re: /\b(optimal|best|ideal)\b/i },
-  { name: "medical claim", re: /\b(diagnos|injur|treat(ment)?|rehab)\b/i },
+  { name: "medical claim", re: /\b(diagnos\w*|injur\w*|treat(ment)?|rehab\w*)\b/i },
   { name: "streak framing", re: /\bstreak\b/i },
   { name: "loss-aversion framing", re: /\bdon'?t lose\b|\bmissing out\b|\bmiss out\b/i },
   { name: "cause attribution", re: /\b(recovery|technique|form|fatigue|overtrain)/i },
