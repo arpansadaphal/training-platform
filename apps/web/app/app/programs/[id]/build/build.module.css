@@ -188,11 +188,15 @@
 
 .dayNameInput {
   flex: 1;
+  /* A text input will not shrink below its default width inside a flex row; without this the day header is 361px
+     wide at its narrowest and the page scrolls sideways on a phone. */
+  min-width: 0;
   font-weight: 600;
 }
 
 .dayControls {
   display: flex;
+  flex: none;
   gap: 0.25rem;
 }
 
@@ -246,6 +250,14 @@
   font-size: 0.85rem;
   color: var(--muted);
   flex-direction: row;
+  /* The Effort select's longest option is wider than a 320px screen; let the field and its select shrink to fit. */
+  min-width: 0;
+  max-width: 100%;
+}
+
+.inlineField select {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .inlineField input {
