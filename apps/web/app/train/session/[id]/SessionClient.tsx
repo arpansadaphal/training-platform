@@ -82,6 +82,7 @@ import {
 } from "@training/domain";
 import { RpePicker, WeightPicker } from "@/components/session/LoggingPickers";
 import { UndoToast, type ToastState } from "@/components/session/UndoToast";
+import { ExerciseIllustration } from "@/components/session/ExerciseIllustration";
 import styles from "../../train.module.css";
 
 type SessionStatus = "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED";
@@ -1201,11 +1202,14 @@ function SessionClientInner({
                       </div>
                     )}
                     {!done && cuesShown ? (
-                      <ul id={cuesPanelId} className={styles.cuesList}>
-                        {cues.map((cue) => (
-                          <li key={cue}>{cue}</li>
-                        ))}
-                      </ul>
+                      <div id={cuesPanelId}>
+                        <ExerciseIllustration name={name} />
+                        <ul className={styles.cuesList}>
+                          {cues.map((cue) => (
+                            <li key={cue}>{cue}</li>
+                          ))}
+                        </ul>
+                      </div>
                     ) : null}
                     {!done || expanded ? (
                       <>

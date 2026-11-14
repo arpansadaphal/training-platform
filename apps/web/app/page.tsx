@@ -49,6 +49,9 @@ export default function LandingPage() {
             <Link href="/check">{CHECK_COPY.landingLink}</Link>
           </p>
         ) : null}
+        <p>
+          <Link href="/credits">Credits</Link>
+        </p>
       </main>
     </>
   );
