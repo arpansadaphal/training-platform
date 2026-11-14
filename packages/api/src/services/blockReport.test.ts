@@ -41,7 +41,7 @@ const FORBIDDEN_PATTERNS: Array<{ name: string; re: RegExp }> = [
     re: /\d+\s*%\s*(more|less|faster|bigger|stronger)/i,
   },
   { name: "optimality claim", re: /\b(optimal|best|ideal)\b/i },
-  { name: "medical claim", re: /\b(diagnos|injur|treat(ment)?|rehab)\b/i },
+  { name: "medical claim", re: /\b(diagnos\w*|injur\w*|treat(ment)?|rehab\w*)\b/i },
   { name: "streak framing", re: /\bstreak\b/i },
   {
     name: "loss-aversion framing",
