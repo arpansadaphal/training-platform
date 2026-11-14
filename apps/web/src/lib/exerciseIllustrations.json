@@ -1,0 +1,454 @@
+{
+  "source": {
+    "repository": "https://github.com/everkinetic/data",
+    "commit": "446bb9a3d0c3beb6b84f7c9d77dfc8af707a2ab6",
+    "license": "CC-BY-SA-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+  },
+  "size": 480,
+  "exercises": {
+    "Back Squat": {
+      "slug": "back-squat",
+      "everkineticId": "0122",
+      "everkineticTitle": "Barbell Squat",
+      "tier": "exact"
+    },
+    "Front Squat": {
+      "slug": "front-squat",
+      "everkineticId": "0138",
+      "everkineticTitle": "Front Squat with Barbell",
+      "tier": "exact"
+    },
+    "Hack Squat": {
+      "slug": "hack-squat",
+      "everkineticId": "0123",
+      "everkineticTitle": "Hack Squat: Machine",
+      "tier": "exact"
+    },
+    "Leg Press": {
+      "slug": "leg-press",
+      "everkineticId": "0127",
+      "everkineticTitle": "Leg Press",
+      "tier": "exact"
+    },
+    "Reverse Lunge": {
+      "slug": "reverse-lunge",
+      "everkineticId": "0129",
+      "everkineticTitle": "Lunges: Dumbbell (Rear)",
+      "tier": "exact"
+    },
+    "Walking Lunge": {
+      "slug": "walking-lunge",
+      "everkineticId": "0121",
+      "everkineticTitle": "Lunges: Dumbbell (Walking)",
+      "tier": "exact"
+    },
+    "Step-Up": {
+      "slug": "step-up",
+      "everkineticId": "0137",
+      "everkineticTitle": "Step Ups: Dumbbell",
+      "tier": "exact"
+    },
+    "Goblet Squat": {
+      "slug": "goblet-squat",
+      "everkineticId": "0130",
+      "everkineticTitle": "Squats: Dumbbells",
+      "tier": "near",
+      "note": "Everkinetic shows two dumbbells held at the sides, not one held at the chest."
+    },
+    "Smith Machine Squat": {
+      "slug": "smith-machine-squat",
+      "everkineticId": "0124",
+      "everkineticTitle": "Squats: Smith Machine",
+      "tier": "exact"
+    },
+    "Zercher Squat": {
+      "slug": "zercher-squat",
+      "everkineticId": "0161",
+      "everkineticTitle": "Zecher Squats",
+      "tier": "exact"
+    },
+    "Sissy Squat": {
+      "slug": "sissy-squat",
+      "everkineticId": "0158",
+      "everkineticTitle": "Weighted Sissy Squat with Weight Plate",
+      "tier": "near",
+      "note": "Everkinetic's version holds a weight plate; ours is bodyweight."
+    },
+    "Conventional Deadlift": {
+      "slug": "conventional-deadlift",
+      "everkineticId": "0099",
+      "everkineticTitle": "Dead Lifts: Barbell",
+      "tier": "exact"
+    },
+    "Romanian Deadlift": {
+      "slug": "romanian-deadlift",
+      "everkineticId": "0118",
+      "everkineticTitle": "Romanian Dead Lift",
+      "tier": "exact"
+    },
+    "Good Morning": {
+      "slug": "good-morning",
+      "everkineticId": "0101",
+      "everkineticTitle": "Good Mornings: Barbell",
+      "tier": "exact"
+    },
+    "Glute Bridge": {
+      "slug": "glute-bridge",
+      "everkineticId": "0109",
+      "everkineticTitle": "Bridging",
+      "tier": "exact"
+    },
+    "45-Degree Back Extension": {
+      "slug": "45-degree-back-extension",
+      "everkineticId": "0103",
+      "everkineticTitle": "Hyperextensions",
+      "tier": "exact"
+    },
+    "Barbell Bench Press": {
+      "slug": "barbell-bench-press",
+      "everkineticId": "0042",
+      "everkineticTitle": "Bench Press: Barbell",
+      "tier": "exact"
+    },
+    "Dumbbell Bench Press": {
+      "slug": "dumbbell-bench-press",
+      "everkineticId": "0055",
+      "everkineticTitle": "Bench Press: Dumbbell",
+      "tier": "exact"
+    },
+    "Incline Barbell Bench Press": {
+      "slug": "incline-barbell-bench-press",
+      "everkineticId": "0043",
+      "everkineticTitle": "Bench Press: Barbell (Incline)",
+      "tier": "exact"
+    },
+    "Push-Up": {
+      "slug": "push-up",
+      "everkineticId": "0077",
+      "everkineticTitle": "Push Up: Body Weight",
+      "tier": "exact"
+    },
+    "Incline Dumbbell Press": {
+      "slug": "incline-dumbbell-press",
+      "everkineticId": "0080",
+      "everkineticTitle": "Incline Dumbbell Press",
+      "tier": "exact"
+    },
+    "Decline Bench Press": {
+      "slug": "decline-bench-press",
+      "everkineticId": "0051",
+      "everkineticTitle": "Bench Press: Barbell (Decline)",
+      "tier": "exact"
+    },
+    "Machine Chest Press": {
+      "slug": "machine-chest-press",
+      "everkineticId": "0066",
+      "everkineticTitle": "Bench Press: Machine",
+      "tier": "exact"
+    },
+    "Smith Machine Bench Press": {
+      "slug": "smith-machine-bench-press",
+      "everkineticId": "0078",
+      "everkineticTitle": "Bench Press: Smith Machine",
+      "tier": "exact"
+    },
+    "Close-Grip Bench Press": {
+      "slug": "close-grip-bench-press",
+      "everkineticId": "0049",
+      "everkineticTitle": "Bench Press: Barbell (Close Grip)",
+      "tier": "exact"
+    },
+    "Chest Dip": {
+      "slug": "chest-dip",
+      "everkineticId": "0054",
+      "everkineticTitle": "Chest Dips",
+      "tier": "exact"
+    },
+    "Tricep Dip": {
+      "slug": "tricep-dip",
+      "everkineticId": "0172",
+      "everkineticTitle": "Triceps Dips: Body Weight",
+      "tier": "exact"
+    },
+    "Cable Chest Fly": {
+      "slug": "cable-chest-fly",
+      "everkineticId": "0048",
+      "everkineticTitle": "Cable Crossover",
+      "tier": "near",
+      "note": "Everkinetic's is the standing cable crossover, shown from a different angle."
+    },
+    "Pec Deck": {
+      "slug": "pec-deck",
+      "everkineticId": "0047",
+      "everkineticTitle": "Butterfly Machine",
+      "tier": "exact"
+    },
+    "Dumbbell Fly": {
+      "slug": "dumbbell-fly",
+      "everkineticId": "0056",
+      "everkineticTitle": "Dumbbell Flys",
+      "tier": "exact"
+    },
+    "Overhead Press": {
+      "slug": "overhead-press",
+      "everkineticId": "0004",
+      "everkineticTitle": "Seated Military Press",
+      "tier": "near",
+      "note": "Everkinetic's barbell press is seated; ours is standing."
+    },
+    "Dumbbell Shoulder Press": {
+      "slug": "dumbbell-shoulder-press",
+      "everkineticId": "0012",
+      "everkineticTitle": "Dumbbell Shoulder Press",
+      "tier": "exact"
+    },
+    "Arnold Press": {
+      "slug": "arnold-press",
+      "everkineticId": "0006",
+      "everkineticTitle": "Arnold Press",
+      "tier": "exact"
+    },
+    "Machine Shoulder Press": {
+      "slug": "machine-shoulder-press",
+      "everkineticId": "0003",
+      "everkineticTitle": "Seated Shoulder Press Machine",
+      "tier": "exact"
+    },
+    "Barbell Row": {
+      "slug": "barbell-row",
+      "everkineticId": "0026",
+      "everkineticTitle": "Reverse Grips Bent Over Barbell Rows",
+      "tier": "near",
+      "note": "Everkinetic's is the reverse-grip (underhand) barbell row; no overhand version has two frames in the set."
+    },
+    "Seated Cable Row": {
+      "slug": "seated-cable-row",
+      "everkineticId": "0025",
+      "everkineticTitle": "Seated Cable Rows",
+      "tier": "exact"
+    },
+    "T-Bar Row": {
+      "slug": "t-bar-row",
+      "everkineticId": "0029",
+      "everkineticTitle": "T-Bar Rows",
+      "tier": "exact"
+    },
+    "Inverted Row": {
+      "slug": "inverted-row",
+      "everkineticId": "0086",
+      "everkineticTitle": "Body Row",
+      "tier": "exact"
+    },
+    "Pull-Up": {
+      "slug": "pull-up",
+      "everkineticId": "0087",
+      "everkineticTitle": "Pull Ups",
+      "tier": "exact"
+    },
+    "Chin-Up": {
+      "slug": "chin-up",
+      "everkineticId": "0089",
+      "everkineticTitle": "Chin Ups",
+      "tier": "exact"
+    },
+    "Lat Pulldown": {
+      "slug": "lat-pulldown",
+      "everkineticId": "0097",
+      "everkineticTitle": "Pull Down: Wide Bar (Wide Grip)",
+      "tier": "exact"
+    },
+    "Neutral-Grip Pull-Up": {
+      "slug": "neutral-grip-pull-up",
+      "everkineticId": "0090",
+      "everkineticTitle": "Narrow Parallel Grip Chin-ups",
+      "tier": "near",
+      "note": "Everkinetic's is the narrow parallel-grip chin-up."
+    },
+    "Straight-Arm Pulldown": {
+      "slug": "straight-arm-pulldown",
+      "everkineticId": "0092",
+      "everkineticTitle": "Straight Arm Push Down",
+      "tier": "exact"
+    },
+    "JM Press": {
+      "slug": "jm-press",
+      "everkineticId": "0175",
+      "everkineticTitle": "JM Press",
+      "tier": "exact"
+    },
+    "Barbell Curl": {
+      "slug": "barbell-curl",
+      "everkineticId": "0211",
+      "everkineticTitle": "Biceps Curl: Barbell",
+      "tier": "exact"
+    },
+    "Hammer Curl": {
+      "slug": "hammer-curl",
+      "everkineticId": "0227",
+      "everkineticTitle": "Biceps Curl: Dumbbell (Hammer)",
+      "tier": "exact"
+    },
+    "Dumbbell Curl": {
+      "slug": "dumbbell-curl",
+      "everkineticId": "0224",
+      "everkineticTitle": "Biceps Curl: Dumbbell",
+      "tier": "exact"
+    },
+    "Incline Curl": {
+      "slug": "incline-curl",
+      "everkineticId": "0214",
+      "everkineticTitle": "Alternating Incline Curl with Dumbbell",
+      "tier": "near",
+      "note": "Everkinetic's is the alternating incline dumbbell curl."
+    },
+    "Preacher Curl": {
+      "slug": "preacher-curl",
+      "everkineticId": "0239",
+      "everkineticTitle": "Preacher Curl: Barbell",
+      "tier": "exact"
+    },
+    "Concentration Curl": {
+      "slug": "concentration-curl",
+      "everkineticId": "0220",
+      "everkineticTitle": "Concentration Curls with Dumbbell",
+      "tier": "exact"
+    },
+    "Cable Curl": {
+      "slug": "cable-curl",
+      "everkineticId": "0212",
+      "everkineticTitle": "Standing Biceps Curl with Cable",
+      "tier": "exact"
+    },
+    "Spider Curl": {
+      "slug": "spider-curl",
+      "everkineticId": "0245",
+      "everkineticTitle": "Spider Curl with Barbell",
+      "tier": "near",
+      "note": "Everkinetic's uses a barbell; ours uses dumbbells."
+    },
+    "Tricep Pushdown": {
+      "slug": "tricep-pushdown",
+      "everkineticId": "0205",
+      "everkineticTitle": "Triceps Pushdown: Cable",
+      "tier": "exact"
+    },
+    "Skull Crusher": {
+      "slug": "skull-crusher",
+      "everkineticId": "0183",
+      "everkineticTitle": "Lying Triceps Press with Barbell",
+      "tier": "exact"
+    },
+    "Tricep Kickback": {
+      "slug": "tricep-kickback",
+      "everkineticId": "0204",
+      "everkineticTitle": "Triceps Kickback with Dumbbell",
+      "tier": "exact"
+    },
+    "Lateral Raise": {
+      "slug": "lateral-raise",
+      "everkineticId": "0018",
+      "everkineticTitle": "Lateral Dumbbell Raises",
+      "tier": "exact"
+    },
+    "Rear Delt Fly": {
+      "slug": "rear-delt-fly",
+      "everkineticId": "0032",
+      "everkineticTitle": "Bent Over Rear Deltoid Raise With Head On Bench",
+      "tier": "near",
+      "note": "Everkinetic's is a bent-over raise with the head supported on a bench."
+    },
+    "Cable Rear Delt Fly": {
+      "slug": "cable-rear-delt-fly",
+      "everkineticId": "0017",
+      "everkineticTitle": "Bent-over Lateral Cable Raises",
+      "tier": "exact"
+    },
+    "Leg Curl": {
+      "slug": "leg-curl",
+      "everkineticId": "0117",
+      "everkineticTitle": "Lying Leg Curl Machine",
+      "tier": "exact"
+    },
+    "Seated Leg Curl": {
+      "slug": "seated-leg-curl",
+      "everkineticId": "0119",
+      "everkineticTitle": "Seated Leg Curl",
+      "tier": "exact"
+    },
+    "Leg Extension": {
+      "slug": "leg-extension",
+      "everkineticId": "0142",
+      "everkineticTitle": "Leg Extensions",
+      "tier": "exact"
+    },
+    "Hip Abduction": {
+      "slug": "hip-abduction",
+      "everkineticId": "0156",
+      "everkineticTitle": "Thigh Abductor",
+      "tier": "exact"
+    },
+    "Hip Adduction": {
+      "slug": "hip-adduction",
+      "everkineticId": "0157",
+      "everkineticTitle": "Thigh Adductor",
+      "tier": "exact"
+    },
+    "Standing Calf Raise": {
+      "slug": "standing-calf-raise",
+      "everkineticId": "0282",
+      "everkineticTitle": "Standing Calf Raises using Machine",
+      "tier": "exact"
+    },
+    "Seated Calf Raise": {
+      "slug": "seated-calf-raise",
+      "everkineticId": "0279",
+      "everkineticTitle": "Seated Calf Raise using Machine",
+      "tier": "exact"
+    },
+    "Cable Crunch": {
+      "slug": "cable-crunch",
+      "everkineticId": "0288",
+      "everkineticTitle": "Seated Ab Crunch with Cable",
+      "tier": "near",
+      "note": "Everkinetic's is the seated cable crunch; ours is kneeling."
+    },
+    "Ab Wheel Rollout": {
+      "slug": "ab-wheel-rollout",
+      "everkineticId": "0286",
+      "everkineticTitle": "Ab Rollout on Knees with Barbell",
+      "tier": "near",
+      "note": "Everkinetic's rollout is on the knees with a barbell; ours uses the wheel."
+    },
+    "Side Plank": {
+      "slug": "side-plank",
+      "everkineticId": "0113",
+      "everkineticTitle": "Side Plank",
+      "tier": "exact"
+    },
+    "Upright Row": {
+      "slug": "upright-row",
+      "everkineticId": "0014",
+      "everkineticTitle": "Upright Barbell Rows",
+      "tier": "exact"
+    },
+    "Shrug": {
+      "slug": "shrug",
+      "everkineticId": "0005",
+      "everkineticTitle": "Shoulder Shrugs: Dumbbell",
+      "tier": "exact"
+    },
+    "Barbell Shrug": {
+      "slug": "barbell-shrug",
+      "everkineticId": "0030",
+      "everkineticTitle": "Barbell Shrugs",
+      "tier": "exact"
+    },
+    "Cable Shrug": {
+      "slug": "cable-shrug",
+      "everkineticId": "0009",
+      "everkineticTitle": "Shoulder Shrugs: Cable",
+      "tier": "exact"
+    }
+  }
+}
