@@ -7,6 +7,7 @@
 // validated: false, configVersion: "0.0.1-unvalidated", thresholds: {}.
 
 import { PrismaClient, type MovementPattern } from "@prisma/client";
+import { EXERCISE_CUES } from "./cues";
 
 const prisma = new PrismaClient();
 
@@ -382,6 +383,16 @@ async function main() {
   const muscleRows = await prisma.muscleGroup.findMany();
   const muscleByName = new Map(muscleRows.map((m) => [m.name, m.id]));
 
+  // Cues are keyed by exercise name. A typo'd key or an exercise without cues fails here, before any write,
+  // for the same reason the muscle lookup below does: a silent skip leaves the screen with no cues and no error.
+  const seededNames = new Set(EXERCISES.map((e) => e.name));
+  for (const name of Object.keys(EXERCISE_CUES)) {
+    if (!seededNames.has(name)) throw new Error(`prisma/cues.ts has cues for unknown exercise "${name}"`);
+  }
+  for (const ex of EXERCISES) {
+    if (!EXERCISE_CUES[ex.name]) throw new Error(`Seed exercise "${ex.name}" has no entry in prisma/cues.ts`);
+  }
+
   // Exercises — upsert by name (name is not unique in schema; guard by findFirst)
   let exerciseCount = 0;
   for (const ex of EXERCISES) {
@@ -396,6 +407,14 @@ async function main() {
       });
       exerciseCount += 1;
     }
+
+    // Cues: written onto the existing row by id, so a row (and the ids that point at it) is never renamed or
+    // recreated. prisma/cues.ts is the source of truth for the text and for the reviewed flag.
+    const cueEntry = EXERCISE_CUES[ex.name]!;
+    await prisma.exercise.update({
+      where: { id: existing.id },
+      data: { cues: [...cueEntry.cues], cuesReviewed: cueEntry.reviewed },
+    });
 
     // Involvements — upsert by composite id
        // Involvements — upsert the new list, then delete anything no longer listed.
@@ -440,7 +459,7 @@ async function main() {
       },
     });
   }
-  console.log(`  ✓ ${EXERCISES.length} exercises (${exerciseCount} newly created)`);
+  console.log(`  ✓ ${EXERCISES.length} exercises (${exerciseCount} newly created), cues written on all`);
 
   // GoalProfileDefinition — HYPERTROPHY only
   //
