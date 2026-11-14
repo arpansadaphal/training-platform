@@ -179,6 +179,7 @@ export {
   listInvolvementsForExercise,
   listAllInvolvements,
   clearReferenceDataCache,
+  withoutCues,
   type ExerciseRecord,
   type MuscleGroupRecord,
   type ExerciseMuscleInvolvementRecord,

@@ -57,8 +57,17 @@ export async function loadExerciseReferenceData(
     listAllInvolvements(),
   ]);
 
+  // Exactly the fields the engine has always read. An Exercise record now also carries its cues, which are copy for
+  // the session screen: they must not reach the engine's input (or a snapshot built from it).
+  const engineExercises = exercises.map(({ id, name, movementPattern, equipment }) => ({
+    id,
+    name,
+    movementPattern,
+    equipment,
+  }));
+
   return scopeReferenceDataToGoal(
-    { exercises, muscleGroups, involvements },
+    { exercises: engineExercises, muscleGroups, involvements },
     definition.relevantMuscleGroups,
   );
 }

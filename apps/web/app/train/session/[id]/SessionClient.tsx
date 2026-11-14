@@ -463,6 +463,8 @@ function SessionClientInner({
   const [toast, setToast] = useState<ToastState | null>(null);
   // Exercises the lifter opened again after finishing them.
   const [reopened, setReopened] = useState<ReadonlySet<string>>(new Set());
+  // Prescriptions whose cues are open. Collapsed by default, so the log controls keep their place.
+  const [cuesOpen, setCuesOpen] = useState<ReadonlySet<string>>(new Set());
   const [completing, setCompleting] = useState(false);
   // Skip session acts at once and can be undone until this timer fires.
   const [skipPending, setSkipPending] = useState(false);
@@ -473,6 +475,7 @@ function SessionClientInner({
 
   const exerciseNameById = new Map(exercises.map((e) => [e.id, e.name]));
   const equipmentById = new Map(exercises.map((e) => [e.id, e.equipment]));
+  const cuesById = new Map(exercises.map((e) => [e.id, { cues: e.cues, reviewed: e.cuesReviewed }]));
 
   function recordsFor(prescriptionId: string): ClientRecord[] {
     return records
@@ -1108,6 +1111,10 @@ function SessionClientInner({
                 const name = exerciseNameById.get(p.exerciseId) ?? p.exerciseId;
                 const vals = inputs[p.id] ?? { reps: "", load: "", rpe: "" };
                 const equipment = equipmentById.get(p.exerciseId) ?? null;
+                const cueSet = cuesById.get(p.exerciseId);
+                const cues = cueSet?.cues ?? [];
+                const cuesShown = cues.length > 0 && cuesOpen.has(p.id);
+                const cuesPanelId = `cues-${p.id}`;
                 const unitLabel = loadUnitLabel(logUnit(p), equipment);
                 const unit = logUnit(p) === "lb" ? "lb" : "kg";
                 const plan = plannedWeight(p);
@@ -1167,13 +1174,39 @@ function SessionClientInner({
                         <span className={styles.doneSummary}>{summarizeSets(logged, unitLabel)}</span>
                       </button>
                     ) : (
-                      <div className={styles.exerciseHeader}>
+                      <div className={`${styles.exerciseHeader} ${cues.length > 0 ? styles.exerciseHeaderCues : ""}`}>
                         <span className={styles.exerciseName}>{name}</span>
+                        {cues.length > 0 ? (
+                          <button
+                            type="button"
+                            className={styles.cuesToggle}
+                            aria-expanded={cuesShown}
+                            aria-controls={cuesPanelId}
+                            onClick={() =>
+                              setCuesOpen((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(p.id)) next.delete(p.id);
+                                else next.add(p.id);
+                                return next;
+                              })
+                            }
+                          >
+                            Cues
+                            {cueSet?.reviewed ? null : <span className={styles.cuesBeta}> (beta)</span>}
+                          </button>
+                        ) : null}
                         <span className={styles.exercisePlan}>
                           {describePlan(p, equipment)} · {logged.length}/{p.targetSets} logged
                         </span>
                       </div>
                     )}
+                    {!done && cuesShown ? (
+                      <ul id={cuesPanelId} className={styles.cuesList}>
+                        {cues.map((cue) => (
+                          <li key={cue}>{cue}</li>
+                        ))}
+                      </ul>
+                    ) : null}
                     {!done || expanded ? (
                       <>
                         {target ? (

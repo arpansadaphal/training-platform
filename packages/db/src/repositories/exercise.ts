@@ -60,6 +60,18 @@ export interface ExerciseRecord {
   name: string;
   movementPattern: MovementPattern;
   equipment: string | null;
+  /** 2-3 short lines for the session screen's "Cues" toggle; [] where none are written. */
+  cues: string[];
+  /** false = drafted, not yet read by the founder: shown with a "(beta)" label. */
+  cuesReviewed: boolean;
+}
+
+/**
+ * The record without its cues. Only the session screen shows cues, so every other reader (the Builder's picker,
+ * the public /check library) drops them rather than ship 110 exercises' text it never renders.
+ */
+export function withoutCues(e: ExerciseRecord): ExerciseRecord {
+  return { ...e, cues: [], cuesReviewed: false };
 }
 
 export interface MuscleGroupRecord {
@@ -80,6 +92,8 @@ const exercisesCache = cached<ExerciseRecord[]>(() =>
       name: true,
       movementPattern: true,
       equipment: true,
+      cues: true,
+      cuesReviewed: true,
     },
     orderBy: { name: "asc" },
   }),
@@ -100,6 +114,8 @@ export async function findExerciseById(
       name: true,
       movementPattern: true,
       equipment: true,
+      cues: true,
+      cuesReviewed: true,
     },
   });
 }

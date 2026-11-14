@@ -207,6 +207,10 @@ model Exercise {
   movementPattern MovementPattern
   equipment       String?
   createdAt       DateTime        @default(now())
+  // 2-3 short lines shown behind the "Cues" toggle on the session screen. Content data written by prisma/seed.ts
+  // from prisma/cues.ts, not user data. cuesReviewed = false labels them "(beta)".
+  cues         String[] @default([])
+  cuesReviewed Boolean  @default(false)
 
   prescriptions ExercisePrescription[]
   involvements  ExerciseMuscleInvolvement[]

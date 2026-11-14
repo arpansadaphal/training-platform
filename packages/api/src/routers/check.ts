@@ -34,7 +34,7 @@ import {
   type NamedAction,
   type ProgramStructure,
 } from "@training/domain";
-import { listExercises, type ExerciseRecord } from "@training/db";
+import { listExercises, withoutCues, type ExerciseRecord } from "@training/db";
 import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { loadExerciseReferenceData } from "../services/referenceDataService";
 import { createMyProgram } from "../services/programService";
@@ -83,7 +83,8 @@ export const checkRouter = router({
   /** The exercise library the parser matches against. Reference data, not user data. */
   exercises: publicProcedure.query(async (): Promise<ExerciseRecord[]> => {
     assertCheckEnabled();
-    return listExercises();
+    // /check shows no cues (founder decision), so none are sent.
+    return (await listExercises()).map(withoutCues);
   }),
 
   analyze: publicProcedure.input(analyzeInput).query(async ({ input }): Promise<CheckAnalyzeResult> => {
