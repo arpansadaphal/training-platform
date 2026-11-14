@@ -124,6 +124,22 @@
   font-size: 0.9rem;
 }
 
+/* The parse confirmation list: a 32px still (or an empty square) beside each matched exercise. */
+.parsedList {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.parsedItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 36px;
+  padding: 2px 0;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;

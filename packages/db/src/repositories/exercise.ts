@@ -55,13 +55,20 @@ export type MovementPattern =
   | "ISOLATION"
   | "OTHER";
 
+export type CueKind = "setup" | "action" | "feel";
+
+export interface CueStep {
+  kind: CueKind;
+  text: string;
+}
+
 export interface ExerciseRecord {
   id: string;
   name: string;
   movementPattern: MovementPattern;
   equipment: string | null;
-  /** 2-3 short lines for the session screen's "Cues" toggle; [] where none are written. */
-  cues: string[];
+  /** The session screen's "Cues" toggle: setup / action / feel lines; [] where none are written. */
+  cues: CueStep[];
   /** false = drafted, not yet read by the founder: shown with a "(beta)" label. */
   cuesReviewed: boolean;
 }
@@ -85,18 +92,54 @@ export interface ExerciseMuscleInvolvementRecord {
   involvementFactor: number;
 }
 
-const exercisesCache = cached<ExerciseRecord[]>(() =>
-  prisma.exercise.findMany({
-    select: {
-      id: true,
-      name: true,
-      movementPattern: true,
-      equipment: true,
-      cues: true,
-      cuesReviewed: true,
-    },
-    orderBy: { name: "asc" },
-  }),
+const CUE_KINDS: readonly string[] = ["setup", "action", "feel"];
+
+/**
+ * The cues of a row. `cueSteps` (JSON) wins when it holds at least one well-formed step; otherwise the legacy
+ * `cues` text lines are each an "action" step, so a database migrated but not yet reseeded still shows its cues.
+ */
+export function cueStepsOf(row: { cues: string[]; cueSteps: unknown }): CueStep[] {
+  if (Array.isArray(row.cueSteps)) {
+    const steps = row.cueSteps.filter(
+      (s): s is CueStep =>
+        typeof s === "object" &&
+        s !== null &&
+        CUE_KINDS.includes((s as CueStep).kind) &&
+        typeof (s as CueStep).text === "string" &&
+        (s as CueStep).text.trim() !== "",
+    );
+    if (steps.length > 0) return steps;
+  }
+  return row.cues.map((text) => ({ kind: "action" as const, text }));
+}
+
+const EXERCISE_SELECT = {
+  id: true,
+  name: true,
+  movementPattern: true,
+  equipment: true,
+  cues: true,
+  cueSteps: true,
+  cuesReviewed: true,
+} as const;
+
+function toRecord(row: {
+  id: string;
+  name: string;
+  movementPattern: MovementPattern;
+  equipment: string | null;
+  cues: string[];
+  cueSteps: unknown;
+  cuesReviewed: boolean;
+}): ExerciseRecord {
+  const { cueSteps: _steps, ...rest } = row;
+  return { ...rest, cues: cueStepsOf(row) };
+}
+
+const exercisesCache = cached<ExerciseRecord[]>(async () =>
+  (
+    await prisma.exercise.findMany({ select: EXERCISE_SELECT, orderBy: { name: "asc" } })
+  ).map(toRecord),
 );
 
 /** Every exercise, by name. Cached per process (see the reference-data cache above). */
@@ -107,17 +150,8 @@ export function listExercises(): Promise<ExerciseRecord[]> {
 export async function findExerciseById(
   id: string,
 ): Promise<ExerciseRecord | null> {
-  return prisma.exercise.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      name: true,
-      movementPattern: true,
-      equipment: true,
-      cues: true,
-      cuesReviewed: true,
-    },
-  });
+  const row = await prisma.exercise.findUnique({ where: { id }, select: EXERCISE_SELECT });
+  return row ? toRecord(row) : null;
 }
 
 const muscleGroupsCache = cached<MuscleGroupRecord[]>(() =>

@@ -135,7 +135,7 @@ test("Builder: build a draft, see the unvalidated Assessment state, commit a ver
 
   // Exercise picker: choose the first real option (index 0 is the
   // "Choose an exercise…" placeholder).
-  await page.getByLabel("Choose an exercise").selectOption({ index: 1 });
+  await page.getByLabel("Choose an exercise").getByRole("option").first().click();
   await page.getByRole("button", { name: "Add exercise" }).click();
 
   // ── Save, and wait for the assessment panel to reflect the saved draft ─
@@ -211,7 +211,7 @@ test("Builder: a High-volume muscle shows under 'What's trending high', and it f
   await page.getByLabel("New draft label").fill("High volume");
   await page.getByRole("button", { name: "Create draft" }).click();
   await page.getByRole("button", { name: "+ Add workout day" }).click();
-  await page.getByLabel("Choose an exercise").selectOption({ index: 1 });
+  await page.getByLabel("Choose an exercise").getByRole("option").first().click();
   await page.getByRole("button", { name: "Add exercise" }).click();
 
   // 24 sets of one exercise puts its primary muscle in the High band (20 up to 30).

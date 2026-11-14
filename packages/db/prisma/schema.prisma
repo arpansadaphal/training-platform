@@ -211,6 +211,10 @@ model Exercise {
   // from prisma/cues.ts, not user data. cuesReviewed = false labels them "(beta)".
   cues         String[] @default([])
   cuesReviewed Boolean  @default(false)
+  // The structured form of the same cues: [{ kind: "setup" | "action" | "feel", text }]. Additive (ARCH-074): the
+  // app reads this when set and falls back to `cues` (each line as an "action" step), so a deploy before the
+  // reseed still shows cues. The seed keeps `cues` filled with the same text until the old column is dropped.
+  cueSteps     Json?
 
   prescriptions ExercisePrescription[]
   involvements  ExerciseMuscleInvolvement[]

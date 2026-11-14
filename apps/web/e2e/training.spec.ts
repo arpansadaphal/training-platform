@@ -83,7 +83,7 @@ test("Training: commit a version, start the session, log a deviation, mark compl
   await expect(page.getByRole("heading", { name: /Option A/ })).toBeVisible();
 
   await page.getByRole("button", { name: "+ Add workout day" }).click();
-  await page.getByLabel("Choose an exercise").selectOption({ index: 1 });
+  await page.getByLabel("Choose an exercise").getByRole("option").first().click();
   await page.getByRole("button", { name: "Add exercise" }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
 

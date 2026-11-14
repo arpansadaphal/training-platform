@@ -413,7 +413,12 @@ async function main() {
     const cueEntry = EXERCISE_CUES[ex.name]!;
     await prisma.exercise.update({
       where: { id: existing.id },
-      data: { cues: [...cueEntry.cues], cuesReviewed: cueEntry.reviewed },
+      data: {
+        // cueSteps is the structured form the app reads; `cues` keeps the same text until the old column is dropped.
+        cueSteps: cueEntry.cues.map((c) => ({ kind: c.kind, text: c.text })),
+        cues: cueEntry.cues.map((c) => c.text),
+        cuesReviewed: cueEntry.reviewed,
+      },
     });
 
     // Involvements — upsert by composite id

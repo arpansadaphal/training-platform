@@ -94,3 +94,19 @@
     background: #fff;
   }
 }
+
+/* 32px list thumbnail; the drawings are black line art, so they sit on white in the dark theme too. */
+.thumb,
+.thumbEmpty {
+  flex: none;
+  display: block;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+}
+
+.thumb {
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--border, #e5e5e5);
+}

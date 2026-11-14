@@ -1,11 +1,15 @@
 // apps/web/app/app/programs/[id]/build/ExercisePicker.tsx
 //
-// Inline picker: a search box above a native <select> of exercises grouped by movement pattern, plus an
+// Inline picker: a search box above a short scrolling list of exercises grouped by movement pattern, plus an
 // Add button. Modeled inline rather than as a modal to keep Phase 4's interaction model simple.
 //
-// With ~110 exercises a bare <select> is slow to scan, and native type-ahead is prefix-only ("curl" never
-// finds "Barbell Curl"), so the search box narrows the select's options by substring. Everything is local:
-// exercises still arrive as props and the component API is unchanged.
+// The list is an ARIA listbox rather than a native <select> because an <option> cannot hold a picture: each row
+// shows a 32px still of the exercise (when it has a drawing) so "Incline Barbell Bench Press" and "Incline Curl"
+// look different at a glance. A row is one line, truncated, at 375px.
+//
+// With ~110 exercises the list is slow to scan and native type-ahead is prefix-only ("curl" never finds
+// "Barbell Curl"), so the search box narrows the list by substring. Everything is local: exercises still arrive
+// as props and the component API is unchanged.
 //
 // Behaviour notes:
 //   - Groups follow PATTERN_LABEL's insertion order (Squat -> ... -> Other), not alphabetical enum order.
@@ -14,12 +18,14 @@
 //   - Exactly one match auto-selects it (only while there is search text). The selection is derived from
 //     what is visible, so Add can never act on an option the user cannot see.
 //   - Adding clears the search and the selection, so a second click cannot add a duplicate.
-//   - Keyboard: Enter in the search box adds the selected exercise (and never submits an enclosing form),
-//     Escape clears the search, and after a keyboard-initiated Add focus returns to the search box.
+//   - Keyboard: ArrowUp/Down (in the search box or the list) move the selection, Enter adds the selected
+//     exercise (and never submits an enclosing form), Escape clears the search, and after a keyboard-initiated
+//     Add focus returns to the search box.
 
 "use client";
 
 import {
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -29,6 +35,7 @@ import {
   type MouseEvent,
 } from "react";
 import type { ExerciseRecord, MovementPattern } from "@training/db";
+import { ExerciseThumb } from "@/components/session/ExerciseIllustration";
 import styles from "./build.module.css";
 
 interface Props {
@@ -102,7 +109,9 @@ export function ExercisePicker({ exercises, onSelect }: Props) {
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const statusId = useId();
+  const listId = useId();
 
   const keyed = useMemo(
     () => exercises.map((exercise) => ({ exercise, key: fold(exercise.name) })),
@@ -128,6 +137,33 @@ export function ExercisePicker({ exercises, onSelect }: Props) {
   else if (searching && visible.length === 1) status = `1 match — ${visible[0]?.name ?? ""} selected`;
   else if (searching) status = `${visible.length} matches`;
 
+  // Keep the selected row in view in the list (not the page) when the arrow keys or a lone search match move it.
+  useEffect(() => {
+    const list = listRef.current;
+    const row = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!list || !row) return;
+    if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop;
+    else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight)
+      list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
+  }, [value]);
+
+  function move(delta: 1 | -1) {
+    if (visible.length === 0) return;
+    const at = visible.findIndex((e) => e.id === value);
+    const next = at === -1 ? (delta === 1 ? 0 : visible.length - 1) : Math.min(Math.max(at + delta, 0), visible.length - 1);
+    setPicked(visible[next]!.id);
+  }
+
+  function handleListKeyDown(e: KeyboardEvent<HTMLElement>) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      move(e.key === "ArrowDown" ? 1 : -1);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      add(false);
+    }
+  }
+
   function reset() {
     setQuery("");
     setPicked("");
@@ -142,7 +178,10 @@ export function ExercisePicker({ exercises, onSelect }: Props) {
 
   function handleSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.nativeEvent.isComposing) return; // let an IME finish its composition first
-    if (e.key === "Enter") {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      move(e.key === "ArrowDown" ? 1 : -1);
+    } else if (e.key === "Enter") {
       e.preventDefault(); // never submit an enclosing <form>
       add(false); // focus is already in the search box
     } else if (e.key === "Escape" && query !== "") {
@@ -171,6 +210,7 @@ export function ExercisePicker({ exercises, onSelect }: Props) {
             placeholder="Search exercises…"
             aria-label="Search exercises"
             aria-describedby={statusId}
+            aria-controls={listId}
             autoComplete="off"
             spellCheck={false}
           />
@@ -190,25 +230,43 @@ export function ExercisePicker({ exercises, onSelect }: Props) {
           ) : null}
         </div>
 
+        <div
+          id={listId}
+          ref={listRef}
+          role="listbox"
+          aria-label="Choose an exercise"
+          aria-activedescendant={value ? `${listId}-${value}` : undefined}
+          tabIndex={0}
+          className={styles.pickerList}
+          onKeyDown={handleListKeyDown}
+        >
+          {groups.map((group) => (
+            <div key={group.pattern} role="group" aria-label={group.label}>
+              <div className={styles.pickerGroup} aria-hidden="true">
+                {group.label}
+              </div>
+              {group.exercises.map((e) => {
+                const label = e.equipment ? `${e.name} — ${e.equipment}` : e.name;
+                return (
+                  <div
+                    key={e.id}
+                    id={`${listId}-${e.id}`}
+                    role="option"
+                    aria-selected={e.id === value}
+                    title={label}
+                    className={styles.pickerOption}
+                    onClick={() => setPicked(e.id)}
+                  >
+                    <ExerciseThumb name={e.name} />
+                    <span className={styles.pickerOptionText}>{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
         <div className={styles.pickerRow}>
-          <select
-            value={value}
-            onChange={(e) => setPicked(e.target.value)}
-            disabled={noMatches}
-            aria-label="Choose an exercise"
-          >
-            <option value="">Choose an exercise…</option>
-            {groups.map((group) => (
-              <optgroup key={group.pattern} label={group.label}>
-                {group.exercises.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.name}
-                    {e.equipment ? ` — ${e.equipment}` : ""}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
           <button type="button" onClick={handleAddClick} disabled={!value}>
             Add exercise
           </button>

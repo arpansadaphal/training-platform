@@ -1,34 +1,64 @@
-// Exercise cues: 2-3 short lines per exercise, shown behind a "Cues" toggle on the session screen.
+// Exercise cues, shown behind a "Cues" toggle on the session screen.
 //
 // Source of truth. `prisma/seed.ts` writes these onto the Exercise rows by name (it never renames a row), so
-// editing a line or flipping `draft(...)` to `reviewed(...)` here and reseeding is how a cue changes.
+// editing a line or flipping `draft(` to `written(` here and reseeding is how a cue changes.
 //
-// Rules (see cues.test.ts, which fails on the first broken one):
-//   - Second person. Setup you can check alone, range you can check alone, or what to feel.
-//   - No safety, medical or outcome language, and no form correction. The app cannot see you.
-//   - At most CUE_MAX_CHARS characters a line; 2-3 lines an exercise.
-//   - A cue ships as `draft` (the screen labels it "(beta)") until the founder has read it and moved it to `reviewed`.
+// Two shapes (see exerciseCues.test.ts in the domain package, which fails on the first broken rule):
+//   - written(setup, action, feel): the Setup / Action / Feel structure (ARCH-074). Read by the founder, so it
+//     ships reviewed (no "(beta)").
+//   - draft(...lines): the earlier 2-3 lines, each stored as an "action" step, still "(beta)" until rewritten.
+//
+// Rules:
+//   - Second person. Setup is a position you can check alone; action is verb-first and names what starts the
+//     movement; feel names the muscle and the sensation.
+//   - Movement directives and negatives both fine ("keep your chest proud", "no shrug"). Mind-muscle and pump
+//     language fine ("squeeze", "feel the stretch").
+//   - No safety, medical or outcome language: no claim of what a cue protects, prevents or builds. Describe the
+//     sensation, not the consequence. The app cannot see you, so it never judges your technique.
+//   - Length limits per kind in CUE_MAX_CHARS.
 //   - Effort is taught once per session in the effort picker, so no cue repeats it.
 
-export const CUE_MAX_CHARS = 90;
+export type CueKind = "setup" | "action" | "feel";
+
+export interface CueStep {
+  readonly kind: CueKind;
+  readonly text: string;
+}
+
+/** Longest allowed line, by kind. Draft (action-only) lines were written to 90 and stay inside it. */
+export const CUE_MAX_CHARS: Readonly<Record<CueKind, number>> = {
+  setup: 110,
+  action: 110,
+  feel: 120,
+};
 
 export interface ExerciseCueEntry {
-  readonly cues: readonly string[];
+  readonly cues: readonly CueStep[];
   /** false = drafted, not yet read by the founder; the session screen shows "(beta)". */
   readonly reviewed: boolean;
 }
 
-const draft = (...cues: string[]): ExerciseCueEntry => ({ cues, reviewed: false });
-// Founder review (2026-11): change `draft(` to `reviewed(` for an exercise once its cues have been read.
-// Kept as a function so the change is one word per exercise.
-export const reviewed = (...cues: string[]): ExerciseCueEntry => ({ cues, reviewed: true });
+const draft = (...lines: string[]): ExerciseCueEntry => ({
+  cues: lines.map((text) => ({ kind: "action" as const, text })),
+  reviewed: false,
+});
+
+/** Setup / Action / Feel, founder-approved 2026-11-15. */
+const written = (setup: string, action: string, feel: string): ExerciseCueEntry => ({
+  cues: [
+    { kind: "setup", text: setup },
+    { kind: "action", text: action },
+    { kind: "feel", text: feel },
+  ],
+  reviewed: true,
+});
 
 export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
   // SQUAT
-  "Back Squat": draft(
-    "Set the bar across your upper back with your hands just outside your shoulders.",
-    "Sit down between your hips, then push the floor away to stand.",
-    "Go to the same depth every rep so your numbers compare week to week.",
+  "Back Squat": written(
+    "Bar across your upper back, feet shoulder-width, toes turned slightly out, chest up.",
+    "Sit straight down between your hips, then push the floor away and stand up through your mid-foot.",
+    "Feel your quads and glutes drive you up out of the bottom.",
   ),
   "Front Squat": draft(
     "Rest the bar on your front shoulders with your elbows pointing forward.",
@@ -39,15 +69,15 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
     "Lower until your thighs are parallel to the platform, then press back up.",
     "Feel the front of your thighs working.",
   ),
-  "Leg Press": draft(
-    "Place your feet shoulder-width, mid-platform, with your hips flat on the seat.",
-    "Lower your knees toward your chest until your hips are about to lift off the seat.",
-    "Push the platform away through your whole foot.",
+  "Leg Press": written(
+    "Feet shoulder-width on the middle of the platform, hips flat on the seat, lower back against the pad.",
+    "Lower until your knees travel toward your chest, then drive the platform away through your whole foot.",
+    "Feel your quads and glutes pushing, not your toes.",
   ),
-  "Bulgarian Split Squat": draft(
-    "Rest your back foot on a bench and step far enough to sit straight down.",
-    "Lower until your front thigh is about parallel, then push through your front foot.",
-    "Feel your front leg doing the work, not your back foot.",
+  "Bulgarian Split Squat": written(
+    "Back foot on a bench behind you, front foot a long step forward, torso tall.",
+    "Lower straight down until your front thigh is about parallel, then push through your front foot.",
+    "Feel your front quad and glute working, not your back foot.",
   ),
   "Reverse Lunge": draft(
     "Step back far enough that your front shin stays close to vertical.",
@@ -63,13 +93,14 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
     "Push through the whole foot on the box to stand, without pushing off your back foot.",
     "Lower slowly back to the floor.",
   ),
-  "Goblet Squat": draft(
-    "Hold one dumbbell against your chest with both hands.",
-    "Sit down between your knees with your elbows inside them, then stand up.",
+  "Goblet Squat": written(
+    "Hold one dumbbell against your chest with both hands, elbows pointing down, feet just wider than hips.",
+    "Sit down between your knees with your elbows inside them, then stand up through your mid-foot.",
+    "Feel your quads and glutes working as you stand.",
   ),
   "Pendulum Squat": draft(
     "Set your feet on the platform with your shoulders under the pads.",
-    "Lower to the depth you chose, then drive back up through your whole foot.",
+    "Lower until your thighs are about parallel, then drive up through your whole foot.",
     "Feel the front of your thighs working.",
   ),
   "Belt Squat": draft(
@@ -78,7 +109,7 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
   ),
   "Smith Machine Squat": draft(
     "Place your feet slightly in front of the bar and set it across your upper back.",
-    "Sit down to your usual depth, then push the floor away to stand.",
+    "Sit down until your thighs are about parallel, then push the floor away to stand.",
   ),
   "Zercher Squat": draft(
     "Hold the bar in the crooks of your elbows against your stomach.",
@@ -91,15 +122,15 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
   ),
 
   // HINGE
-  "Conventional Deadlift": draft(
-    "Stand with the bar over your mid-foot and grip it just outside your legs.",
-    "Push the floor away, keeping the bar close to your legs as you stand.",
-    "Lower the bar back along your legs to the floor under control.",
+  "Conventional Deadlift": written(
+    "Bar over your mid-foot, hands just outside your legs, shoulders slightly in front of the bar.",
+    "Push the floor away and keep the bar dragging up your legs until you stand tall.",
+    "Feel your glutes and hamstrings drive your hips forward at the top.",
   ),
-  "Romanian Deadlift": draft(
-    "Start standing with the bar at your hips and a soft bend in your knees.",
-    "Push your hips back and slide the bar down your thighs.",
-    "Feel your hamstrings stretch, then drive your hips forward to stand.",
+  "Romanian Deadlift": written(
+    "Feet hip-width, knees soft, bar against your shins.",
+    "Push your hips back like you're closing a car door with your butt, bar drags up your legs.",
+    "Feel the stretch along the back of your thighs. Stop when the hamstrings are taut, not when the bar hits the floor.",
   ),
   "Sumo Deadlift": draft(
     "Take a wide stance with your toes turned out and grip the bar inside your knees.",
@@ -132,10 +163,10 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
     "Push your hips back until you feel your hamstrings stretch.",
     "Drive your hips forward and squeeze your glutes at the top.",
   ),
-  "Glute Bridge": draft(
-    "Lie on your back with your feet flat and your knees bent.",
-    "Push through your heels to lift your hips.",
-    "Feel your glutes squeeze at the top for a moment.",
+  "Glute Bridge": written(
+    "Lie on your back, feet flat and hip-width, knees bent, arms by your sides.",
+    "Push through your heels and drive your hips up until your shoulders, hips and knees line up.",
+    "Squeeze your glutes hard at the top.",
   ),
   "45-Degree Back Extension": draft(
     "Set the pad just below your hips so you can bend freely at the waist.",
@@ -148,26 +179,29 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
   ),
 
   // HORIZONTAL_PUSH
-  "Barbell Bench Press": draft(
-    "Lie so your eyes are under the bar and plant your feet on the floor.",
-    "Lower the bar to the same spot on your chest every rep.",
-    "Press the bar up and slightly back until it is over your shoulders.",
+  "Barbell Bench Press": written(
+    "Eyes under the bar, shoulder blades pinned back into the bench, feet planted flat on the floor.",
+    "Lower the bar to the same spot on your chest, then press it up and slightly back.",
+    "Feel your chest and triceps pushing the bar away from you.",
   ),
-  "Dumbbell Bench Press": draft(
-    "Sit with the dumbbells on your thighs, lie back and bring them to your chest.",
-    "Lower them until you feel your chest stretch, then press them up over your shoulders.",
+  "Dumbbell Bench Press": written(
+    "Lie back with the dumbbells at your chest, feet planted, shoulder blades pinned into the bench.",
+    "Press the dumbbells up over your shoulders, then lower until you feel your chest stretch.",
+    "Feel your chest squeeze as the dumbbells come together over you.",
   ),
   "Incline Barbell Bench Press": draft(
-    "Set the bench at a low incline and lie with your eyes under the bar.",
+    "Set the bench at about 30° and lie with your eyes under the bar.",
     "Lower the bar to your upper chest, then press it back up.",
   ),
-  "Push-Up": draft(
-    "Place your hands just outside your shoulders and your feet together.",
-    "Lower your chest to about a fist from the floor, then push the floor away.",
+  "Push-Up": written(
+    "Hands just outside your shoulders, feet together, body in one line from head to heels.",
+    "Lower your chest to a fist from the floor, then push the floor away.",
+    "Feel your chest and triceps pushing you up.",
   ),
-  "Incline Dumbbell Press": draft(
-    "Set the bench at a low incline and bring the dumbbells to your shoulders.",
-    "Press them up until your arms are straight, then lower until you feel your chest stretch.",
+  "Incline Dumbbell Press": written(
+    "Bench at 30°, dumbbells at your shoulders, shoulder blades pinned back into the pad.",
+    "Press the dumbbells up and slightly together over your upper chest, then lower under control.",
+    "Feel your upper chest stretch at the bottom, squeeze at the top.",
   ),
   "Decline Bench Press": draft(
     "Hook your feet under the pads and lie with your eyes under the bar.",
@@ -197,10 +231,10 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
     "Lower until your upper arms are about parallel to the floor, then press up.",
     "Feel your triceps working as you straighten your arms.",
   ),
-  "Cable Chest Fly": draft(
-    "Stand between the cables with a soft bend in your elbows.",
-    "Sweep your hands together in front of your chest in a wide arc.",
-    "Feel your chest stretch as your arms open.",
+  "Cable Chest Fly": written(
+    "Stand between the cables, one foot forward, soft bend in your elbows, handles at chest height.",
+    "Sweep your hands together in a wide arc in front of your chest, then open slowly.",
+    "Feel your chest stretch as you open, squeeze as you meet.",
   ),
   "Pec Deck": draft(
     "Set the seat so the handles sit at chest height.",
@@ -214,14 +248,15 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
   ),
 
   // VERTICAL_PUSH
-  "Overhead Press": draft(
-    "Hold the bar at your collarbone with your hands just outside your shoulders.",
-    "Press the bar straight up, moving your head through once it passes your face.",
-    "Finish with the bar over your shoulders and your arms straight.",
+  "Overhead Press": written(
+    "Bar at your collarbone, hands just outside your shoulders, glutes squeezed, ribs down.",
+    "Press the bar straight up and push your head through once it clears your face.",
+    "Feel your shoulders and triceps drive the bar to lockout.",
   ),
-  "Dumbbell Shoulder Press": draft(
-    "Sit with the dumbbells at your shoulders and your palms facing forward.",
-    "Press them up until your arms are straight, then lower to shoulder height.",
+  "Dumbbell Shoulder Press": written(
+    "Seat upright, dumbbells at shoulder height, palms facing forward, ribs down.",
+    "Press the dumbbells straight up until your arms are extended, then lower to shoulder height.",
+    "Feel the front and sides of your shoulders pushing.",
   ),
   "Arnold Press": draft(
     "Start with the dumbbells at your chest and your palms facing you.",
@@ -247,20 +282,20 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
   ),
 
   // HORIZONTAL_PULL
-  "Barbell Row": draft(
-    "Hold the bar with your hands just outside your knees and lean forward from your hips.",
-    "Pull the bar toward your lower ribs, then lower it until your arms are straight.",
-    "Feel your upper back squeeze as the bar reaches you.",
+  "Barbell Row": written(
+    "Hinge forward from your hips, bar hanging below your chest, hands just outside your knees.",
+    "Pull the bar toward your lower ribs, leading with your elbows, then lower it under control.",
+    "Feel your lats and upper back squeeze as the bar reaches you.",
   ),
-  "Dumbbell Row": draft(
-    "Rest one hand and knee on a bench and let the dumbbell hang under your shoulder.",
+  "Dumbbell Row": written(
+    "One hand and knee on a bench, dumbbell hanging under your shoulder, back parallel to the floor.",
     "Pull your elbow back toward your hip, then lower until your arm is straight.",
-    "Feel your upper back doing the pulling.",
+    "Feel your lats squeeze at the top and stretch at the bottom.",
   ),
-  "Seated Cable Row": draft(
-    "Sit with your feet on the platform and your knees slightly bent.",
-    "Pull the handle to your stomach, then let your arms straighten slowly.",
-    "Feel your shoulder blades squeeze together.",
+  "Seated Cable Row": written(
+    "Feet on the platform, knees slightly bent, chest tall, handle at arm's length.",
+    "Pull the handle to your stomach, leading with your elbows, then reach forward slowly.",
+    "Feel your shoulder blades squeeze together and your mid-back working.",
   ),
   "Chest-Supported Row": draft(
     "Lie with your chest on the pad and let the handles hang at arm's length.",
@@ -290,19 +325,19 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
   ),
 
   // VERTICAL_PULL
-  "Pull-Up": draft(
-    "Hang from the bar with your hands just outside your shoulders.",
-    "Pull your chest up toward the bar, then lower until your arms are straight.",
-    "Think of pulling your elbows down to your pockets.",
+  "Pull-Up": written(
+    "Hang from the bar, hands just outside your shoulders, shoulder blades pulled down away from your ears.",
+    "Drive your elbows down toward your hips and pull your chest up to meet the bar.",
+    "Feel your lats squeeze under your armpits at the top.",
   ),
   "Chin-Up": draft(
     "Hang from the bar with your palms facing you and your hands shoulder-width apart.",
     "Pull your chin over the bar, then lower until your arms are straight.",
   ),
-  "Lat Pulldown": draft(
-    "Adjust the pad so it rests snugly on your thighs and grip just outside your shoulders.",
-    "Pull the bar to your upper chest, driving your elbows down.",
-    "Feel your lats pulling your elbows to your sides.",
+  "Lat Pulldown": written(
+    "Snug the thigh pad. Grip just outside shoulders, shoulder blades pulled down away from your ears.",
+    "Drive your elbows down toward your hips, chest lifted to meet the bar.",
+    "Squeeze your armpits tight at the bottom — no shoulder roll.",
   ),
   "Neutral-Grip Pull-Up": draft(
     "Hang from the handles with your palms facing each other.",
@@ -352,19 +387,19 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
     "Lower the bar toward your upper chest with your elbows pointing forward.",
     "Press up by straightening your elbows and feel your triceps.",
   ),
-  "Barbell Curl": draft(
-    "Stand tall with the bar at your thighs and your palms facing forward.",
-    "Curl the bar toward your shoulders without swinging, keeping your elbows at your sides.",
-    "Feel your biceps working, then lower the bar slowly.",
+  "Barbell Curl": written(
+    "Stand tall, bar at your thighs, palms forward, elbows tucked against your sides.",
+    "Curl the bar toward your shoulders with your elbows pinned in place, then lower slowly.",
+    "Feel your biceps squeeze at the top and stretch at the bottom.",
   ),
-  "Hammer Curl": draft(
-    "Hold the dumbbells at your sides with your palms facing each other.",
-    "Curl them up without turning your wrists, then lower slowly.",
-    "Feel your arms working the whole way up.",
+  "Hammer Curl": written(
+    "Stand tall with the dumbbells at your sides, palms facing each other, elbows tucked in.",
+    "Curl the dumbbells up like you're lifting hammers, wrists still, then lower slowly.",
+    "Feel the outside of your upper arm and your forearms working.",
   ),
-  "Dumbbell Curl": draft(
-    "Stand tall with the dumbbells at your sides and your palms forward.",
-    "Curl them to your shoulders while your elbows stay by your sides.",
+  "Dumbbell Curl": written(
+    "Stand tall, dumbbells at your sides, palms forward, elbows tucked against your ribs.",
+    "Curl the dumbbells up to your shoulders while your elbows stay in place.",
     "Feel your biceps squeeze at the top.",
   ),
   "Incline Curl": draft(
@@ -397,9 +432,9 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
     "Curl the handle forward to your shoulder, keeping your elbow behind your body.",
     "Feel your biceps stretch at the start.",
   ),
-  "Tricep Pushdown": draft(
-    "Stand close to the cable with your elbows pinned at your sides.",
-    "Push the handle down until your arms are straight, then let it rise slowly.",
+  "Tricep Pushdown": written(
+    "Stand close to the cable, elbows pinned at your sides, hands on the handle.",
+    "Push the handle down until your arms are straight, elbows staying put, then let it rise slowly.",
     "Feel your triceps squeeze at the bottom.",
   ),
   "Overhead Tricep Extension": draft(
@@ -407,20 +442,20 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
     "Straighten your arms out in front of you, then return slowly.",
     "Feel your triceps stretch as you bend your elbows.",
   ),
-  "Skull Crusher": draft(
-    "Lie back and hold the bar over your chest with your arms straight.",
-    "Lower the bar toward your forehead by bending only your elbows, then press back up.",
-    "Feel your triceps stretch at the bottom.",
+  "Skull Crusher": written(
+    "Lie back, bar over your chest on straight arms, upper arms vertical.",
+    "Bend only your elbows to lower the bar toward your forehead, then press it back up.",
+    "Feel your triceps stretch at the bottom and squeeze as you press.",
   ),
   "Tricep Kickback": draft(
     "Lean forward with your upper arm held against your side.",
     "Straighten your elbow until your arm is in line with your body, then lower.",
     "Feel your triceps squeeze at the top.",
   ),
-  "Lateral Raise": draft(
-    "Stand tall with the dumbbells at your sides and a slight bend in your elbows.",
-    "Raise your arms out to the sides until your hands reach shoulder height.",
-    "Lower slowly and feel your shoulders doing the lifting.",
+  "Lateral Raise": written(
+    "Stand tall, slight forward lean, arms angled 30° in front of your body.",
+    "Lead with your elbows, push the dumbbells out toward the walls.",
+    "Tension strictly on the side of your shoulders. Traps stay relaxed — no shrug.",
   ),
   "Cable Lateral Raise": draft(
     "Stand sideways to the cable and hold the handle with your far hand.",
@@ -447,10 +482,10 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
     "Swing your arms back until they are level with your shoulders.",
     "Feel the backs of your shoulders working.",
   ),
-  "Leg Curl": draft(
-    "Lie face down with the pad just above your heels.",
-    "Curl your heels toward your glutes, then lower slowly.",
-    "Feel your hamstrings squeeze at the top.",
+  "Leg Curl": written(
+    "Lie face down, pad just above your heels, hips pressed flat into the bench.",
+    "Curl your heels toward your glutes, then lower slowly until your legs are nearly straight.",
+    "Feel your hamstrings squeeze at the top, stretch on the way down.",
   ),
   "Seated Leg Curl": draft(
     "Sit with the pad just above your heels and the lap pad snug on your thighs.",
@@ -462,9 +497,9 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
     "Lower your torso forward as slowly as you can, then push off the floor to come back up.",
     "Feel your hamstrings working to slow you down.",
   ),
-  "Leg Extension": draft(
-    "Adjust the seat so your knees line up with the machine's pivot.",
-    "Straighten your legs until your knees are fully extended, then lower slowly.",
+  "Leg Extension": written(
+    "Seat set so your knees line up with the machine's pivot, pad just above your ankles.",
+    "Press your legs out until your knees are straight, then lower slowly.",
     "Feel your quads squeeze at the top.",
   ),
   "Hip Abduction": draft(
@@ -477,10 +512,10 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
     "Squeeze your knees together, then return slowly.",
     "Feel the insides of your thighs working.",
   ),
-  "Standing Calf Raise": draft(
-    "Stand with the balls of your feet on the edge and your shoulders under the pads.",
-    "Rise as high as you can onto your toes, then lower until your heels drop below the edge.",
-    "Feel a stretch in your calves at the bottom.",
+  "Standing Calf Raise": written(
+    "Balls of your feet on the edge, shoulders under the pads, knees soft.",
+    "Rise onto your toes as high as you can, pause, then lower your heels below the edge.",
+    "Feel a deep stretch in your calves at the bottom.",
   ),
   "Seated Calf Raise": draft(
     "Sit with the balls of your feet on the platform and the pad over your knees.",
@@ -497,10 +532,10 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
     "Curl your ribs toward your hips, then return slowly.",
     "Feel your abs squeezing.",
   ),
-  Plank: draft(
-    "Rest on your forearms and toes with your elbows under your shoulders.",
-    "Hold a straight line from your head to your heels.",
-    "Squeeze your abs and glutes for the whole hold.",
+  Plank: written(
+    "Forearms on the floor, elbows under your shoulders, toes down, body in one line.",
+    "Squeeze your glutes and brace your abs as if a light punch is coming, then hold.",
+    "Feel your abs tight and your hips level.",
   ),
   "Hanging Leg Raise": draft(
     "Hang from the bar with your arms straight.",
@@ -509,7 +544,7 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
   ),
   "Ab Wheel Rollout": draft(
     "Kneel with the wheel under your shoulders.",
-    "Roll forward as far as you can control, then pull back to the start.",
+    "Roll forward until your arms are in line with your ears, then pull back to the start.",
     "Feel your abs working to hold you steady.",
   ),
   "Machine Crunch": draft(
@@ -539,10 +574,10 @@ export const EXERCISE_CUES: Readonly<Record<string, ExerciseCueEntry>> = {
     "Pull it up along your body to about chest height, leading with your elbows.",
     "Lower it slowly.",
   ),
-  "Face Pull": draft(
-    "Set the cable at face height and pull the rope toward your face.",
-    "Pull the ends apart as the rope reaches you, with your elbows high.",
-    "Feel the backs of your shoulders squeeze.",
+  "Face Pull": written(
+    "Cable at face height, rope in both hands, step back until the weight hangs off the stack.",
+    "Pull the rope toward your face and pull the ends apart, elbows high.",
+    "Feel the backs of your shoulders squeeze, with your traps relaxed.",
   ),
   Shrug: draft(
     "Stand tall with the dumbbells hanging at your sides.",

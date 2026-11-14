@@ -23,6 +23,7 @@ import {
   loadUnitLabel,
 } from "@/src/lib/loadLabels";
 import { ExercisePicker } from "./ExercisePicker";
+import { ExerciseThumb } from "@/components/session/ExerciseIllustration";
 import styles from "./build.module.css";
 
 interface Props {
@@ -248,7 +249,8 @@ export function StructureEditor({ structure, exercises, onChange }: Props) {
               <li key={p.id} className={styles.prescriptionRow}>
                 <div className={styles.prescriptionMain}>
                   <span className={styles.prescriptionExercise}>
-                    {exercise?.name ?? p.exerciseId}
+                    <ExerciseThumb name={exercise?.name ?? ""} />
+                    <span>{exercise?.name ?? p.exerciseId}</span>
                   </span>
                   <label className={styles.inlineField}>
                     Sets

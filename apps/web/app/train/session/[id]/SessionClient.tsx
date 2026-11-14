@@ -83,6 +83,7 @@ import {
 import { RpePicker, WeightPicker } from "@/components/session/LoggingPickers";
 import { UndoToast, type ToastState } from "@/components/session/UndoToast";
 import { ExerciseIllustration } from "@/components/session/ExerciseIllustration";
+import { boldActionVerbs, groupCues } from "@/src/lib/cueText";
 import styles from "../../train.module.css";
 
 type SessionStatus = "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED";
@@ -1204,11 +1205,22 @@ function SessionClientInner({
                     {!done && cuesShown ? (
                       <div id={cuesPanelId}>
                         <ExerciseIllustration name={name} />
-                        <ul className={styles.cuesList}>
-                          {cues.map((cue) => (
-                            <li key={cue}>{cue}</li>
+                        <div className={styles.cuesList}>
+                          {groupCues(cues).map((group) => (
+                            <p key={group.kind} className={styles.cueRow}>
+                              <span className={styles.cueLabel}>{group.label}</span>
+                              {group.lines.map((line) => (
+                                <span key={line} className={styles.cueLine}>
+                                  {group.kind === "action"
+                                    ? boldActionVerbs(line).map((seg, i) =>
+                                        seg.bold ? <strong key={i}>{seg.text}</strong> : seg.text,
+                                      )
+                                    : line}
+                                </span>
+                              ))}
+                            </p>
                           ))}
-                        </ul>
+                        </div>
                       </div>
                     ) : null}
                     {!done || expanded ? (

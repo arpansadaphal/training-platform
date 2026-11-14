@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 
 /**
  * Exercise cues on the session screen: a "Cues" toggle (44px, aria-expanded, collapsed by default), a "(beta)"
@@ -16,8 +16,8 @@ async function signUp(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 }
 
-/** One day with one named exercise, committed. The Builder is desktop-sized; the session is then driven at 375px. */
-async function commitProgram(page: Page, program: string, exercise: string): Promise<void> {
+/** Signed in: a new program, a draft and one empty workout day open in the Builder (desktop-sized). */
+async function openBuilderDay(page: Page, program: string): Promise<void> {
   await page.goto("/app/programs");
   await page.getByPlaceholder("e.g. 4-day upper/lower").fill(program);
   await page.getByRole("button", { name: "Create" }).click();
@@ -29,14 +29,16 @@ async function commitProgram(page: Page, program: string, exercise: string): Pro
   await page.getByRole("button", { name: "Create draft" }).click();
   await expect(page.getByRole("heading", { name: /Option A/ })).toBeVisible();
   await page.getByRole("button", { name: "+ Add workout day" }).click();
-  const picker = page.getByLabel("Choose an exercise");
-  const value = await picker.evaluate(
-    (el, name) =>
-      [...(el as HTMLSelectElement).options].find((o) => o.text.startsWith(name))?.value ?? null,
-    exercise,
-  );
-  expect(value, `"${exercise}" is in the exercise picker`).not.toBeNull();
-  await picker.selectOption(value!);
+}
+
+/** One day with one named exercise, committed. The Builder is desktop-sized; the session is then driven at 375px. */
+async function commitProgram(page: Page, program: string, exercise: string): Promise<void> {
+  await openBuilderDay(page, program);
+  const option = page
+    .getByLabel("Choose an exercise")
+    .getByRole("option", { name: new RegExp(`^${exercise}( —|$)`) });
+  await expect(option, `"${exercise}" is in the exercise picker`).toHaveCount(1);
+  await option.click();
   await page.getByRole("button", { name: "Add exercise" }).click();
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Overall" })).toBeVisible();
@@ -55,6 +57,38 @@ async function startSession(page: Page, program: string): Promise<void> {
   }).toPass({ timeout: 45_000 });
   await page.getByRole("button", { name: "Start session" }).click();
   await expect(page.getByRole("button", { name: "Log one set" }).first()).toBeVisible();
+}
+
+/** Scrolls an element to the top of the screen, then saves a screenshot (only when CUES_SHOTS names a folder). */
+async function shot(page: Page, target: Locator, file: string): Promise<void> {
+  if (!process.env.CUES_SHOTS) return;
+  await target.evaluate((el) => {
+    el.scrollIntoView({ block: "start" });
+    window.scrollBy(0, -12);
+  });
+  await page.screenshot({ path: `${process.env.CUES_SHOTS}/${file}` });
+}
+
+/**
+ * Height of the plain 3-string list the cues panel used before ARCH-074, rendered here at the panel's own width with
+ * the old CSS, so the comparison is the same font, the same width, the same screen.
+ */
+async function oldListHeight(panel: Locator, lines: string[]): Promise<number> {
+  return panel.evaluate((el, items) => {
+    const ul = document.createElement("ul");
+    ul.style.cssText =
+      "margin:0 0 0.5rem;padding:0.5rem 0.75rem 0.5rem 1.75rem;border-left:3px solid #e5e5e5;font-size:0.95rem;";
+    items.forEach((t, i) => {
+      const li = document.createElement("li");
+      li.textContent = t;
+      if (i > 0) li.style.marginTop = "0.35rem";
+      ul.appendChild(li);
+    });
+    el.appendChild(ul);
+    const h = ul.getBoundingClientRect().height;
+    ul.remove();
+    return h;
+  }, lines);
 }
 
 /** Where the first card's log controls sit on a 375x812 screen, scrolled to the top. */
@@ -99,7 +133,7 @@ test.describe("exercise cues (375px)", () => {
     expect(collapsed.scrollWidth).toBeLessThanOrEqual(375);
   });
 
-  test("Cues toggle: collapsed by default, 44px, aria-expanded, beta label, no horizontal scroll", async ({
+  test("Cues toggle: collapsed by default, 44px, aria-expanded, no beta on a written cue, labels Setup / Action / Feel, bold verbs, no horizontal scroll", async ({
     page,
   }) => {
     const program = `Cues toggle ${Date.now()}`;
@@ -111,8 +145,8 @@ test.describe("exercise cues (375px)", () => {
     const toggle = page.getByRole("button", { name: /^Cues/ });
     await expect(toggle).toHaveCount(1);
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    // Unreviewed cues carry the beta label, in the toggle itself so it shows while collapsed.
-    await expect(toggle).toContainText("(beta)");
+    // Back Squat is one of the 30 written (reviewed) cues, so no beta label.
+    await expect(toggle).not.toContainText("(beta)");
     const box = (await toggle.boundingBox())!;
     expect(box.height).toBeGreaterThanOrEqual(44);
     expect(box.width).toBeGreaterThanOrEqual(44);
@@ -121,23 +155,48 @@ test.describe("exercise cues (375px)", () => {
     const panelId = (await toggle.getAttribute("aria-controls"))!;
     expect(panelId).toBeTruthy();
     await expect(page.locator(`#${panelId}`)).toHaveCount(0);
-    await expect(page.getByText("Sit down between your hips")).toHaveCount(0);
+    await expect(page.getByText("Sit straight down between your hips")).toHaveCount(0);
 
-    // Open: the seeded Back Squat cues, as a list the toggle controls.
     const before = await foldNumbers(page);
-    if (process.env.CUES_SHOTS)
-      await page.screenshot({ path: `${process.env.CUES_SHOTS}/cues-collapsed-375.png` });
+    await shot(page, toggle, "cues-collapsed-375.png");
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     const panel = page.locator(`#${panelId}`);
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole("listitem")).toHaveCount(3);
-    await expect(panel).toContainText("Sit down between your hips");
+
+    // Three labelled rows, in order, each with its text.
+    const rows = panel.locator("p");
+    await expect(rows).toHaveCount(3);
+    await expect(rows.nth(0)).toContainText("Setup");
+    await expect(rows.nth(0)).toContainText("Bar across your upper back");
+    await expect(rows.nth(1)).toContainText("Action");
+    await expect(rows.nth(1)).toContainText("Sit straight down between your hips");
+    await expect(rows.nth(2)).toContainText("Feel");
+    await expect(rows.nth(2)).toContainText("Feel your quads and glutes");
+    // Bold drive verbs in the Action row only.
+    await expect(rows.nth(1).locator("strong")).toContainText(["push"]);
+    await expect(rows.nth(0).locator("strong")).toHaveCount(0);
+    await expect(rows.nth(2).locator("strong")).toHaveCount(0);
+
     const open = await foldNumbers(page);
     console.log("FOLD open", JSON.stringify(open));
-    if (process.env.CUES_SHOTS)
-      await page.screenshot({ path: `${process.env.CUES_SHOTS}/cues-open-375.png` });
+    await shot(page, toggle, "cues-open-375.png");
+    // The Setup / Action / Feel panel is no taller than the 3-string list it replaced (same width, same font).
+    const newList = (await rows.first().locator("xpath=..").boundingBox())!.height;
+    const oldList = await oldListHeight(panel, [
+      "Set the bar across your upper back with your hands just outside your shoulders.",
+      "Sit down between your hips, then push the floor away to stand.",
+      "Go to the same depth every rep so your numbers compare week to week.",
+    ]);
+    console.log("CUE LIST HEIGHT written", newList, "old 3-string", oldList);
+    expect(newList).toBeLessThanOrEqual(oldList);
     expect(open.scrollWidth).toBeLessThanOrEqual(375);
+    // The label runs in on the text's first line instead of taking a column or a line of its own.
+    const label = rows.nth(1).locator("span").first();
+    const row = (await rows.nth(1).boundingBox())!;
+    expect(Math.abs((await label.boundingBox())!.y - row.y)).toBeLessThan(8);
+    const panelBox = (await panel.boundingBox())!;
+    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(375);
     // The cues open above the log controls, so they move down by the panel's height and no more.
     expect(open.repsTop! - before.repsTop!).toBeGreaterThan(0);
 
@@ -153,6 +212,35 @@ test.describe("exercise cues (375px)", () => {
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await page.keyboard.press("Space");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  });
+
+  test("a draft exercise keeps the beta label and shows its lines under one Action label", async ({
+    page,
+  }) => {
+    const program = `Cues draft ${Date.now()}`;
+    await signUp(page);
+    await commitProgram(page, program, "Hack Squat");
+    await page.setViewportSize({ width: 375, height: 812 });
+    await startSession(page, program);
+
+    const toggle = page.getByRole("button", { name: /^Cues/ });
+    await expect(toggle).toContainText("(beta)");
+    await toggle.click();
+    const panel = page.locator(`#${(await toggle.getAttribute("aria-controls"))!}`);
+    await expect(panel.locator("p")).toHaveCount(1);
+    await expect(panel.locator("p").first()).toContainText("Action");
+    await expect(panel).not.toContainText("Setup");
+    await expect(panel).toContainText("Set your feet shoulder-width on the platform");
+    await expect(panel).toContainText("Feel the front of your thighs working.");
+    // A draft's three lines under one label are no taller than the plain list they replaced.
+    const draftList = (await panel.locator("p").first().locator("xpath=..").boundingBox())!.height;
+    const oldList = await oldListHeight(panel, [
+      "Set your feet shoulder-width on the platform with your shoulders under the pads.",
+      "Lower until your thighs are parallel to the platform, then press back up.",
+      "Feel the front of your thighs working.",
+    ]);
+    console.log("CUE LIST HEIGHT draft", draftList, "old 3-string", oldList);
+    expect(draftList).toBeLessThanOrEqual(oldList);
   });
 
   test("logging a set still works with the cues open", async ({ page }) => {
@@ -306,5 +394,120 @@ test.describe("/credits", () => {
     const attribution = await request.get("/exercises/ATTRIBUTION.md");
     expect(attribution.status()).toBe(200);
     expect(await attribution.text()).toContain("CC BY-SA 4.0");
+  });
+});
+
+/** The picker's rows, a 32px thumbnail each when the exercise has a drawing and an empty square when it has not. */
+async function expectThumb(row: Locator, drawn: boolean, slug?: string) {
+  if (drawn) {
+    const img = row.getByTestId("exercise-thumb");
+    await expect(img).toHaveCount(1);
+    await expect(img).toHaveAttribute("src", `/exercises/${slug}-1.webp`);
+    const box = (await img.boundingBox())!;
+    expect([Math.round(box.width), Math.round(box.height)]).toEqual([32, 32]);
+    await expect
+      .poll(() => img.evaluate((el) => (el as HTMLImageElement).naturalWidth))
+      .toBeGreaterThan(0);
+  } else {
+    await expect(row.locator("img")).toHaveCount(0);
+    const empty = row.getByTestId("exercise-thumb-empty");
+    await expect(empty).toHaveCount(1);
+    const box = (await empty.boundingBox())!;
+    expect([Math.round(box.width), Math.round(box.height)]).toEqual([32, 32]);
+  }
+}
+
+test.describe("exercise thumbnails (375px)", () => {
+  test.setTimeout(150_000);
+
+  test("picker: a thumbnail beside an exercise with a drawing, an empty square beside one without, one line each", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/check");
+    await page
+      .getByLabel("Your routine")
+      .fill(["Zottman Spin 3x8", "Back Squat 3x8", "Barbell Row 3x8", "Pull-Up 3x8"].join("\n"));
+    await page.getByRole("button", { name: "Choose different" }).click();
+    const list = page.getByLabel("Choose an exercise");
+    await expect(list).toBeVisible();
+
+    const search = page.getByLabel("Search exercises");
+    await search.fill("back squat");
+    await expectThumb(list.getByRole("option", { name: /^Back Squat/ }), true, "back-squat");
+    await search.fill("hip thrust");
+    await expectThumb(list.getByRole("option", { name: /^Hip Thrust/ }), false);
+
+    // The longest names stay on one line (truncated, never wrapped) and nothing runs sideways.
+    await search.fill("incline");
+    const rows = list.getByRole("option");
+    expect(await rows.count()).toBeGreaterThanOrEqual(3);
+    for (const box of await rows.evaluateAll((els) =>
+      els.map((e) => e.getBoundingClientRect().height),
+    ))
+      expect(box).toBeLessThanOrEqual(48);
+    const lines = await rows.evaluateAll((els) =>
+      els.map((e) => {
+        const t = e.querySelector("span:last-child") as HTMLElement;
+        return getComputedStyle(t).whiteSpace;
+      }),
+    );
+    expect(new Set(lines)).toEqual(new Set(["nowrap"]));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      375,
+    );
+    await search.fill("");
+    await shot(page, search, "picker-check-375.png");
+
+    // Choosing still works: tap a row, then Add.
+    await search.fill("back squat");
+    await list.getByRole("option", { name: /^Back Squat/ }).click();
+    await expect(list.getByRole("option", { name: /^Back Squat/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await page.getByRole("button", { name: "Add exercise" }).click();
+  });
+
+  test("/check parse list: a 32px still beside a matched exercise, an empty square beside one with no drawing", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/check");
+    await page
+      .getByLabel("Your routine")
+      .fill(["Back Squat 3x8", "Hip Thrust 3x10", "Barbell Row 3x8"].join("\n"));
+    const row = (text: string) => page.getByText(text).locator("xpath=..");
+    await expect(page.getByText("Back Squat 3×8")).toBeVisible();
+    await expectThumb(row("Back Squat 3×8"), true, "back-squat");
+    await expectThumb(row("Hip Thrust 3×10"), false);
+    await expectThumb(row("Barbell Row 3×8"), true, "barbell-row");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      375,
+    );
+    await shot(page, page.getByRole("heading", { name: /^Parsed as/ }), "check-parse-375.png");
+  });
+
+  test("Builder: thumbnails in the picker and beside each prescription row", async ({ page }) => {
+    await signUp(page);
+    await openBuilderDay(page, `Thumbs ${Date.now()}`);
+    await page.setViewportSize({ width: 375, height: 812 });
+    const list = page.getByLabel("Choose an exercise");
+    await expect(list).toBeVisible();
+    await expectThumb(list.getByRole("option", { name: /^Back Squat/ }), true, "back-squat");
+    await expectThumb(list.getByRole("option", { name: /^Hip Thrust/ }), false);
+    await list.getByRole("option", { name: /^Back Squat/ }).scrollIntoViewIfNeeded();
+    await shot(page, page.getByLabel("Search exercises"), "picker-builder-375.png");
+    await list.getByRole("option", { name: /^Back Squat/ }).click();
+    await page.getByRole("button", { name: "Add exercise" }).click();
+    // The prescription row shows the same still.
+    const rowThumb = page
+      .locator('li:has-text("Back Squat")')
+      .getByTestId("exercise-thumb")
+      .first();
+    await expect(rowThumb).toHaveAttribute("src", "/exercises/back-squat-1.webp");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      375,
+    );
   });
 });

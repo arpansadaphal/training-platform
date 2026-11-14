@@ -31,6 +31,7 @@ import {
 } from "@training/domain";
 import { CheckPreview } from "./CheckPreview";
 import { ExercisePicker } from "@/app/app/programs/[id]/build/ExercisePicker";
+import { ExerciseThumb } from "@/components/session/ExerciseIllustration";
 import styles from "./check.module.css";
 
 const MIN_EXERCISES = 3;
@@ -263,16 +264,20 @@ export function CheckClient({ exercises }: { exercises: ExerciseRecord[] }) {
                         {CHECK_COPY.parsedDayLine(entry.index + 1, entry.day.name, entry.day.nameAuto, entry.day.label ?? null)}
                       </span>{" "}
                       <span className={styles.note}>{CHECK_COPY.exerciseCount(entry.day.lines.length)}</span>
-                      <ul className={styles.exerciseList}>
+                      <ul className={styles.parsedList}>
                         {entry.day.lines.map((line) => (
-                          <li key={line.lineNo}>
-                            {resolvedName(line, resolutions) ?? line.query} {prescription(line)}
-                            {cameFrom(line, resolutions) !== null ? (
-                              <>
-                                {" "}
-                                <span className={styles.note}>{CHECK_COPY.acceptedFrom(cameFrom(line, resolutions)!)}</span>
-                              </>
-                            ) : null}
+                          <li key={line.lineNo} className={styles.parsedItem}>
+                            {/* An unmatched line has no resolved name, so it gets the empty square. */}
+                            <ExerciseThumb name={resolvedName(line, resolutions) ?? ""} />
+                            <span>
+                              {resolvedName(line, resolutions) ?? line.query} {prescription(line)}
+                              {cameFrom(line, resolutions) !== null ? (
+                                <>
+                                  {" "}
+                                  <span className={styles.note}>{CHECK_COPY.acceptedFrom(cameFrom(line, resolutions)!)}</span>
+                                </>
+                              ) : null}
+                            </span>
                           </li>
                         ))}
                       </ul>

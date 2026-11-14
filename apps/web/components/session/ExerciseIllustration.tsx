@@ -40,3 +40,27 @@ export function ExerciseIllustration({ name }: { name: string }) {
     </figure>
   );
 }
+
+/**
+ * A 32px still of the exercise (first frame only: no crossfade, that belongs to the session screen) for lists where
+ * a lifter picks or checks an exercise. An exercise with no drawing gets an empty square of the same size, so
+ * names line up either way.
+ */
+export function ExerciseThumb({ name }: { name: string }) {
+  const illustration = illustrationFor(name);
+  if (illustration === null) {
+    return <span className={styles.thumbEmpty} data-testid="exercise-thumb-empty" aria-hidden="true" />;
+  }
+  return (
+    <img
+      src={`/exercises/${illustration.slug}-1.webp`}
+      alt=""
+      width={32}
+      height={32}
+      loading="lazy"
+      decoding="async"
+      className={styles.thumb}
+      data-testid="exercise-thumb"
+    />
+  );
+}
