@@ -5,10 +5,10 @@
 // seeded, not user-owned — see 03-domain-model.md).
 
 import { router, protectedProcedure } from "../trpc";
-import { listExercises, type ExerciseRecord } from "@training/db";
+import { listExercises, withoutCues, type ExerciseRecord } from "@training/db";
 
 export const exerciseRouter = router({
   listAll: protectedProcedure.query(
-    async (): Promise<ExerciseRecord[]> => listExercises(),
+    async (): Promise<ExerciseRecord[]> => (await listExercises()).map(withoutCues),
   ),
 });

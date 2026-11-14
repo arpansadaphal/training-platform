@@ -48,6 +48,7 @@ import {
   findDayOfSessionId,
   listCompletedPerformancesForDay,
   listExercises,
+  withoutCues,
   listObservationsForSession,
   listPrescriptionRowsForDay,
   type ExerciseRecord,
@@ -718,9 +719,11 @@ export async function getSessionPage(
     history,
     daysSinceLastTraining: wholeDaysSince(lastCompleted?.completedAt ?? null, new Date()),
   });
+  // Cues travel only for the exercises on this day; the client reads the rest of the list for names and equipment.
+  const onDay = new Set(context.workoutDay.prescriptions.map((p) => p.exerciseId));
   return {
     context,
-    exercises,
+    exercises: exercises.map((e) => (onDay.has(e.id) ? e : withoutCues(e))),
     records,
     observations,
     lastTimeHints: lastTimeHintsFromRows(history),
