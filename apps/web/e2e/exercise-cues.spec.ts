@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { test, expect, type Page } from "@playwright/test";
 
 /**
@@ -167,5 +168,143 @@ test.describe("exercise cues (375px)", () => {
     await expect(log).toBeEnabled();
     await log.click();
     await expect(page.getByText(/Set 1: 8 reps/)).toBeVisible();
+  });
+});
+
+test.describe("exercise drawings (375px)", () => {
+  test.setTimeout(150_000);
+
+  test("an exercise with a drawing shows it in the Cues panel: two frames, loaded, credited, animated three times then at rest", async ({
+    page,
+  }) => {
+    const program = `Drawing ${Date.now()}`;
+    await signUp(page);
+    await commitProgram(page, program, "Back Squat");
+    await page.setViewportSize({ width: 375, height: 812 });
+    await startSession(page, program);
+
+    // Collapsed by default: no drawing in the card, so the fold is the cues fold.
+    await expect(page.getByRole("img", { name: /Drawing of the Back Squat/ })).toHaveCount(0);
+
+    await page.getByRole("button", { name: /^Cues/ }).click();
+    const figure = page.getByRole("img", {
+      name: "Drawing of the Back Squat, showing both ends of the movement",
+    });
+    await expect(figure).toBeVisible();
+    const frames = figure.locator("img");
+    await expect(frames).toHaveCount(2);
+    await expect(frames.nth(0)).toHaveAttribute("src", "/exercises/back-squat-1.webp");
+    await expect(frames.nth(1)).toHaveAttribute("src", "/exercises/back-squat-2.webp");
+    // Both files really loaded (not a broken image).
+    await expect
+      .poll(() => frames.evaluateAll((els) => els.map((e) => (e as HTMLImageElement).naturalWidth)))
+      .toEqual([480, 480]);
+    // The credit is beside the picture and goes to /credits.
+    const credit = page.getByRole("link", { name: "Drawing: Everkinetic, CC BY-SA 4.0" });
+    await expect(credit).toHaveAttribute("href", "/credits");
+    // It fits the phone.
+    const box = (await figure.boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(375);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      375,
+    );
+
+    // Moving: two animations (one per frame), and they stop on their own, in under five seconds.
+    const running = () =>
+      page.evaluate(() => document.getAnimations().filter((a) => a.playState === "running").length);
+    expect(await running()).toBeGreaterThanOrEqual(2);
+    await expect.poll(running, { timeout: 10_000 }).toBe(0);
+    // At rest the first frame is showing and the second is not.
+    const opacities = await frames.evaluateAll((els) =>
+      els.map((e) => getComputedStyle(e).opacity),
+    );
+    expect(opacities).toEqual(["1", "0"]);
+  });
+
+  test("with reduced motion both frames are shown side by side and nothing moves", async ({
+    page,
+  }) => {
+    const program = `Drawing still ${Date.now()}`;
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await signUp(page);
+    await commitProgram(page, program, "Back Squat");
+    await page.setViewportSize({ width: 375, height: 812 });
+    await startSession(page, program);
+    await page.getByRole("button", { name: /^Cues/ }).click();
+
+    const frames = page.getByRole("img", { name: /Drawing of the Back Squat/ }).locator("img");
+    await expect(frames).toHaveCount(2);
+    expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+    const [a, b] = await frames.evaluateAll((els) =>
+      els.map((e) => {
+        const r = e.getBoundingClientRect();
+        return { x: r.x, right: r.right, width: r.width, opacity: getComputedStyle(e).opacity };
+      }),
+    );
+    expect([a!.opacity, b!.opacity]).toEqual(["1", "1"]);
+    // Side by side, neither over the other, both inside the phone.
+    expect(b!.x).toBeGreaterThanOrEqual(a!.right);
+    expect(b!.right).toBeLessThanOrEqual(375);
+    expect(a!.width).toBeGreaterThan(100);
+  });
+
+  test("an exercise Everkinetic does not draw has cues and no picture", async ({ page }) => {
+    const program = `No drawing ${Date.now()}`;
+    await signUp(page);
+    await commitProgram(page, program, "Hip Thrust");
+    await page.setViewportSize({ width: 375, height: 812 });
+    await startSession(page, program);
+    await page.getByRole("button", { name: /^Cues/ }).click();
+    await expect(page.getByText("Drive your hips up until your shoulders")).toBeVisible();
+    await expect(page.getByRole("img", { name: /Drawing of the/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Everkinetic/ })).toHaveCount(0);
+  });
+});
+
+test.describe("/credits", () => {
+  test("is public, credits Everkinetic with the license and the changes, fits a phone and has no serious a11y violations", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    const res = await page.goto("/credits");
+    expect(res!.status()).toBe(200);
+    await expect(page).toHaveURL(/\/credits$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Credits" })).toBeVisible();
+    const body = page.locator("main");
+    await expect(body).toContainText("Everkinetic");
+    await expect(body).toContainText("Greg Priday");
+    await expect(body).toContainText("CC BY-SA 4.0");
+    await expect(body).toContainText("We did not redraw or edit the drawings");
+    await expect(body).toContainText("the training app");
+    await expect(page.getByRole("link", { name: "Everkinetic data and drawings" })).toHaveAttribute(
+      "href",
+      "https://github.com/everkinetic/data",
+    );
+    await expect(page.getByRole("link", { name: "CC BY-SA 4.0 license" })).toHaveAttribute(
+      "href",
+      "https://creativecommons.org/licenses/by-sa/4.0/",
+    );
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      375,
+    );
+    const axe = await new AxeBuilder({ page }).analyze();
+    expect(axe.violations.filter((v) => v.impact === "critical" || v.impact === "serious")).toEqual(
+      [],
+    );
+  });
+
+  test("the landing page links to it, and the converted drawings are served as WebP", async ({
+    page,
+    request,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("link", { name: "Credits" }).click();
+    await expect(page).toHaveURL(/\/credits$/);
+    const image = await request.get("/exercises/back-squat-1.webp");
+    expect(image.status()).toBe(200);
+    expect(image.headers()["content-type"]).toBe("image/webp");
+    const attribution = await request.get("/exercises/ATTRIBUTION.md");
+    expect(attribution.status()).toBe(200);
+    expect(await attribution.text()).toContain("CC BY-SA 4.0");
   });
 });
