@@ -428,7 +428,7 @@ test("bare Bench, Squat and Row need no answer; Incline defaults to a press", as
 test("'Choose different' opens the exercise picker", async ({ page }) => {
   await paste(page, ["Zottman Spin 3x8", "Back Squat 3x8", "Barbell Row 3x8", "Pull-Up 3x8"].join("\n"));
   await page.getByRole("button", { name: "Choose different" }).click();
-  await page.getByLabel("Choose an exercise").selectOption({ index: 1 });
+  await page.getByLabel("Choose an exercise").getByRole("option").first().click();
   await page.getByRole("button", { name: "Add exercise" }).click();
   await expect(page.getByRole("heading", { name: "Confirm these exercises" })).toHaveCount(0);
 });

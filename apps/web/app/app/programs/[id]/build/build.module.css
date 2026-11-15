@@ -188,11 +188,15 @@
 
 .dayNameInput {
   flex: 1;
+  /* A text input will not shrink below its default width inside a flex row; without this the day header is 361px
+     wide at its narrowest and the page scrolls sideways on a phone. */
+  min-width: 0;
   font-weight: 600;
 }
 
 .dayControls {
   display: flex;
+  flex: none;
   gap: 0.25rem;
 }
 
@@ -232,6 +236,9 @@
 }
 
 .prescriptionExercise {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   min-width: 10rem;
   font-weight: 500;
 }
@@ -243,6 +250,14 @@
   font-size: 0.85rem;
   color: var(--muted);
   flex-direction: row;
+  /* The Effort select's longest option is wider than a 320px screen; let the field and its select shrink to fit. */
+  min-width: 0;
+  max-width: 100%;
+}
+
+.inlineField select {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .inlineField input {
@@ -286,15 +301,7 @@
   border-top: 1px solid var(--border);
 }
 
-.picker select {
-  flex: 1;
-  padding: 0.4rem;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font: inherit;
-}
-
-/* ── Exercise picker: search + status (additions; .picker and .picker select are unchanged) ───────── */
+/* ── Exercise picker: search, list, status ─────────────────────────────────────────────────────────── */
 
 .pickerBody {
   flex: 1;
@@ -341,6 +348,52 @@
   background: var(--border);
   color: var(--fg);
   filter: none;
+}
+
+/* Four 44px rows show at once; the rest scroll. A row never wraps: the name truncates, so 32px thumbnails keep
+   every option to one line at 375px. */
+.pickerList {
+  position: relative;
+  max-height: 11rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.pickerGroup {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.2rem 0.5rem;
+  background: var(--bg, #fff);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pickerOption {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0 0.5rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pickerOption[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent, #047857) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent, #047857);
+  font-weight: 600;
+}
+
+.pickerOptionText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pickerRow {

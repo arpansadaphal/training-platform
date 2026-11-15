@@ -201,15 +201,36 @@
   color: var(--muted);
 }
 
+/* Setup / Action / Feel: the label runs in before the text, so the full width is the text's and the panel is no taller
+   than the plain list it replaced. A draft's second and third action lines drop to their own line. */
 .cuesList {
   margin: 0 0 0.5rem;
-  padding: 0.5rem 0.75rem 0.5rem 1.75rem;
+  padding: 0.25rem 0.75rem 0.25rem 0.75rem;
   border-left: 3px solid var(--border, #e5e5e5);
   font-size: 0.95rem;
+  line-height: 1.4;
 }
 
-.cuesList li + li {
-  margin-top: 0.35rem;
+.cueRow {
+  margin: 0;
+}
+
+.cueRow + .cueRow {
+  margin-top: 0.25rem;
+}
+
+.cueLabel {
+  margin-right: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cueLine + .cueLine {
+  display: block;
+  margin-top: 0.25rem;
 }
 
 .inputRow {

@@ -14,16 +14,20 @@ import { getOrCreateNext, getSessionPage } from "./sessionService";
 import { loadExerciseReferenceData } from "./referenceDataService";
 
 describe("seeded cues", () => {
-  it("every exercise has 2-3 cues of at most 90 characters, and none is marked reviewed yet", async () => {
+  it("every exercise has 2-3 structured cue lines; the 30 written ones are setup, action, feel and reviewed", async () => {
     const all = await listExercises();
     expect(all).toHaveLength(110);
     for (const e of all) {
       expect(e.cues.length, `${e.name}: ${e.cues.length} cues`).toBeGreaterThanOrEqual(2);
       expect(e.cues.length, `${e.name}: ${e.cues.length} cues`).toBeLessThanOrEqual(3);
-      for (const line of e.cues)
-        expect(line.length, `${e.name}: "${line}"`).toBeLessThanOrEqual(90);
-      expect(typeof e.cuesReviewed).toBe("boolean");
+      for (const c of e.cues) {
+        expect(["setup", "action", "feel"]).toContain(c.kind);
+        expect(c.text.length, `${e.name}: "${c.text}"`).toBeLessThanOrEqual(120);
+      }
+      if (e.cuesReviewed) expect(e.cues.map((c) => c.kind), e.name).toEqual(["setup", "action", "feel"]);
+      else expect(e.cues.every((c) => c.kind === "action"), e.name).toBe(true);
     }
+    expect(all.filter((e) => e.cuesReviewed)).toHaveLength(30);
   });
 });
 
@@ -98,6 +102,6 @@ describe("where cues are sent", () => {
     const sent = page.exercises.filter((e) => e.cues.length > 0);
     expect(sent.map((e) => e.name)).toEqual(["Back Squat"]);
     expect(sent[0]!.cues).toEqual(squat.cues);
-    expect(sent[0]!.cuesReviewed).toBe(false);
+    expect(sent[0]!.cuesReviewed).toBe(true); // Back Squat is one of the 30 written cues
   });
 });
