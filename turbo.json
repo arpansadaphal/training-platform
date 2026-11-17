@@ -21,7 +21,8 @@
     "RATE_LIMIT_DRIVER",
     "CHECK_PUBLIC",
     "LAUNCH_OVERRIDE_TOKEN",
-    "VERCEL_ENV"
+    "VERCEL_ENV",
+    "RUN_DB_DEPLOY"
   ],
   "tasks": {
     "build": {

@@ -122,6 +122,12 @@ jobs:
       - name: Seed reference data
         run: pnpm --filter @training/db exec prisma db seed
 
+      # The production deploy step (ARCH-075), run exactly as Vercel's build runs it, against the CI database.
+      # Everything above has already applied the migrations and the seed, so this is also the idempotency check:
+      # "No pending migrations", no new rows, exit 0. A broken db:deploy fails here, not at deploy time.
+      - name: Rehearse the production deploy step (db:deploy)
+        run: VERCEL_ENV=production pnpm --filter @training/db run db:deploy
+
       - name: Typecheck
         run: pnpm turbo run typecheck
 

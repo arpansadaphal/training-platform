@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "pnpm run check:provisional-banner && pnpm run launch-gate && next build",
+    "build": "pnpm run check:provisional-banner && pnpm run launch-gate && pnpm run db:deploy && next build",
+    "db:deploy": "pnpm --filter @training/db run db:deploy",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

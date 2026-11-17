@@ -6,7 +6,7 @@
 // The one GoalProfileDefinition seeded (HYPERTROPHY) is deliberately
 // validated: false, configVersion: "0.0.1-unvalidated", thresholds: {}.
 
-import { PrismaClient, type MovementPattern } from "@prisma/client";
+import { Prisma, PrismaClient, type MovementPattern } from "@prisma/client";
 import { EXERCISE_CUES } from "./cues";
 
 const prisma = new PrismaClient();
@@ -366,12 +366,12 @@ const EXERCISES: SeedExercise[] = [
 
 // ───────────────────── Main ─────────────────────
 
-async function main() {
+async function seed(db: Prisma.TransactionClient) {
   console.log("Seeding canonical reference data (idempotent)...");
 
   // Muscle groups — upsert by unique name
   for (const name of MUSCLE_GROUPS) {
-    await prisma.muscleGroup.upsert({
+    await db.muscleGroup.upsert({
       where: { name },
       update: {},
       create: { name },
@@ -380,7 +380,7 @@ async function main() {
   console.log(`  ✓ ${MUSCLE_GROUPS.length} muscle groups`);
 
   // Load muscle groups into a lookup by name
-  const muscleRows = await prisma.muscleGroup.findMany();
+  const muscleRows = await db.muscleGroup.findMany();
   const muscleByName = new Map(muscleRows.map((m) => [m.name, m.id]));
 
   // Cues are keyed by exercise name. A typo'd key or an exercise without cues fails here, before any write,
@@ -396,9 +396,9 @@ async function main() {
   // Exercises — upsert by name (name is not unique in schema; guard by findFirst)
   let exerciseCount = 0;
   for (const ex of EXERCISES) {
-    let existing = await prisma.exercise.findFirst({ where: { name: ex.name } });
+    let existing = await db.exercise.findFirst({ where: { name: ex.name } });
     if (!existing) {
-      existing = await prisma.exercise.create({
+      existing = await db.exercise.create({
         data: {
           name: ex.name,
           movementPattern: ex.movementPattern,
@@ -411,7 +411,7 @@ async function main() {
     // Cues: written onto the existing row by id, so a row (and the ids that point at it) is never renamed or
     // recreated. prisma/cues.ts is the source of truth for the text and for the reviewed flag.
     const cueEntry = EXERCISE_CUES[ex.name]!;
-    await prisma.exercise.update({
+    await db.exercise.update({
       where: { id: existing.id },
       data: {
         // cueSteps is the structured form the app reads; `cues` keeps the same text until the old column is dropped.
@@ -439,7 +439,7 @@ async function main() {
       }
       newMuscleIds.push(muscleId);
 
-      await prisma.exerciseMuscleInvolvement.upsert({
+      await db.exerciseMuscleInvolvement.upsert({
         where: {
           exerciseId_muscleGroupId: {
             exerciseId: existing.id,
@@ -457,7 +457,7 @@ async function main() {
 
     // Delete involvements no longer in the new mapping. For Overhead Carry
     // (empty involvements), notIn: [] deletes every prior row — intended.
-    await prisma.exerciseMuscleInvolvement.deleteMany({
+    await db.exerciseMuscleInvolvement.deleteMany({
       where: {
         exerciseId: existing.id,
         muscleGroupId: { notIn: newMuscleIds },
@@ -470,7 +470,7 @@ async function main() {
   //
   // thresholds is deliberately an empty object. Bounds, weights, and band
   // edges are [SCIENTIFIC INPUT REQUIRED] and must not be invented here.
-  await prisma.goalProfileDefinition.upsert({
+  await db.goalProfileDefinition.upsert({
     where: { key: "HYPERTROPHY" },
     update: {},
     create: {
@@ -487,9 +487,40 @@ async function main() {
   console.log("Seed complete.");
 }
 
-main().catch((err) => {
-  console.error("Seed failed:", err);
-  // Re-throw so tsx exits non-zero and prisma migrate dev fails loudly
-  // rather than leaving the database half-populated.
-  throw err;
-});
+// The whole seed runs in ONE transaction that first takes a transaction-scoped advisory lock.
+//
+// Why (the seed now runs on every production deploy, so two properties matter):
+//   - Serialized. Exercise.name is not unique in the schema, so "findFirst, then create" is only idempotent when
+//     one seed runs at a time. Two overlapping deploys would each see no row and each create one: duplicate
+//     exercises. The lock makes the second seed wait, then find the first one's rows.
+//   - Atomic. A seed that fails halfway rolls back instead of leaving the table half-written under a live app.
+// pg_advisory_xact_lock is held by the transaction and released at commit or rollback, so it is safe through
+// Neon's pooled (PgBouncer) connection, which a session-level lock would not be. The key is an arbitrary
+// constant; prisma migrate uses a different one.
+const SEED_LOCK_SQL = Prisma.sql`SELECT pg_advisory_xact_lock(7316094213)`;
+
+async function main() {
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw(SEED_LOCK_SQL);
+      await seed(tx);
+    },
+    {
+      // maxWait: time to get a connection. timeout: the whole seed (about 700 statements). The default 5 s is
+      // far too short for a remote database.
+      maxWait: 30_000,
+      timeout: 180_000,
+    },
+  );
+}
+
+main()
+  .then(async () => {
+    await prisma.$disconnect();
+  })
+  .catch(async (err) => {
+    console.error("Seed failed:", err);
+    await prisma.$disconnect().catch(() => {});
+    // Exit non-zero explicitly: the deploy step depends on this to halt the build.
+    process.exit(1);
+  });

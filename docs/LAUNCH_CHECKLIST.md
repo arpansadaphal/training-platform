@@ -135,6 +135,15 @@ pnpm --filter @training/db exec prisma db seed
 
 Then revert `packages/db/.env` back to its previous target (ARCH-034).
 
+### 3c. Migrations and seed on deploy (ARCH-075)
+
+A production build runs `prisma migrate deploy` then `prisma db seed` itself (`pnpm --filter @training/db run db:deploy`, chained into `apps/web`'s build script after the launch gate). Nothing to run by hand for ordinary changes. The build log lines to look for are prefixed `[db-deploy]`.
+
+- **Production env needs** `DIRECT_URL` (the *unpooled* Neon string; a `-pooler` host is refused) and `DATABASE_URL`, available to the build, not only to the runtime.
+- **Rehearse on a test branch:** create a throwaway Neon branch, set `DATABASE_URL`, `DIRECT_URL` and `RUN_DB_DEPLOY=true` for a Vercel Preview deployment of the test branch only (Git branch scope in Settings → Environment Variables), push, and read the `[db-deploy]` lines. Remove the three variables and delete the Neon branch afterwards. Never set `RUN_DB_DEPLOY` in Production; it is not needed there.
+- **If the build fails at `[db-deploy]`:** nothing was deployed and the live site is unchanged. A failed migration is recorded in `_prisma_migrations` and every later deploy fails with `P3009` until it is resolved: fix the SQL in a new migration if it did not apply, or `prisma migrate resolve --rolled-back <name>` / `--applied <name>` against the production `DIRECT_URL` from a local machine (as in 3a, step 6), then redeploy.
+- **Write migrations for the code that is still live** (add columns nullable or with a default; drop in a later deploy). See ARCH-075 consequence 1.
+
 ### 3b. Confirm production branch connection strings
 
 Vercel's production env already carries them from Phase 0. Re-verify they're still valid by opening the Neon console → `main` branch → Connection Details.

@@ -22,7 +22,7 @@ Optimized for low complexity + low cost + reliable production deployment for a s
 - **Production:** Neon primary branch, Vercel production deployment, real users.
 
 ## Migrations
-Prisma Migrate, run as an explicit CI/CD step (not automatically on every deploy) — `pnpm prisma migrate deploy` gated behind a manual approval or a dedicated migration job, so a schema change is never silently applied by an ordinary code deploy. Every migration is checked into the repo under `packages/db/prisma/migrations/`.
+Every migration is checked into the repo under `packages/db/prisma/migrations/`. **Superseded by ARCH-075 (2026-11-17):** the original plan here was a manual step, and forgetting it caused two production outages. A production build now runs `prisma migrate deploy` and `prisma db seed` before `next build` and fails the build if either fails; see `docs/decisions/ARCH-075.md`.
 
 ## Logging & error monitoring
 - Application errors: Sentry, both `apps/web`'s client and server code, with `packages/api` and `packages/ai` errors tagged by router/tool name so a Coach-tool failure is distinguishable from an ordinary CRUD failure at a glance.
